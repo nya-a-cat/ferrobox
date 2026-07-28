@@ -64,12 +64,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|value| value.parse().ok())
         .unwrap_or(5000);
     let listener = VsockListener::bind(VsockAddr::new(libc::VMADDR_CID_ANY, port))?;
-    let incoming = async_stream::try_stream! {
-        loop {
-            let (stream, _) = listener.accept().await?;
-            yield ConnectedVsock(stream);
-        }
-    };
+    let incoming = futures::stream::unfold(listener, |listener| async move {
+        let item = listener
+            .accept()
+            .await
+            .map(|(stream, _)| ConnectedVsock(stream));
+        Some((item, listener))
+    });
     tonic::transport::Server::builder()
         .add_service(GuestServiceServer::new(GuestService::new(
             "/home/sandbox".into(),
