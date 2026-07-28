@@ -65,33 +65,11 @@ jobs:
             "${RUNNER_TEMP}/firecracker/jailer" \
             /opt/ferrobox/bin/jailer
 
-      - name: Resolve Firecracker CI kernel
+      - name: Fetch Firecracker CI kernel
         shell: bash
         run: |
           set -euo pipefail
-          listing="${RUNNER_TEMP}/kernel-list.xml"
-          curl --fail --location --silent --show-error \
-            --output "${listing}" \
-            'https://s3.amazonaws.com/spec.ccfc.min/?prefix=firecracker-ci/v1.16/x86_64/vmlinux-&list-type=2'
-          kernel_key="$(
-            python3 - "${listing}" <<'PY'
-          import re
-          import sys
-          import xml.etree.ElementTree as ET
-
-          root = ET.parse(sys.argv[1]).getroot()
-          keys = [
-              node.text for node in root.iter()
-              if node.tag.endswith("Key") and node.text and "/vmlinux-" in node.text
-          ]
-          if not keys:
-              raise SystemExit("No Firecracker CI kernel found")
-          def version(key):
-              match = re.search(r"vmlinux-(\d+)\.(\d+)\.(\d+)$", key)
-              return tuple(map(int, match.groups())) if match else (0, 0, 0)
-          print(max(keys, key=version))
-          PY
-          )"
+          kernel_key='firecracker-ci/v1.15/x86_64/vmlinux-6.1.155'
           kernel="${RUNNER_TEMP}/vmlinux"
           curl --fail --location --silent --show-error \
             --output "${kernel}" \

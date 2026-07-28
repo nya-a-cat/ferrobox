@@ -461,6 +461,7 @@ impl guest_service_server::GuestService for GuestService {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn read_output<R>(
     stream: Option<R>,
     stdout: bool,
