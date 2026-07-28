@@ -1,0 +1,39 @@
+[package]
+name = "ferrobox-node"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+clap.workspace = true
+ferrobox-core = { path = "../ferrobox-core" }
+ferrobox-protocol = { path = "../ferrobox-protocol" }
+futures.workspace = true
+http.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tonic.workspace = true
+tower.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+hyperlocal = "0.9.1"
+
+[dev-dependencies]
+tokio-stream.workspace = true
+
+[lints]
+workspace = true

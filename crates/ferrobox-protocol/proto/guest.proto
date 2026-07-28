@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package ferrobox.guest.v1;
+
+service GuestService {
+  rpc Health(HealthRequest) returns (HealthResponse);
+  rpc Init(InitRequest) returns (InitResponse);
+  rpc StartProcess(StartProcessRequest) returns (stream ProcessEvent);
+  rpc SignalProcess(SignalProcessRequest) returns (SignalProcessResponse);
+  rpc WriteFile(WriteFileRequest) returns (WriteFileResponse);
+  rpc ReadFile(ReadFileRequest) returns (stream FileChunk);
+  rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse);
+}
+
+message Auth { string token = 1; }
+message HealthRequest {}
+message HealthResponse {
+  bool ready = 1;
+  string version = 2;
+  string sandbox_id = 3;
+}
+message InitRequest {
+  string request_id = 1;
+  string sandbox_id = 2;
+  string token = 3;
+  uint32 command_uid = 4;
+  uint32 command_gid = 5;
+  uint64 max_file_bytes = 6;
+  uint32 max_processes = 7;
+  string guest_ipv4 = 8;
+  uint32 guest_prefix_length = 9;
+  string gateway_ipv4 = 10;
+  string dns_ipv4 = 11;
+}
+message InitResponse {
+  bool initialized = 1;
+  bool replayed = 2;
+}
+message StartProcessRequest {
+  Auth auth = 1;
+  string request_id = 2;
+  repeated string argv = 3;
+  string cwd = 4;
+  map<string, string> environment = 5;
+  uint64 timeout_millis = 6;
+  uint64 max_output_bytes = 7;
+}
+message ProcessEvent {
+  string process_id = 1;
+  oneof event {
+    bytes stdout = 2;
+    bytes stderr = 3;
+    ProcessExit exit = 4;
+    ProcessError error = 5;
+  }
+}
+message ProcessExit {
+  optional int32 exit_code = 1;
+  optional int32 signal = 2;
+  bool timed_out = 3;
+  bool output_limit_exceeded = 4;
+  bool stdout_truncated = 5;
+  bool stderr_truncated = 6;
+}
+message ProcessError {
+  string code = 1;
+  string message = 2;
+}
+message SignalProcessRequest {
+  Auth auth = 1;
+  string request_id = 2;
+  string process_id = 3;
+  int32 signal = 4;
+}
+message SignalProcessResponse { bool delivered = 1; }
+message WriteFileRequest {
+  Auth auth = 1;
+  string request_id = 2;
+  string path = 3;
+  bytes data = 4;
+  bool overwrite = 5;
+  optional uint32 mode = 6;
+}
+message WriteFileResponse { uint64 bytes_written = 1; }
+message ReadFileRequest {
+  Auth auth = 1;
+  string request_id = 2;
+  string path = 3;
+  uint64 offset = 4;
+  uint64 max_bytes = 5;
+}
+message FileChunk {
+  bytes data = 1;
+  bool eof = 2;
+}
+message ListDirectoryRequest {
+  Auth auth = 1;
+  string request_id = 2;
+  string path = 3;
+}
+message ListDirectoryResponse { repeated DirectoryEntry entries = 1; }
+message DirectoryEntry {
+  string name = 1;
+  string path = 2;
+  FileKind kind = 3;
+  uint64 size_bytes = 4;
+  optional uint64 modified_unix_millis = 5;
+  optional uint32 mode = 6;
+}
+enum FileKind {
+  FILE_KIND_UNSPECIFIED = 0;
+  FILE_KIND_FILE = 1;
+  FILE_KIND_DIRECTORY = 2;
+}

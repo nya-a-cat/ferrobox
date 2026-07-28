@@ -1,0 +1,154 @@
+name: Firecracker KVM E2E
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  kvm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install image build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            debootstrap \
+            e2fsprogs \
+            jq \
+            musl-tools \
+            protobuf-compiler
+
+      - name: Require nested KVM
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          sudo chgrp "$(id -gn)" /dev/kvm
+          sudo chmod 660 /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+
+      - name: Build node and static guest
+        run: |
+          cargo generate-lockfile
+          cargo build -p ferrobox-node --locked
+          cargo build -p ferrobox-guest \
+            --release \
+            --target x86_64-unknown-linux-musl \
+            --locked
+
+      - name: Fetch verified Firecracker
+        run: |
+          bash scripts/fetch-firecracker.sh "${RUNNER_TEMP}/firecracker"
+          sudo install -d -o root -g root -m 0755 /opt/ferrobox/bin
+          sudo install -o root -g root -m 0755 \
+            "${RUNNER_TEMP}/firecracker/firecracker" \
+            /opt/ferrobox/bin/firecracker
+          sudo install -o root -g root -m 0755 \
+            "${RUNNER_TEMP}/firecracker/jailer" \
+            /opt/ferrobox/bin/jailer
+
+      - name: Resolve Firecracker CI kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          listing="${RUNNER_TEMP}/kernel-list.xml"
+          curl --fail --location --silent --show-error \
+            --output "${listing}" \
+            'https://spec.ccfc.min.s3.amazonaws.com/?prefix=firecracker-ci/v1.16/x86_64/vmlinux-&list-type=2'
+          kernel_key="$(
+            python3 - "${listing}" <<'PY'
+          import re
+          import sys
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse(sys.argv[1]).getroot()
+          keys = [
+              node.text for node in root.iter()
+              if node.tag.endswith("Key") and node.text and "/vmlinux-" in node.text
+          ]
+          if not keys:
+              raise SystemExit("No Firecracker CI kernel found")
+          def version(key):
+              match = re.search(r"vmlinux-(\d+)\.(\d+)\.(\d+)$", key)
+              return tuple(map(int, match.groups())) if match else (0, 0, 0)
+          print(max(keys, key=version))
+          PY
+          )"
+          kernel="${RUNNER_TEMP}/vmlinux"
+          curl --fail --location --silent --show-error \
+            --output "${kernel}" \
+            "https://s3.amazonaws.com/spec.ccfc.min/${kernel_key}"
+          kernel_sha256="$(sha256sum "${kernel}" | awk '{print $1}')"
+          {
+            printf 'kernel_key=%s\n' "${kernel_key}"
+            printf 'kernel_sha256=%s\n' "${kernel_sha256}"
+          } | tee "${RUNNER_TEMP}/kernel.manifest"
+          sudo install -d -o root -g root -m 0755 /opt/ferrobox/images
+          sudo install -o root -g root -m 0444 \
+            "${kernel}" \
+            /opt/ferrobox/images/vmlinux
+
+      - name: Build Python guest rootfs
+        run: |
+          sudo bash scripts/build-python-rootfs.sh \
+            target/x86_64-unknown-linux-musl/release/ferrobox-guest \
+            /opt/ferrobox/images/python.ext4
+          sudo chmod 0444 /opt/ferrobox/images/python.ext4
+
+      - name: Prepare Jailer host directories
+        run: |
+          sudo install -d -o root -g root -m 0755 \
+            /srv/ferrobox/jailer \
+            /var/lib/ferrobox/runtime
+          sudo sysctl -w net.ipv4.ip_forward=1
+          if [[ -w /sys/fs/cgroup/cgroup.subtree_control ]]; then
+            echo '+cpu +memory +pids' |
+              sudo tee /sys/fs/cgroup/cgroup.subtree_control >/dev/null || true
+          fi
+
+      - name: Run Firecracker end-to-end
+        env:
+          FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
+          FERROBOX_JAILER: /opt/ferrobox/bin/jailer
+          FERROBOX_KERNEL: /opt/ferrobox/images/vmlinux
+          FERROBOX_ROOTFS: /opt/ferrobox/images/python.ext4
+          FERROBOX_NODE_BINARY: target/debug/ferrobox-node
+        run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_NODE_BINARY bash scripts/e2e-kvm.sh
+      - name: Run Firecracker internet-policy end-to-end
+        env:
+          FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
+          FERROBOX_JAILER: /opt/ferrobox/bin/jailer
+          FERROBOX_KERNEL: /opt/ferrobox/images/vmlinux
+          FERROBOX_ROOTFS: /opt/ferrobox/images/python.ext4
+          FERROBOX_NODE_BINARY: target/debug/ferrobox-node
+          FERROBOX_INTERNET: "1"
+        run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_NODE_BINARY,FERROBOX_INTERNET bash scripts/e2e-kvm.sh
+
+      - name: Upload provenance and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kvm-evidence
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/kernel.manifest
+            /opt/ferrobox/images/python.ext4.manifest.json
+            /srv/ferrobox/jailer/**/root/*.log

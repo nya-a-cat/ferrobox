@@ -1,0 +1,63 @@
+[workspace]
+members = [
+    "crates/ferrobox-api",
+    "crates/ferrobox-cli",
+    "crates/ferrobox-core",
+    "crates/ferrobox-guest",
+    "crates/ferrobox-node",
+    "crates/ferrobox-protocol",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0"
+repository = "https://example.invalid/ferrobox"
+
+[workspace.dependencies]
+anyhow = "1"
+async-stream = "0.3"
+async-trait = "0.1"
+axum = { version = "0.8", features = ["http1", "json", "tokio"] }
+base64 = "0.22"
+bytes = "1"
+clap = { version = "4.5", features = ["derive", "env"] }
+futures = "0.3"
+http = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "tokio"] }
+libc = "0.2"
+nix = { version = "0.30", features = ["fs", "process", "signal", "user"] }
+prost = "0.14"
+prost-build = "0.14"
+prost-types = "0.14"
+protoc-bin-vendored = "3"
+rand = "0.9"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+subtle = "2"
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+tokio-vsock = "0.7"
+tonic = { version = "0.14", features = ["channel", "codegen", "router", "server", "transport"] }
+tonic-build = "0.14"
+tonic-prost = "0.14"
+tonic-prost-build = "0.14"
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["catch-panic", "limit", "request-id", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+uuid = { version = "1", features = ["serde", "v4", "v7"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+

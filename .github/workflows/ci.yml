@@ -1,0 +1,93 @@
+name: Ferrobox CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  rust:
+    name: Rust workspace
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+          targets: x86_64-unknown-linux-musl
+
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes musl-tools protobuf-compiler
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Generate dependency lock
+        run: cargo generate-lockfile
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Unit and integration tests
+        run: cargo test --workspace --all-targets --locked
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Workspace build
+        run: cargo build --workspace --locked
+
+      - name: Static guest build
+        run: cargo build -p ferrobox-guest --release --target x86_64-unknown-linux-musl --locked
+
+      - name: Process/API end-to-end
+        run: bash scripts/e2e-process.sh
+
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cargo.lock
+          path: Cargo.lock
+
+  firecracker-gate:
+    name: Firecracker host gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inspect KVM
+        id: kvm
+        shell: bash
+        run: |
+          set -euo pipefail
+          uname -a
+          if [[ ! -c /dev/kvm ]]; then
+            echo "available=false" >>"${GITHUB_OUTPUT}"
+            echo "::error::This runner does not expose /dev/kvm"
+            exit 1
+          fi
+          sudo chmod 660 /dev/kvm
+          sudo chgrp "$(id -gn)" /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+          echo "available=true" >>"${GITHUB_OUTPUT}"
+
+      - name: Fetch pinned Firecracker and Jailer
+        run: bash scripts/fetch-firecracker.sh "${RUNNER_TEMP}/firecracker"
+
+      - name: Verify versions
+        run: |
+          test "$("${RUNNER_TEMP}/firecracker/firecracker" --version | grep -c '1.16.1')" -eq 1
+          test "$("${RUNNER_TEMP}/firecracker/jailer" --version | grep -c '1.16.1')" -eq 1

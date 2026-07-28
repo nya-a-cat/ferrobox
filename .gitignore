@@ -1,0 +1,14 @@
+/target/
+/runtime/
+/artifacts/
+/images/kernel/*
+!/images/kernel/.gitkeep
+/images/rootfs/*
+!/images/rootfs/.gitkeep
+/images/templates/*
+!/images/templates/.gitkeep
+*.log
+
+
+# Local development log
+/progress.md

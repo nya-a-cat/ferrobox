@@ -1,0 +1,28 @@
+[package]
+name = "ferrobox-guest"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+async-stream.workspace = true
+cap-std = "3"
+ferrobox-core = { path = "../ferrobox-core" }
+ferrobox-protocol = { path = "../ferrobox-protocol" }
+futures.workspace = true
+libc.workspace = true
+nix.workspace = true
+sha2.workspace = true
+subtle.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tokio-vsock.workspace = true
+tonic.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
+
