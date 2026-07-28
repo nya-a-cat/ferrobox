@@ -70,11 +70,13 @@ jobs:
         run: |
           set -euo pipefail
           kernel_key='firecracker-ci/v1.15/x86_64/vmlinux-6.1.155'
+          expected_kernel_sha256='e20e46d0c36c55c0d1014eb20576171b3f3d922260d9f792017aeff53af3d4f2'
           kernel="${RUNNER_TEMP}/vmlinux"
           curl --fail --location --silent --show-error \
             --output "${kernel}" \
             "https://s3.amazonaws.com/spec.ccfc.min/${kernel_key}"
           kernel_sha256="$(sha256sum "${kernel}" | awk '{print $1}')"
+          [[ "${kernel_sha256}" == "${expected_kernel_sha256}" ]]
           {
             printf 'kernel_key=%s\n' "${kernel_key}"
             printf 'kernel_sha256=%s\n' "${kernel_sha256}"

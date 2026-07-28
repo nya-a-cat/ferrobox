@@ -22,16 +22,16 @@ path traversal rejection, deletion, and token redaction from audit records.
 ## KVM CI
 
 `.github/workflows/kvm.yml` requires `/dev/kvm`, builds the static guest and a
-Python Debian rootfs, fetches the pinned Firecracker/Jailer release, resolves a
-Firecracker CI guest kernel, and runs:
+Python Debian rootfs, fetches the pinned Firecracker/Jailer release, downloads the pinned
+Firecracker CI guest kernel and verifies its SHA-256, and runs:
 
 ```text
 Jailer -> Firecracker -> guest READY -> python3 prints 42 -> delete -> leak check
 ```
 
-The first successful run records the resolved kernel key and SHA-256 as an
-artifact. That value must then replace the minor-series resolver with a fixed
-kernel URL/hash before the KVM gate is considered reproducible.
+Each run uploads the kernel key/hash and rootfs build manifest as provenance
+evidence. The workflow rejects any kernel whose SHA-256 differs from the pinned
+supply-chain record.
 
 ## Completion rule
 

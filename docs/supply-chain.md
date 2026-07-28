@@ -24,8 +24,13 @@ root-owned directory that cannot be modified by the Firecracker runtime UID.
 
 ## Kernel and root filesystem
 
-Ferrobox does not silently fetch a floating kernel or root filesystem. A
-deployable template manifest records:
+The GitHub KVM gate pins the guest kernel to
+`firecracker-ci/v1.15/x86_64/vmlinux-6.1.155` with SHA-256
+`e20e46d0c36c55c0d1014eb20576171b3f3d922260d9f792017aeff53af3d4f2`.
+The hash was captured from GitHub Actions run `30335455619` and is verified
+before the kernel is installed or executed.
+
+A deployable template manifest records:
 
 - source URL or build recipe revision;
 - SHA-256 for the uncompressed kernel and ext4 root filesystem;
