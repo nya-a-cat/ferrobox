@@ -72,7 +72,7 @@ jobs:
           listing="${RUNNER_TEMP}/kernel-list.xml"
           curl --fail --location --silent --show-error \
             --output "${listing}" \
-            'https://spec.ccfc.min.s3.amazonaws.com/?prefix=firecracker-ci/v1.16/x86_64/vmlinux-&list-type=2'
+            'https://s3.amazonaws.com/spec.ccfc.min/?prefix=firecracker-ci/v1.16/x86_64/vmlinux-&list-type=2'
           kernel_key="$(
             python3 - "${listing}" <<'PY'
           import re
