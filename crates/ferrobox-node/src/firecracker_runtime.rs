@@ -336,6 +336,15 @@ impl SandboxRuntime for FirecrackerRuntime {
             .await
             .map_err(|error| RuntimeError::internal(error.to_string()))?;
 
+        let permission_status = Command::new("chmod")
+            .arg("0600")
+            .arg(&rootfs_path)
+            .status()
+            .await
+            .map_err(|error| RuntimeError::internal(format!("start chmod: {error}")))?;
+        if !permission_status.success() {
+            return Err(RuntimeError::internal("chmod sandbox rootfs failed"));
+        }
         let owner = format!("{}:{}", self.config.jail_uid, self.config.jail_gid);
         let ownership_status = Command::new("chown")
             .arg(&owner)

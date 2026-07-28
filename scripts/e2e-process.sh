@@ -21,7 +21,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cargo run -p ferrobox-api -- \
+target/debug/ferrobox-api \
     --backend process \
     --unsafe-process-runtime \
     --listen 127.0.0.1:18080 \
