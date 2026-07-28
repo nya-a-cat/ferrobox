@@ -98,9 +98,7 @@ impl GuestService {
                 Ok(metadata) if metadata.file_type().is_symlink() => {
                     return Err(Status::permission_denied("symbolic links are forbidden"));
                 }
-                Ok(metadata)
-                    if index + 1 != count && !metadata.is_dir() =>
-                {
+                Ok(metadata) if index + 1 != count && !metadata.is_dir() => {
                     return Err(Status::invalid_argument("parent is not a directory"));
                 }
                 Ok(_) => {}
@@ -142,10 +140,7 @@ impl guest_service_server::GuestService for GuestService {
         }))
     }
 
-    async fn init(
-        &self,
-        request: Request<InitRequest>,
-    ) -> Result<Response<InitResponse>, Status> {
+    async fn init(&self, request: Request<InitRequest>) -> Result<Response<InitResponse>, Status> {
         let request = request.into_inner();
         if request.sandbox_id.is_empty()
             || request.token.len() < 32
@@ -201,7 +196,10 @@ impl guest_service_server::GuestService for GuestService {
         let state = self.authorized(request.auth.as_ref()).await?;
         if request.argv.is_empty()
             || request.argv.len() > 256
-            || request.argv.iter().any(|value| value.as_bytes().contains(&0))
+            || request
+                .argv
+                .iter()
+                .any(|value| value.as_bytes().contains(&0))
             || request.timeout_millis == 0
             || request.max_output_bytes == 0
         {
@@ -541,7 +539,9 @@ async fn configure_guest_network(
 ) -> Result<(), Status> {
     if address.is_empty() {
         if prefix_length != 0 || !gateway.is_empty() || !dns.is_empty() {
-            return Err(Status::invalid_argument("incomplete guest network configuration"));
+            return Err(Status::invalid_argument(
+                "incomplete guest network configuration",
+            ));
         }
         return Ok(());
     }
@@ -562,20 +562,10 @@ async fn configure_guest_network(
     run_guest_command("ip", &["link", "set", "eth0", "up"]).await?;
     run_guest_command(
         "ip",
-        &[
-            "address",
-            "replace",
-            &address_with_prefix,
-            "dev",
-            "eth0",
-        ],
+        &["address", "replace", &address_with_prefix, "dev", "eth0"],
     )
     .await?;
-    run_guest_command(
-        "ip",
-        &["route", "replace", "default", "via", &gateway],
-    )
-    .await?;
+    run_guest_command("ip", &["route", "replace", "default", "via", &gateway]).await?;
     tokio::fs::write("/etc/resolv.conf", format!("nameserver {dns}\n"))
         .await
         .map_err(|error| Status::internal(format!("write resolv.conf: {error}")))

@@ -48,4 +48,3 @@ mod tests {
         assert!(!format!("{digest:?}").contains(&first));
     }
 }
-

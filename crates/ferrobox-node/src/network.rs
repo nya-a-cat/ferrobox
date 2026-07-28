@@ -103,10 +103,7 @@ impl NetworkManager {
                 &namespace,
                 &["ip", "tuntap", "add", "dev", "tap0", "mode", "tap"],
             ),
-            netns(
-                &namespace,
-                &["ip", "link", "set", "tap0", "master", "br0"],
-            ),
+            netns(&namespace, &["ip", "link", "set", "tap0", "master", "br0"]),
             netns(
                 &namespace,
                 &["ip", "link", "set", &peer_veth, "master", "br0"],
@@ -114,10 +111,7 @@ impl NetworkManager {
             netns(&namespace, &["ip", "link", "set", "lo", "up"]),
             netns(&namespace, &["ip", "link", "set", "br0", "up"]),
             netns(&namespace, &["ip", "link", "set", "tap0", "up"]),
-            netns(
-                &namespace,
-                &["ip", "link", "set", &peer_veth, "up"],
-            ),
+            netns(&namespace, &["ip", "link", "set", &peer_veth, "up"]),
         ];
         for command in commands {
             if let Err(error) = run(&command).await {

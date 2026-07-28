@@ -39,11 +39,7 @@ impl FirecrackerClient {
         self.send_json(Method::PUT, path, value).await
     }
 
-    pub async fn patch<T: Serialize>(
-        &self,
-        path: &str,
-        value: &T,
-    ) -> Result<(), FirecrackerError> {
+    pub async fn patch<T: Serialize>(&self, path: &str, value: &T) -> Result<(), FirecrackerError> {
         self.send_json(Method::PATCH, path, value).await
     }
 
@@ -53,8 +49,8 @@ impl FirecrackerClient {
         path: &str,
         value: &T,
     ) -> Result<(), FirecrackerError> {
-        let body =
-            serde_json::to_vec(value).map_err(|error| FirecrackerError::Decode(error.to_string()))?;
+        let body = serde_json::to_vec(value)
+            .map_err(|error| FirecrackerError::Decode(error.to_string()))?;
         self.request(method, path, Bytes::from(body)).await?;
         Ok(())
     }

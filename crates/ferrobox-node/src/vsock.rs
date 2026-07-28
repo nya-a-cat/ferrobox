@@ -58,13 +58,10 @@ impl GuestConnector {
             .await
             .map_err(|error| VsockConnectError::Io(error.to_string()))?;
         let mut acknowledgement = String::new();
-        let bytes = tokio::time::timeout(
-            self.timeout,
-            reader.read_line(&mut acknowledgement),
-        )
-        .await
-        .map_err(|_| VsockConnectError::Io("handshake timed out".to_owned()))?
-        .map_err(|error| VsockConnectError::Io(error.to_string()))?;
+        let bytes = tokio::time::timeout(self.timeout, reader.read_line(&mut acknowledgement))
+            .await
+            .map_err(|_| VsockConnectError::Io("handshake timed out".to_owned()))?
+            .map_err(|error| VsockConnectError::Io(error.to_string()))?;
         if bytes == 0
             || bytes > MAX_HANDSHAKE_LINE
             || !acknowledgement.starts_with("OK ")
@@ -83,14 +80,17 @@ impl GuestConnector {
     }
 
     #[cfg(unix)]
-    pub async fn client(
-        &self,
-    ) -> Result<GuestServiceClient<Channel>, VsockConnectError> {
+    pub async fn client(&self) -> Result<GuestServiceClient<Channel>, VsockConnectError> {
         let connector = self.clone();
         let channel = Endpoint::from_static("http://[::]:5000")
             .connect_with_connector(service_fn(move |_| {
                 let connector = connector.clone();
-                async move { connector.connect_stream().await.map_err(std::io::Error::other) }
+                async move {
+                    connector
+                        .connect_stream()
+                        .await
+                        .map_err(std::io::Error::other)
+                }
             }))
             .await
             .map_err(|error| VsockConnectError::Tonic(error.to_string()))?;
@@ -98,9 +98,7 @@ impl GuestConnector {
     }
 
     #[cfg(not(unix))]
-    pub async fn client(
-        &self,
-    ) -> Result<GuestServiceClient<Channel>, VsockConnectError> {
+    pub async fn client(&self) -> Result<GuestServiceClient<Channel>, VsockConnectError> {
         Err(VsockConnectError::UnsupportedHost)
     }
 }

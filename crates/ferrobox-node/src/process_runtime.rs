@@ -8,20 +8,19 @@ use std::{
 use async_trait::async_trait;
 use ferrobox_core::{
     DirectoryEntry, ExecRequest, ExecResult, ExecTermination, FileKind, ListDirectoryRequest,
-    ListDirectoryResult, OutputTruncation, ProcessId, ReadFileRequest, ReadFileResult, RuntimeError,
-    RuntimeErrorKind, SandboxHandle, SandboxId, SandboxPath, SandboxRuntime, SandboxSpec,
-    SandboxState, SignalRequest, SignalResult, WriteFileRequest, WriteFileResult, MAX_FILE_BYTES,
+    ListDirectoryResult, MAX_FILE_BYTES, OutputTruncation, ProcessId, ReadFileRequest,
+    ReadFileResult, RuntimeError, RuntimeErrorKind, SandboxHandle, SandboxId, SandboxPath,
+    SandboxRuntime, SandboxSpec, SandboxState, SignalRequest, SignalResult, WriteFileRequest,
+    WriteFileResult,
 };
 use tokio::{
     fs,
     process::Command,
     sync::RwLock,
-    time::{timeout, Instant},
+    time::{Instant, timeout},
 };
 
-use crate::audit::{
-    AuditAction, AuditEvent, AuditOutcome, AuditSink, TracingAuditSink,
-};
+use crate::audit::{AuditAction, AuditEvent, AuditOutcome, AuditSink, TracingAuditSink};
 
 #[derive(Clone)]
 struct ProcessSandbox {

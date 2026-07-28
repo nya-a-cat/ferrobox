@@ -227,9 +227,10 @@ impl ExecRequest {
     pub fn validate(&self) -> Result<(), ValidationError> {
         if self.argv.is_empty()
             || self.argv.len() > 256
-            || self.argv.iter().any(|argument| {
-                argument.as_bytes().contains(&0) || argument.len() > 128 * 1024
-            })
+            || self
+                .argv
+                .iter()
+                .any(|argument| argument.as_bytes().contains(&0) || argument.len() > 128 * 1024)
         {
             return Err(ValidationError::Argv);
         }

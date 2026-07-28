@@ -71,18 +71,9 @@ pub fn router(state: AppState) -> Router {
             "/v1/sandboxes/{id}",
             get(get_sandbox).delete(delete_sandbox),
         )
-        .route(
-            "/v1/sandboxes/{id}/commands",
-            post(execute_command),
-        )
-        .route(
-            "/v1/sandboxes/{id}/files",
-            put(write_file).get(read_file),
-        )
-        .route(
-            "/v1/sandboxes/{id}/directories",
-            get(list_directory),
-        )
+        .route("/v1/sandboxes/{id}/commands", post(execute_command))
+        .route("/v1/sandboxes/{id}/files", put(write_file).get(read_file))
+        .route("/v1/sandboxes/{id}/directories", get(list_directory))
         .route("/v1/sandboxes/{id}/pause", post(pause_sandbox))
         .route("/v1/sandboxes/{id}/resume", post(resume_sandbox))
         .layer(RequestBodyLimitLayer::new(MAX_REQUEST_BODY))
@@ -169,8 +160,8 @@ async fn create_sandbox(
     };
     let (token, digest) = TokenDigest::issue();
     let expires_at = Instant::now() + Duration::from_secs(spec.timeout_seconds);
-    let expires_at_unix_ms = unix_millis()
-        .saturating_add(u128::from(spec.timeout_seconds).saturating_mul(1000));
+    let expires_at_unix_ms =
+        unix_millis().saturating_add(u128::from(spec.timeout_seconds).saturating_mul(1000));
     state.inner.records.write().await.insert(
         handle.sandbox_id.clone(),
         SandboxRecord {
@@ -278,10 +269,7 @@ async fn execute_command(
         .execute(&id, request)
         .await
         .map_err(ApiError::from_runtime)?;
-    let details = BTreeMap::from([(
-        "process_id".to_owned(),
-        result.process_id.to_string(),
-    )]);
+    let details = BTreeMap::from([("process_id".to_owned(), result.process_id.to_string())]);
     state
         .inner
         .audit
@@ -346,10 +334,7 @@ async fn write_file(
             Some(&id.to_string()),
             "write_file",
             "succeeded",
-            &BTreeMap::from([(
-                "bytes".to_owned(),
-                result.bytes_written.to_string(),
-            )]),
+            &BTreeMap::from([("bytes".to_owned(), result.bytes_written.to_string())]),
         )
         .await
         .map_err(ApiError::internal)?;
@@ -478,11 +463,7 @@ async fn delete_sandbox(
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn delete_internal(
-    state: &AppState,
-    id: &SandboxId,
-    reason: &str,
-) -> Result<(), ApiError> {
+async fn delete_internal(state: &AppState, id: &SandboxId, reason: &str) -> Result<(), ApiError> {
     transition(state, id, SandboxState::Deleting).await?;
     if let Err(error) = state.inner.runtime.delete(id).await {
         transition(state, id, SandboxState::Failed).await?;
@@ -521,11 +502,7 @@ fn spawn_ttl_reaper(state: AppState, id: SandboxId, ttl_seconds: u64) {
     });
 }
 
-async fn transition(
-    state: &AppState,
-    id: &SandboxId,
-    next: SandboxState,
-) -> Result<(), ApiError> {
+async fn transition(state: &AppState, id: &SandboxId, next: SandboxState) -> Result<(), ApiError> {
     let mut records = state.inner.records.write().await;
     let record = records
         .get_mut(id)

@@ -8,9 +8,9 @@ use std::{
 use async_trait::async_trait;
 use ferrobox_core::{
     DirectoryEntry, ExecRequest, ExecResult, ExecTermination, FileKind, ListDirectoryRequest,
-    ListDirectoryResult, OutputTruncation, ProcessId, ReadFileRequest, ReadFileResult, RuntimeError,
-    RuntimeErrorKind, SandboxHandle, SandboxId, SandboxPath, SandboxRuntime, SandboxSpec,
-    SandboxState, SignalRequest, SignalResult, WriteFileRequest, WriteFileResult,
+    ListDirectoryResult, OutputTruncation, ProcessId, ReadFileRequest, ReadFileResult,
+    RuntimeError, RuntimeErrorKind, SandboxHandle, SandboxId, SandboxPath, SandboxRuntime,
+    SandboxSpec, SandboxState, SignalRequest, SignalResult, WriteFileRequest, WriteFileResult,
 };
 use ferrobox_protocol::guest::v1::{
     self as guest, Auth, HealthRequest, InitRequest, ListDirectoryRequest as GuestListRequest,
@@ -21,7 +21,7 @@ use tokio::{
     fs,
     process::{Child, Command},
     sync::{Mutex, RwLock},
-    time::{sleep, timeout, Instant},
+    time::{Instant, sleep, timeout},
 };
 use tonic::Request;
 
@@ -144,10 +144,7 @@ impl FirecrackerRuntime {
         spec: &SandboxSpec,
         network: Option<&NetworkLease>,
     ) -> Result<(), RuntimeError> {
-        let version: VersionResponse = api
-            .get("/version")
-            .await
-            .map_err(fc_error)?;
+        let version: VersionResponse = api.get("/version").await.map_err(fc_error)?;
         if version.firecracker_version != FIRECRACKER_VERSION {
             return Err(RuntimeError::new(
                 RuntimeErrorKind::Unavailable,
@@ -247,10 +244,16 @@ impl FirecrackerRuntime {
                                 command_gid: 1000,
                                 max_file_bytes: ferrobox_core::MAX_FILE_BYTES,
                                 max_processes: 256,
-                                guest_ipv4: network.map_or_else(String::new, |lease| lease.guest_address.clone()),
+                                guest_ipv4: network
+                                    .map_or_else(String::new, |lease| lease.guest_address.clone()),
                                 guest_prefix_length: if network.is_some() { 24 } else { 0 },
-                                gateway_ipv4: network.map_or_else(String::new, |lease| lease.gateway.clone()),
-                                dns_ipv4: if network.is_some() { "1.1.1.1".to_owned() } else { String::new() },
+                                gateway_ipv4: network
+                                    .map_or_else(String::new, |lease| lease.gateway.clone()),
+                                dns_ipv4: if network.is_some() {
+                                    "1.1.1.1".to_owned()
+                                } else {
+                                    String::new()
+                                },
                             }))
                             .await
                             .map_err(|error| {
@@ -268,10 +271,7 @@ impl FirecrackerRuntime {
         }
     }
 
-    async fn record(
-        &self,
-        id: &SandboxId,
-    ) -> Result<Arc<Mutex<FirecrackerSandbox>>, RuntimeError> {
+    async fn record(&self, id: &SandboxId) -> Result<Arc<Mutex<FirecrackerSandbox>>, RuntimeError> {
         self.sandboxes
             .read()
             .await
@@ -305,9 +305,10 @@ impl FirecrackerRuntime {
                 "sandbox is not running",
             ));
         }
-        let client = connector.client().await.map_err(|error| {
-            RuntimeError::new(RuntimeErrorKind::Unavailable, error.to_string())
-        })?;
+        let client = connector
+            .client()
+            .await
+            .map_err(|error| RuntimeError::new(RuntimeErrorKind::Unavailable, error.to_string()))?;
         Ok((client, token_value))
     }
 }
@@ -399,7 +400,10 @@ impl SandboxRuntime for FirecrackerRuntime {
             return Err(error);
         }
         let api = FirecrackerClient::new(api_socket, self.config.api_timeout);
-        if let Err(error) = self.configure_and_start(&api, &spec, network.as_ref()).await {
+        if let Err(error) = self
+            .configure_and_start(&api, &spec, network.as_ref())
+            .await
+        {
             let _ = child.kill().await;
             if let Some(lease) = &network {
                 let _ = self.network.delete(lease).await;

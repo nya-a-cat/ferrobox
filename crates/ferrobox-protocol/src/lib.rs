@@ -5,4 +5,3 @@ pub mod guest {
         tonic::include_proto!("ferrobox.guest.v1");
     }
 }
-

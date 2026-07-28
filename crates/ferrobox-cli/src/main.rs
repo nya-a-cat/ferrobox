@@ -9,7 +9,11 @@ use serde_json::{Value, json};
 #[derive(Debug, Parser)]
 #[command(name = "ferrobox", version)]
 struct Cli {
-    #[arg(long, env = "FERROBOX_API_URL", default_value = "http://127.0.0.1:8080")]
+    #[arg(
+        long,
+        env = "FERROBOX_API_URL",
+        default_value = "http://127.0.0.1:8080"
+    )]
     api_url: String,
     #[command(subcommand)]
     command: Command,
@@ -167,10 +171,7 @@ async fn main() -> anyhow::Result<()> {
                 print!("{}", String::from_utf8_lossy(&data));
             }
         }
-        Command::Delete {
-            sandbox_id,
-            token,
-        } => {
+        Command::Delete { sandbox_id, token } => {
             let response = authorized(
                 &client,
                 Method::DELETE,
@@ -186,7 +187,12 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn authorized(client: &Client, method: Method, url: String, token: &str) -> reqwest::RequestBuilder {
+fn authorized(
+    client: &Client,
+    method: Method,
+    url: String,
+    token: &str,
+) -> reqwest::RequestBuilder {
     client.request(method, url).bearer_auth(token)
 }
 
