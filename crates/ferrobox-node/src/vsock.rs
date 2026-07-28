@@ -1,6 +1,8 @@
 use std::{path::PathBuf, time::Duration};
 
 use ferrobox_protocol::guest::v1::guest_service_client::GuestServiceClient;
+#[cfg(unix)]
+use hyper_util::rt::TokioIo;
 use thiserror::Error;
 use tokio::{
     io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader},
@@ -89,6 +91,7 @@ impl GuestConnector {
                     connector
                         .connect_stream()
                         .await
+                        .map(TokioIo::new)
                         .map_err(std::io::Error::other)
                 }
             }))
