@@ -40,7 +40,22 @@ if [[ "${FERROBOX_INTERNET:-0}" == "1" ]]; then
     arguments+=(--internet)
     expected=$'42\ninternet=ok'
 fi
-output="$(timeout --kill-after=10s 120s "${node_binary}" "${arguments[@]}")"
+output_file="$(mktemp)"
+cleanup() {
+    rm -f -- "${output_file}"
+}
+trap cleanup EXIT
+set +e
+timeout --kill-after=10s 120s \
+    "${node_binary}" "${arguments[@]}" >"${output_file}"
+status="$?"
+set -e
+if [[ "${status}" -ne 0 ]]; then
+    echo "Firecracker KVM E2E command failed with status ${status}" >&2
+    cat "${output_file}" >&2
+    exit "${status}"
+fi
+output="$(cat "${output_file}")"
 [[ "${output}" == "${expected}" ]]
 
 sleep 1

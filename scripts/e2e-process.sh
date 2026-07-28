@@ -6,11 +6,18 @@ runtime_root="$(mktemp -d)"
 api_pid=""
 
 cleanup() {
+    status="$?"
+    if [[ "${status}" -ne 0 && -f "${runtime_root}/api.log" ]]; then
+        echo "::group::Ferrobox API log"
+        cat "${runtime_root}/api.log"
+        echo "::endgroup::"
+    fi
     if [[ -n "${api_pid}" ]]; then
         kill "${api_pid}" 2>/dev/null || true
         wait "${api_pid}" 2>/dev/null || true
     fi
     rm -rf -- "${runtime_root}"
+    return "${status}"
 }
 trap cleanup EXIT
 
@@ -26,6 +33,9 @@ api_pid="$!"
 for _ in $(seq 1 120); do
     if curl --fail --silent "${api_url}/healthz" >/dev/null; then
         break
+    fi
+    if ! kill -0 "${api_pid}" 2>/dev/null; then
+        wait "${api_pid}"
     fi
     sleep 0.25
 done
