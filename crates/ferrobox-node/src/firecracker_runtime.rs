@@ -231,41 +231,38 @@ impl FirecrackerRuntime {
                     "guest agent did not become ready",
                 ));
             }
-            match connector.client().await {
-                Ok(mut client) => {
-                    let health = client.health(Request::new(HealthRequest {})).await;
-                    if health.is_ok() {
-                        client
-                            .init(Request::new(InitRequest {
-                                request_id: uuid::Uuid::new_v4().to_string(),
-                                sandbox_id: id.to_string(),
-                                token: token_value.to_owned(),
-                                command_uid: 1000,
-                                command_gid: 1000,
-                                max_file_bytes: ferrobox_core::MAX_FILE_BYTES,
-                                max_processes: 256,
-                                guest_ipv4: network
-                                    .map_or_else(String::new, |lease| lease.guest_address.clone()),
-                                guest_prefix_length: if network.is_some() { 24 } else { 0 },
-                                gateway_ipv4: network
-                                    .map_or_else(String::new, |lease| lease.gateway.clone()),
-                                dns_ipv4: if network.is_some() {
-                                    "1.1.1.1".to_owned()
-                                } else {
-                                    String::new()
-                                },
-                            }))
-                            .await
-                            .map_err(|error| {
-                                RuntimeError::new(
-                                    RuntimeErrorKind::Unavailable,
-                                    format!("guest init: {error}"),
-                                )
-                            })?;
-                        return Ok(());
-                    }
+            if let Ok(mut client) = connector.client().await {
+                let health = client.health(Request::new(HealthRequest {})).await;
+                if health.is_ok() {
+                    client
+                        .init(Request::new(InitRequest {
+                            request_id: uuid::Uuid::new_v4().to_string(),
+                            sandbox_id: id.to_string(),
+                            token: token_value.to_owned(),
+                            command_uid: 1000,
+                            command_gid: 1000,
+                            max_file_bytes: ferrobox_core::MAX_FILE_BYTES,
+                            max_processes: 256,
+                            guest_ipv4: network
+                                .map_or_else(String::new, |lease| lease.guest_address.clone()),
+                            guest_prefix_length: if network.is_some() { 24 } else { 0 },
+                            gateway_ipv4: network
+                                .map_or_else(String::new, |lease| lease.gateway.clone()),
+                            dns_ipv4: if network.is_some() {
+                                "1.1.1.1".to_owned()
+                            } else {
+                                String::new()
+                            },
+                        }))
+                        .await
+                        .map_err(|error| {
+                            RuntimeError::new(
+                                RuntimeErrorKind::Unavailable,
+                                format!("guest init: {error}"),
+                            )
+                        })?;
+                    return Ok(());
                 }
-                Err(_) => {}
             }
             sleep(Duration::from_millis(100)).await;
         }
