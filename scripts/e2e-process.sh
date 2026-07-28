@@ -57,7 +57,7 @@ exec_response="$(
         --data '{"argv":["python3","-c","print(42)"],"cwd":"/home/sandbox","environment":{},"timeout_seconds":30,"max_output_bytes":1048576}' \
         "${api_url}/v1/sandboxes/${sandbox_id}/commands"
 )"
-[[ "$(jq -r '.stdout' <<<"${exec_response}")" == "42"$'\n' ]]
+[[ "$(jq -r '.stdout' <<<"${exec_response}")" == "42" ]]
 [[ "$(jq -r '.termination.kind' <<<"${exec_response}")" == "exited" ]]
 
 literal_response="$(
@@ -67,7 +67,7 @@ literal_response="$(
         --data '{"argv":["python3","-c","import sys; print(sys.argv[1])","$(touch /tmp/ferrobox-injected);"],"cwd":"/home/sandbox","environment":{},"timeout_seconds":30,"max_output_bytes":1048576}' \
         "${api_url}/v1/sandboxes/${sandbox_id}/commands"
 )"
-[[ "$(jq -r '.stdout' <<<"${literal_response}")" == '$(touch /tmp/ferrobox-injected);'$'\n' ]]
+[[ "$(jq -r '.stdout' <<<"${literal_response}")" == '$(touch /tmp/ferrobox-injected);' ]]
 [[ ! -e /tmp/ferrobox-injected ]]
 
 curl --fail --silent \

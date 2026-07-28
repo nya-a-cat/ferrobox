@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    process::Stdio,
     sync::Arc,
     time::Duration,
 };
@@ -391,7 +392,9 @@ impl SandboxRuntime for FirecrackerRuntime {
         if let Some(lease) = &network {
             command.arg("--netns").arg(&lease.namespace_path);
         }
-        command.args(["--", "--api-sock", "/run/firecracker.socket"]);
+        command
+            .args(["--", "--api-sock", "/run/firecracker.socket"])
+            .stdout(Stdio::null());
         let mut child = command
             .kill_on_drop(true)
             .spawn()
