@@ -40,7 +40,7 @@ if [[ "${FERROBOX_INTERNET:-0}" == "1" ]]; then
     arguments+=(--internet)
     expected=$'42\ninternet=ok'
 fi
-output="$(timeout 120s "${node_binary}" "${arguments[@]}")"
+output="$(timeout --kill-after=10s 120s "${node_binary}" "${arguments[@]}")"
 [[ "${output}" == "${expected}" ]]
 
 sleep 1

@@ -494,10 +494,8 @@ fn spawn_ttl_reaper(state: AppState, id: SandboxId, ttl_seconds: u64) {
             .await
             .get(&id)
             .is_some_and(|record| record.expires_at <= Instant::now());
-        if expired {
-            if let Err(error) = delete_internal(&state, &id, "ttl").await {
-                tracing::error!(sandbox_id = %id, error = %error.message, "TTL cleanup failed");
-            }
+        if expired && let Err(error) = delete_internal(&state, &id, "ttl").await {
+            tracing::error!(sandbox_id = %id, error = %error.message, "TTL cleanup failed");
         }
     });
 }

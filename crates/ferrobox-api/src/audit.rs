@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeMap,
     io,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -72,7 +72,7 @@ impl AuditLog {
     }
 
     #[cfg(test)]
-    pub(crate) fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &std::path::Path {
         &self.path
     }
 }
