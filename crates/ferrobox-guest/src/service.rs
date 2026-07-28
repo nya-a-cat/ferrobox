@@ -332,7 +332,7 @@ impl guest_service_server::GuestService for GuestService {
         }
         let relative = Self::relative_path(&request.path)?;
         let workspace_path = self.workspace.clone();
-        let response = tokio::task::spawn_blocking(move || {
+        let response = tokio::task::spawn_blocking(move || -> Result<WriteFileResponse, Status> {
             let directory = Self::open_workspace(&workspace_path)?;
             Self::verify_components(&directory, &relative, true)?;
             if let Some(parent) = relative.parent() {
@@ -423,7 +423,7 @@ impl guest_service_server::GuestService for GuestService {
             let directory = Self::open_workspace(&workspace_path)?;
             Self::verify_components(&directory, &relative, false)?;
             let mut output = Vec::new();
-            for entry in directory.entries(&relative).map_err(map_file_error)? {
+            for entry in directory.read_dir(&relative).map_err(map_file_error)? {
                 if output.len() >= 4096 {
                     return Err(Status::resource_exhausted("directory entry limit exceeded"));
                 }
@@ -440,6 +440,7 @@ impl guest_service_server::GuestService for GuestService {
                 let modified_unix_millis = metadata
                     .modified()
                     .ok()
+                    .map(cap_std::time::SystemTime::into_std)
                     .and_then(|value| value.duration_since(SystemTime::UNIX_EPOCH).ok())
                     .and_then(|value| u64::try_from(value.as_millis()).ok());
                 output.push(DirectoryEntry {
