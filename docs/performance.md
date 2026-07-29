@@ -103,12 +103,12 @@ measurement. This matches the runtime's COW storage requirement and prevents a
 full sparse-image copy from being counted as sandbox allocation.
 
 `pool_prepare_us` measures a complete snapshot restore, guest health check, and
-unique guest initialization for each prepared microVM. It also warms one
-minimal native process and the Python interpreter so lazy snapshot page faults
-stay in the background boundary. `create_to_ready_us` measures a compatible API
-allocation from that ready pool. Both sample sets are retained; pool
-construction is never hidden inside workflow setup time. Once a snapshot
-exists, missing pool entries restore concurrently.
+unique guest initialization for each prepared microVM. It also warms the Python
+interpreter so its main lazy snapshot page faults stay in the background
+boundary. `create_to_ready_us` measures a compatible API allocation from that
+ready pool. Both sample sets are retained; pool construction is never hidden
+inside workflow setup time. Once a snapshot exists, missing pool entries
+restore concurrently.
 
 The runtime artifact also records the ready-pool size and summed `VmRSS` from
 the corresponding Firecracker processes after native/Python page warmup. This
