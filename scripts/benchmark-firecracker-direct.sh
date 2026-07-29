@@ -12,10 +12,17 @@ rootfs_template="${FERROBOX_ROOTFS:?FERROBOX_ROOTFS is required}"
 probe="${FERROBOX_MICROVM_PROBE:?FERROBOX_MICROVM_PROBE is required}"
 output="${FERROBOX_FIRECRACKER_DIRECT_OUTPUT:?FERROBOX_FIRECRACKER_DIRECT_OUTPUT is required}"
 runtime_root="${FERROBOX_FIRECRACKER_DIRECT_RUNTIME_ROOT:-/mnt/ferrobox/runtime/firecracker-direct}"
+cpu_max="${FERROBOX_FIRECRACKER_DIRECT_CPU_MAX:-}"
 
 mkdir -p "${runtime_root}"
 runtime_root="$(realpath "${runtime_root}")"
 workdir="$(mktemp -d "${runtime_root}/benchmark.XXXXXX")"
+cgroup_path=
+if [[ -n "${cpu_max}" ]]; then
+    cgroup_path="/sys/fs/cgroup/ferrobox-direct-benchmark-$$"
+    mkdir "${cgroup_path}"
+    printf '%s\n' "${cpu_max}" >"${cgroup_path}/cpu.max"
+fi
 cleanup() {
     if [[ -n "${child_pid:-}" ]]; then
         kill "${child_pid}" 2>/dev/null || true
@@ -25,6 +32,9 @@ cleanup() {
         "${runtime_root}"/benchmark.*) rm -rf -- "${workdir}" ;;
         *) echo "refusing to remove unexpected workdir: ${workdir}" >&2 ;;
     esac
+    if [[ -n "${cgroup_path}" ]]; then
+        rmdir -- "${cgroup_path}"
+    fi
 }
 trap cleanup EXIT
 
@@ -51,6 +61,9 @@ for iteration in $(seq 1 5); do
     launched_unix_nanos="$(date +%s%N)"
     "${firecracker}" --api-sock "${api}" >"${log}" 2>&1 &
     child_pid=$!
+    if [[ -n "${cgroup_path}" ]]; then
+        printf '%s\n' "${child_pid}" >"${cgroup_path}/cgroup.procs"
+    fi
     for _ in $(seq 1 200); do
         if [[ -S "${api}" ]]; then
             break
@@ -109,11 +122,12 @@ jq --slurp '
     .[-1] + {
         schema_version: 2,
         runtime: "firecracker-direct",
+        host_cpu_max: $cpu_max,
         ready_us: $ready,
         ready_p50_us: $ready[2],
         ready_p95_us: $ready[4]
     }
-' "${results[@]}" >"${output}"
+' --arg cpu_max "${cpu_max}" "${results[@]}" >"${output}"
 
 jq --exit-status '
     .schema_version == 2 and

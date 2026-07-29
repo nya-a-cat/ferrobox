@@ -362,6 +362,19 @@ jobs:
           sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_MICROVM_PROBE,FERROBOX_FIRECRACKER_DIRECT_OUTPUT,FERROBOX_FIRECRACKER_DIRECT_RUNTIME_ROOT \
             bash scripts/benchmark-firecracker-direct.sh
 
+      - name: Benchmark CPU-capped direct Firecracker boundary
+        env:
+          FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
+          FERROBOX_KERNEL: /mnt/ferrobox/images/vmlinux
+          FERROBOX_ROOTFS: /mnt/ferrobox/images/python.ext4
+          FERROBOX_MICROVM_PROBE: target/debug/microvm-probe
+          FERROBOX_FIRECRACKER_DIRECT_OUTPUT: ${{ runner.temp }}/firecracker-direct-capped-benchmark.json
+          FERROBOX_FIRECRACKER_DIRECT_RUNTIME_ROOT: /mnt/ferrobox/runtime/firecracker-direct-capped
+          FERROBOX_FIRECRACKER_DIRECT_CPU_MAX: "100000 100000"
+        run: |
+          sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_MICROVM_PROBE,FERROBOX_FIRECRACKER_DIRECT_OUTPUT,FERROBOX_FIRECRACKER_DIRECT_RUNTIME_ROOT,FERROBOX_FIRECRACKER_DIRECT_CPU_MAX \
+            bash scripts/benchmark-firecracker-direct.sh
+
       - name: Benchmark Cloud Hypervisor guest boundary
         env:
           FERROBOX_CLOUD_HYPERVISOR: /opt/ferrobox/bin/cloud-hypervisor
@@ -515,6 +528,7 @@ jobs:
             ${{ runner.temp }}/cloud-hypervisor-version.txt
             ${{ runner.temp }}/cloud-hypervisor.sha256
             ${{ runner.temp }}/firecracker-direct-benchmark.json
+            ${{ runner.temp }}/firecracker-direct-capped-benchmark.json
             ${{ runner.temp }}/kata-benchmark.json
             ${{ runner.temp }}/kata-version.txt
             ${{ runner.temp }}/kata-static.sha256

@@ -77,6 +77,10 @@ MicroVM probe schema 2 adds a second minimal-command series that clones the
 tonic client before each request. The persistent-client and cloned-client
 series run against the same guest, isolating client reuse from VMM and guest
 variation.
+The workflow also reruns direct Firecracker inside the same
+`cpu.max=100000 100000` host quota used by a one-vCPU Ferrobox sandbox. This
+diagnostic separates VMM/runtime implementation cost from host CPU scheduling
+policy.
 
 The mandatory microVM leadership step remains red because the snapshot-pooled
 full runtime does not yet beat direct Cloud Hypervisor at `/bin/true` P50.
