@@ -225,11 +225,7 @@ async fn main() -> anyhow::Result<()> {
 
             let mut raw_guest_true_us = Vec::with_capacity(exec_iterations as usize);
             for _ in 0..exec_iterations {
-                raw_guest_true_us.push(
-                    runtime
-                        .benchmark_raw_true_us(&handle.sandbox_id)
-                        .await?,
-                );
+                raw_guest_true_us.push(runtime.benchmark_raw_true_us(&handle.sandbox_id).await?);
             }
             raw_guest_true_us.sort_unstable();
 
