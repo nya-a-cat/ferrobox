@@ -110,6 +110,10 @@ allocation from that ready pool. Both sample sets are retained; pool
 construction is never hidden inside workflow setup time. Once a snapshot
 exists, missing pool entries restore concurrently.
 
+The runtime artifact also records the ready-pool size and summed `VmRSS` from
+the corresponding Firecracker processes after native/Python page warmup. This
+keeps latency gains paired with an auditable resident-memory cost.
+
 `http_create_us` is the user-facing same-host boundary. It starts immediately
 before an HTTP `POST /v1/sandboxes` and ends after the complete 201 response is
 read. It includes request parsing, pool allocation, state registration, token

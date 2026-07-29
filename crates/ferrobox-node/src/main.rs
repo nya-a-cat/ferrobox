@@ -40,6 +40,8 @@ struct BenchmarkResult {
     pool_prepare_us: Vec<u128>,
     pool_prepare_p50_us: u128,
     pool_prepare_p95_us: u128,
+    pool_firecracker_rss_kib: u64,
+    pool_size: usize,
     create_to_ready_us: Vec<u128>,
     create_to_ready_p50_us: u128,
     create_to_ready_p95_us: u128,
@@ -128,6 +130,8 @@ async fn main() -> anyhow::Result<()> {
                 .prewarm(benchmark_spec(), create_iterations as usize)
                 .await?;
             pool_prepare_us.sort_unstable();
+            let pool_size = runtime.ready_pool_len().await;
+            let pool_firecracker_rss_kib = runtime.firecracker_rss_kib().await?;
             let mut create_to_ready_us = Vec::with_capacity(create_iterations as usize);
             let mut delete_us = Vec::with_capacity(create_iterations as usize);
             let mut handle = None;
@@ -181,10 +185,12 @@ async fn main() -> anyhow::Result<()> {
             delete_us.push(delete_started.elapsed().as_micros());
             delete_us.sort_unstable();
             let result = BenchmarkResult {
-                schema_version: 3,
+                schema_version: 4,
                 pool_prepare_p50_us: percentile(&pool_prepare_us, 50),
                 pool_prepare_p95_us: percentile(&pool_prepare_us, 95),
                 pool_prepare_us,
+                pool_firecracker_rss_kib,
+                pool_size,
                 create_to_ready_p50_us: percentile(&create_to_ready_us, 50),
                 create_to_ready_p95_us: percentile(&create_to_ready_us, 95),
                 create_to_ready_us,

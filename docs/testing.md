@@ -36,6 +36,7 @@ supply-chain record.
 The same hosted-KVM job emits `ferrobox-benchmark.json` with:
 
 - five sorted ready-pool preparation samples plus P50 and P95;
+- ready-pool size and summed Firecracker resident memory;
 - five sorted create-to-ready samples plus P50 and P95;
 - all `/bin/true` execution samples plus P50 and P95;
 - one Python execution sample;

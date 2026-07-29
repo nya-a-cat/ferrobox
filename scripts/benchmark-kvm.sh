@@ -21,8 +21,10 @@ create_iterations="${FERROBOX_BENCHMARK_CREATE_ITERATIONS:-5}"
     >"${output}"
 
 jq --exit-status '
-    .schema_version == 3 and
+    .schema_version == 4 and
     (.pool_prepare_us | length > 0) and
+    .pool_size > 0 and
+    .pool_firecracker_rss_kib > 0 and
     (.create_to_ready_us | length > 0) and
     (.delete_us | length > 0) and
     (.exec_true_us | length > 0)

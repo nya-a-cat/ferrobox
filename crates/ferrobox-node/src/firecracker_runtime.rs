@@ -173,6 +173,35 @@ impl FirecrackerRuntime {
         self.ready_pool.lock().await.len()
     }
 
+    pub async fn firecracker_rss_kib(&self) -> Result<u64, RuntimeError> {
+        let records = self
+            .sandboxes
+            .read()
+            .await
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut total = 0_u64;
+        for record in records {
+            let process_id = record
+                .lock()
+                .await
+                .child
+                .id()
+                .ok_or_else(|| RuntimeError::internal("Firecracker process has no PID"))?;
+            let status = fs::read_to_string(format!("/proc/{process_id}/status"))
+                .await
+                .map_err(|error| {
+                    RuntimeError::internal(format!("read Firecracker process status: {error}"))
+                })?;
+            total = total.saturating_add(
+                parse_vm_rss_kib(&status)
+                    .ok_or_else(|| RuntimeError::internal("Firecracker VmRSS is missing"))?,
+            );
+        }
+        Ok(total)
+    }
+
     async fn warm_ready_sandbox(&self, handle: &SandboxHandle) -> Result<(), RuntimeError> {
         for argv in [
             vec!["/bin/true".to_owned()],
@@ -1030,6 +1059,16 @@ fn guest_cid(spec: &SandboxSpec) -> u32 {
     3 + (u32::from(spec.cpu_count) << 8) + (spec.memory_mb % 127)
 }
 
+fn parse_vm_rss_kib(status: &str) -> Option<u64> {
+    status.lines().find_map(|line| {
+        line.strip_prefix("VmRSS:")?
+            .split_whitespace()
+            .next()?
+            .parse()
+            .ok()
+    })
+}
+
 fn fc_error(error: crate::firecracker::FirecrackerError) -> RuntimeError {
     RuntimeError::new(RuntimeErrorKind::Unavailable, error.to_string())
 }
@@ -1046,4 +1085,17 @@ fn guest_error(error: tonic::Status) -> RuntimeError {
         _ => RuntimeErrorKind::Unavailable,
     };
     RuntimeError::new(kind, error.message())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_vm_rss_kib;
+
+    #[test]
+    fn parses_linux_process_rss() {
+        assert_eq!(
+            parse_vm_rss_kib("Name:\tfirecracker\nVmRSS:\t  12345 kB\n"),
+            Some(12345)
+        );
+    }
 }
