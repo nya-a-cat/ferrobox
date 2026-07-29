@@ -36,6 +36,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 
 type RpcStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send + 'static>>;
+const FILE_CHUNK_BYTES: u64 = 1024 * 1024;
 
 #[derive(Clone)]
 struct InitState {
@@ -384,7 +385,8 @@ impl guest_service_server::GuestService for GuestService {
             let mut remaining = maximum;
             let mut chunks = Vec::new();
             while remaining > 0 {
-                let size = usize::try_from(remaining.min(64 * 1024)).unwrap_or(64 * 1024);
+                let size = usize::try_from(remaining.min(FILE_CHUNK_BYTES))
+                    .unwrap_or(FILE_CHUNK_BYTES as usize);
                 let mut data = vec![0; size];
                 let read = file
                     .read(&mut data)
