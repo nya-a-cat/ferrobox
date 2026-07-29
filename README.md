@@ -93,31 +93,37 @@ is recorded in [Scope and acceptance](docs/scope.md).
 ## Measured startup performance
 
 GitHub Actions run
-[`30424454694`](https://github.com/nya-a-cat/ferrobox/actions/runs/30424454694)
+[`30424993453`](https://github.com/nya-a-cat/ferrobox/actions/runs/30424993453)
 measured the real HTTP control plane, Docker, and gVisor `runsc` on one hosted
 nested-KVM runner:
 
 | Five-sample P95 | Latency |
 | --- | ---: |
-| Ferrobox `POST /v1/sandboxes` from a ready pool | 4.212 ms |
-| Ferrobox five-client concurrent create | 6.234 ms |
-| Docker/runc container create + start | 133.117 ms |
-| gVisor/runsc container create + start | 149.404 ms |
+| Ferrobox `POST /v1/sandboxes` from a ready pool | 4.558 ms |
+| Ferrobox five-client concurrent create | 5.908 ms |
+| Docker/runc container create + start | 139.797 ms |
+| gVisor/runsc container create + start | 143.987 ms |
 
 | 100-command result | P50 | P95 | Sequential throughput |
 | --- | ---: | ---: | ---: |
-| Ferrobox guest `/bin/true` RPC | 3.847 ms | 14.002 ms | 164.169 ops/s |
-| Docker/runc `/bin/true` exec-to-exit | 36.392 ms | 40.178 ms | 27.183 ops/s |
-| gVisor/runsc `/bin/true` exec-to-exit | 22.998 ms | 24.884 ms | 43.006 ops/s |
+| Ferrobox guest `/bin/true` RPC | 3.149 ms | 20.238 ms | 150.955 ops/s |
+| Docker/runc `/bin/true` exec-to-exit | 35.478 ms | 37.945 ms | 28.043 ops/s |
+| gVisor/runsc `/bin/true` exec-to-exit | 21.139 ms | 22.975 ms | 46.820 ops/s |
+
+| 30-command Python 3.11 result | P50 | P95 | Sequential throughput |
+| --- | ---: | ---: | ---: |
+| Ferrobox `python3 -c "print(42)"` | 17.327 ms | 19.596 ms | 60.742 ops/s |
+| Docker/runc `python3 -c "print(42)"` | 46.769 ms | 48.847 ms | 21.349 ops/s |
+| gVisor/runsc `python3 -c "print(42)"` | 40.007 ms | 41.851 ms | 24.952 ops/s |
 
 The workflow uses direct HTTP, preloads template images, matches the available
 resource settings, retains all raw samples, verifies the official gVisor
 archive with SHA-512, and gates Ferrobox P95 below both Docker/runc and
-gVisor/runsc for startup and command execution. Ferrobox sustained 6.04 times
-the Docker/runc sequential command throughput and 3.82 times the gVisor/runsc
-throughput in this boundary. Percentiles use the conservative nearest-rank
-method. Snapshot restore cost, ready-pool allocation, burst wall time, and
-resident memory are reported separately in
+gVisor/runsc for startup, minimal command execution, and Python execution.
+Ferrobox sustained 2.85 times the Docker/runc Python throughput and 2.43 times
+the gVisor/runsc Python throughput in this boundary. Percentiles use the
+conservative nearest-rank method. Snapshot restore cost, ready-pool allocation,
+burst wall time, and resident memory are reported separately in
 [Performance evidence](docs/performance.md).
 
 ## API example

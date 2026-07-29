@@ -139,6 +139,28 @@ gVisor/runsc create-and-start at 134.211 ms P50 and 149.404 ms P95. The
 five-client Ferrobox allocation burst had a 6.234 ms P95 and completed in
 23.857 ms.
 
+Run [30424993453](https://github.com/nya-a-cat/ferrobox/actions/runs/30424993453)
+adds a 30-sample Python 3.11 short-script comparison after one untimed warmup:
+
+| Runtime | Python P50 | Python P95 | Sequential throughput |
+| --- | ---: | ---: | ---: |
+| Ferrobox | 17.327 ms | 19.596 ms | 60.742 ops/s |
+| Docker/runc | 46.769 ms | 48.847 ms | 21.349 ops/s |
+| gVisor/runsc | 40.007 ms | 41.851 ms | 24.952 ops/s |
+
+Ferrobox had 2.70 times lower Python P50 and 2.49 times lower Python P95 than
+Docker/runc, and 2.31 times lower P50 and 2.14 times lower P95 than
+gVisor/runsc. Its Python throughput was 2.85 times Docker/runc and 2.43 times
+gVisor/runsc. The workflow enforces both P95 comparisons as mandatory gates.
+All three controls execute `python3 -c "print(42)"` with Python 3.11 after one
+untimed interpreter warmup.
+
+The same artifact retained one hundred `/bin/true` samples. Ferrobox measured
+3.149 ms P50, 20.238 ms P95, and 150.955 ops/s. Docker/runc measured
+35.478 ms, 37.945 ms, and 28.043 ops/s; gVisor/runsc measured 21.139 ms,
+22.975 ms, and 46.820 ops/s. This repeat confirms leadership while showing
+hosted-runner variation in the Ferrobox upper tail.
+
 ## Measurement boundary
 
 Each `create_to_ready_us` sample starts before `FirecrackerRuntime::create` and
@@ -198,6 +220,12 @@ request path, resource limits, sample counts, and timing boundaries. Ferrobox
 uses a prewarmed microVM pool, while each gVisor startup sample creates and
 starts a container. The table therefore supports a warm-service allocation
 claim and does not represent cold host initialization.
+
+The Python comparison executes one untimed warmup followed by thirty timed
+requests in each already-running sandbox or container. Every sample includes
+runtime RPC/API handling, Python process creation, interpreter startup, script
+execution, output handling, and exit observation. It measures repeated short
+Python jobs inside warm environments.
 
 ## Targets
 
