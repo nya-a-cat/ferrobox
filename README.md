@@ -93,25 +93,28 @@ is recorded in [Scope and acceptance](docs/scope.md).
 ## Measured startup performance
 
 GitHub Actions run
-[`30423283407`](https://github.com/nya-a-cat/ferrobox/actions/runs/30423283407)
-measured the real HTTP control plane on hosted nested KVM:
+[`30423815234`](https://github.com/nya-a-cat/ferrobox/actions/runs/30423815234)
+measured the real HTTP control plane, Docker, and gVisor `runsc` on one hosted
+nested-KVM runner:
 
 | Five-sample P95 | Latency |
 | --- | ---: |
-| Ferrobox `POST /v1/sandboxes` from a ready pool | 5.888 ms |
-| Ferrobox five-client concurrent create | 7.224 ms |
-| Docker Engine container create + start on the same host | 125.341 ms |
+| Ferrobox `POST /v1/sandboxes` from a ready pool | 4.597 ms |
+| Ferrobox five-client concurrent create | 7.641 ms |
+| gVisor container create + start through Docker Engine | 141.948 ms |
 
 | Twenty-sample P95 | Latency |
 | --- | ---: |
-| Ferrobox guest `/bin/true` RPC | 22.044 ms |
-| Docker Engine `/bin/true` exec-to-exit | 35.803 ms |
+| Ferrobox guest `/bin/true` RPC | 21.408 ms |
+| gVisor `/bin/true` exec-to-exit through Docker Engine | 25.621 ms |
 
-The workflow uses direct HTTP for both engines, preloads template images,
-matches the available resource settings, retains raw JSON, and gates Ferrobox
-P95 below Docker P95 for startup and command execution. Percentiles use the
-conservative nearest-rank method. Snapshot restore cost, ready-pool allocation,
-burst wall time, and resident memory are reported separately in
+The workflow uses direct HTTP, preloads template images, matches the available
+resource settings, retains raw JSON, verifies the official gVisor archive with
+SHA-512, and gates Ferrobox P95 below both Docker/runc and gVisor/runsc for
+startup and command execution. The retained Docker/runc comparison is also
+documented in the detailed evidence. Percentiles use the conservative
+nearest-rank method. Snapshot restore cost, ready-pool allocation, burst wall
+time, and resident memory are reported separately in
 [Performance evidence](docs/performance.md).
 
 ## API example

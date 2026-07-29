@@ -97,6 +97,26 @@ product page. Ferrobox's same-host HTTP measurement is below that published
 value, while the network and deployment boundaries differ. No cross-cloud
 speedup ratio is claimed.
 
+Run [30423815234](https://github.com/nya-a-cat/ferrobox/actions/runs/30423815234)
+adds a same-host gVisor `runsc` control:
+
+| Metric | Ferrobox P50 | Ferrobox P95 | gVisor P50 | gVisor P95 |
+| --- | ---: | ---: | ---: | ---: |
+| HTTP allocation / container create + start | 1.561 ms | 4.597 ms | 129.838 ms | 141.948 ms |
+| Warm `/bin/true` exec-to-exit | 11.409 ms | 21.408 ms | 19.690 ms | 25.621 ms |
+
+Ferrobox startup latency was 83.2 times lower at P50 and 30.9 times lower at
+P95. Its hot-command latency was 1.73 times lower at P50 and 1.20 times lower
+at P95. The control used gVisor `release-20260721.0`, the same cached Python
+image and Docker Engine API harness, and the same CPU, memory, PID, and
+network-disabled settings. The workflow verified the official release archive
+using its published SHA-512 file before installation and retained the exact
+version and archive digest.
+
+The run passed every functional and performance step through the gVisor gates.
+Its overall conclusion remained red because the later Internet-policy test
+again failed DNS resolution with `Temporary failure in name resolution`.
+
 ## Measurement boundary
 
 Each `create_to_ready_us` sample starts before `FirecrackerRuntime::create` and
@@ -145,6 +165,13 @@ The Docker command control runs twenty `/bin/true` requests in one warm
 container. Each timer covers exec creation, detached start, and Engine API
 inspection until exit. The workflow compares its P95 with Ferrobox's twenty
 hot `/bin/true` guest RPC samples.
+
+The gVisor control reuses that Docker Engine harness with `HostConfig.Runtime`
+set to `runsc`. This isolates the runtime change while preserving the image,
+request path, resource limits, sample counts, and timing boundaries. Ferrobox
+uses a prewarmed microVM pool, while each gVisor startup sample creates and
+starts a container. The table therefore supports a warm-service allocation
+claim and does not represent cold host initialization.
 
 ## Targets
 
