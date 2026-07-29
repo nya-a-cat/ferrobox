@@ -90,7 +90,46 @@ Public port routing, domain policy, persistent volumes, multi-node scheduling,
 and object storage are planned after the v0.1 runtime gate. The full boundary
 is recorded in [Scope and acceptance](docs/scope.md).
 
-## Measured startup performance
+## Measured performance
+
+### Primary microVM comparison
+
+GitHub Actions run
+[`30427754169`](https://github.com/nya-a-cat/ferrobox/actions/runs/30427754169)
+booted Cloud Hypervisor v53.0 with the same kernel, 512 MiB rootfs, one vCPU,
+Rust guest service, and host-to-guest vsock probe used by Ferrobox:
+
+| Same-host microVM result | P50 | P95 |
+| --- | ---: | ---: |
+| Ferrobox ready-pool HTTP allocation | 4–6 ms across retained runs | 4–6 ms across retained runs |
+| Cloud Hypervisor cold launch to guest ready | 2,514.082 ms | 2,530.100 ms |
+| Cloud Hypervisor guest `/bin/true` | 3.111 ms | 7.298 ms |
+| Cloud Hypervisor guest Python 3.11 | 10.617 ms | 11.510 ms |
+
+The startup rows represent two useful service boundaries. Ferrobox measures an
+HTTP allocation from a bounded pool of already-restored Firecracker microVMs.
+Cloud Hypervisor measures a complete process launch, Linux boot, vsock
+connection, and guest health check. Ferrobox cold Firecracker boot is about
+2.5 seconds on the same hosted runner, while its retained snapshot restore
+result is 348.172 ms P95. The ready pool moves that restore work ahead of the
+user request.
+
+The command rows show that the underlying microVM algorithm is competitive:
+Cloud Hypervisor and Firecracker both deliver low-millisecond guest process
+control over the shared Ferrobox guest protocol. Ferrobox's differentiator is
+the ready-state snapshot and allocation path around Firecracker. Cloud
+Hypervisor remains faster in the retained Python hot-exec sample, so Ferrobox
+does not claim universal execution leadership.
+
+Kata Containers is the next primary comparator. Its standard deployment adds
+a container-runtime and shim path around a chosen VMM, so a fair benchmark
+must report both the full Kata request boundary and the selected VMM. E2B is a
+remote Firecracker service; its public 80 ms startup figure is included as a
+product boundary, without a same-host speedup claim. Exact comparator status
+and raw measurement boundaries are recorded in
+[Performance evidence](docs/performance.md).
+
+### Container and userspace-kernel controls
 
 GitHub Actions run
 [`30424993453`](https://github.com/nya-a-cat/ferrobox/actions/runs/30424993453)

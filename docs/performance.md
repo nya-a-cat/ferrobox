@@ -10,6 +10,58 @@ samples.
 Percentiles use the nearest-rank method. A five-sample P95 is therefore the
 maximum sample, which keeps small-sample gates conservative.
 
+## Comparator hierarchy
+
+The primary comparison set is Firecracker, Cloud Hypervisor, Kata Containers,
+and E2B:
+
+- Native Firecracker quantifies the VMM and guest boundary under Ferrobox.
+- Cloud Hypervisor provides a same-host, independently implemented Rust VMM
+  control using the Ferrobox guest protocol.
+- Kata Containers measures the complete containerd/CRI, shim, and microVM
+  request path and reports its selected VMM separately.
+- E2B provides a remote Firecracker product boundary. Network and deployment
+  differences prevent a same-host speedup ratio.
+
+Docker/runc and gVisor/runsc remain secondary controls. They show the cost and
+security-boundary trade-off against common container execution paths.
+
+## Cloud Hypervisor
+
+Run [30427754169](https://github.com/nya-a-cat/ferrobox/actions/runs/30427754169)
+is the first retained same-host Cloud Hypervisor comparison:
+
+| Runtime boundary | P50 | P95 | Samples |
+| --- | ---: | ---: | ---: |
+| Cloud Hypervisor cold launch to guest ready | 2,514.082 ms | 2,530.100 ms | 5 |
+| Cloud Hypervisor guest `/bin/true` | 3.111 ms | 7.298 ms | 20 |
+| Cloud Hypervisor guest Python 3.11 | 10.617 ms | 11.510 ms | 10 |
+
+The workflow pins Cloud Hypervisor v53.0 and verifies the official static
+binary with SHA-256 before execution. It launches one vCPU and 512 MiB of
+memory, attaches a reflink clone of the same Python rootfs, boots the same
+kernel, and connects through the same hybrid-vsock guest protocol. The first
+four launches stop after guest health; the fifth also authenticates and
+initializes the guest, executes twenty `/bin/true` requests, performs one
+untimed Python warmup, and executes ten timed Python requests.
+
+The Cloud Hypervisor startup measurement includes VMM process launch, complete
+Linux boot, vsock connection, and guest health. It is directly comparable to
+Ferrobox cold `create_to_ready_us`, which is also about 2.5 seconds on retained
+runs. It is deliberately separate from Ferrobox's 348.172 ms snapshot restore
+and 4–6 ms ready-pool HTTP allocation boundaries.
+
+The hot-command result demonstrates similar low-millisecond guest control for
+both VMMs. The retained Ferrobox Python comparison from another run measured
+17.327 ms P50 and 19.596 ms P95; Cloud Hypervisor measured 10.617 ms and
+11.510 ms here. Runner generation, sample count, and run timing differ, so this
+is an engineering signal rather than a strict VMM ranking. A future matrix run
+will interleave both VMMs on one runner for a stronger execution comparison.
+
+The overall workflow conclusion is red because its later HTTP file-API
+leadership gate correctly failed. The Cloud Hypervisor install and benchmark
+steps completed successfully, and the artifact was uploaded.
+
 ## Baseline
 
 Run [30417577685](https://github.com/nya-a-cat/ferrobox/actions/runs/30417577685)
