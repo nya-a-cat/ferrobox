@@ -87,6 +87,11 @@ unique guest initialization for each prepared microVM. `create_to_ready_us`
 measures a compatible API allocation from that ready pool. Both sample sets
 are retained; pool construction is never hidden inside workflow setup time.
 
+`http_create_us` is the user-facing same-host boundary. It starts immediately
+before an HTTP `POST /v1/sandboxes` and ends after the complete 201 response is
+read. It includes request parsing, pool allocation, state registration, token
+issuance, audit persistence, JSON serialization, and loopback transport.
+
 ## Targets
 
 The optimization program tracks two different thresholds:

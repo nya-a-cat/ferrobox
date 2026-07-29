@@ -50,6 +50,7 @@ jobs:
         run: |
           cargo generate-lockfile
           cargo build -p ferrobox-node --locked
+          cargo build -p ferrobox-api --locked
           cargo build -p ferrobox-guest \
             --release \
             --target x86_64-unknown-linux-musl \
@@ -151,6 +152,54 @@ jobs:
           FERROBOX_BENCHMARK_ITERATIONS: "20"
         run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_SNAPSHOT_ROOT,FERROBOX_CHROOT_BASE,FERROBOX_RUNTIME_ROOT,FERROBOX_NODE_BINARY,FERROBOX_BENCHMARK_OUTPUT,FERROBOX_BENCHMARK_CREATE_ITERATIONS,FERROBOX_BENCHMARK_ITERATIONS bash scripts/benchmark-kvm.sh
 
+      - name: Benchmark HTTP ready-pool allocation
+        env:
+          FERROBOX_HTTP_BENCHMARK_OUTPUT: ${{ runner.temp }}/ferrobox-http-benchmark.json
+          FERROBOX_API_LOG: ${{ runner.temp }}/ferrobox-api.log
+        run: |
+          set -euo pipefail
+          sudo target/debug/ferrobox-api \
+            --backend firecracker \
+            --listen 127.0.0.1:18080 \
+            --audit-log /mnt/ferrobox/runtime/http-audit.jsonl \
+            --firecracker /opt/ferrobox/bin/firecracker \
+            --jailer /opt/ferrobox/bin/jailer \
+            --kernel /mnt/ferrobox/images/vmlinux \
+            --rootfs /mnt/ferrobox/images/python.ext4 \
+            --snapshot-root /mnt/ferrobox/snapshots/python \
+            --ready-pool-size 5 \
+            --chroot-base /mnt/ferrobox/jailer \
+            --runtime-root /mnt/ferrobox/runtime \
+            >"${FERROBOX_API_LOG}" 2>&1 &
+          api_pid=$!
+          cleanup() {
+            sudo pkill --signal TERM --parent "${api_pid}" 2>/dev/null || true
+            sudo kill "${api_pid}" 2>/dev/null || true
+            wait "${api_pid}" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for _ in $(seq 1 200); do
+            if curl --fail --silent http://127.0.0.1:18080/healthz >/dev/null; then
+              break
+            fi
+            if ! sudo kill -0 "${api_pid}" 2>/dev/null; then
+              cat "${FERROBOX_API_LOG}" >&2
+              exit 1
+            fi
+            sleep 0.05
+          done
+          curl --fail --silent http://127.0.0.1:18080/healthz >/dev/null
+          python3 scripts/benchmark-http.py \
+            --url http://127.0.0.1:18080 \
+            --iterations 5 \
+            >"${FERROBOX_HTTP_BENCHMARK_OUTPUT}"
+          jq --exit-status '
+            .schema_version == 1 and
+            (.http_create_us | length == 5) and
+            .http_create_p95_us <= 80000
+          ' "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" >/dev/null
+          cat "${FERROBOX_HTTP_BENCHMARK_OUTPUT}"
+
       - name: Run Firecracker internet-policy end-to-end
         env:
           FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
@@ -170,6 +219,8 @@ jobs:
           path: |
             ${{ runner.temp }}/kernel.manifest
             ${{ runner.temp }}/ferrobox-benchmark.json
+            ${{ runner.temp }}/ferrobox-http-benchmark.json
+            ${{ runner.temp }}/ferrobox-api.log
             /opt/ferrobox/images/python.ext4.manifest.json
             /mnt/ferrobox/jailer/**/root/*.log
             /srv/ferrobox/jailer/**/root/*.log

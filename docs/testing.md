@@ -49,6 +49,11 @@ When `FERROBOX_SNAPSHOT_ROOT` is set, the functional path prepares a snapshot
 and the later benchmark measures restore-to-ready preparation and ready-pool
 allocation independently.
 
+The workflow also starts the real HTTP API with five ready microVMs and retains
+`ferrobox-http-benchmark.json`. Its create samples include HTTP parsing, runtime
+allocation, control-plane state registration, token issuance, audit writing,
+JSON serialization, and loopback response transfer.
+
 ## Completion rule
 
 Workflow presence is not evidence of success. Ferrobox remains incomplete until
