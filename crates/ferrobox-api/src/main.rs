@@ -31,6 +31,8 @@ struct Cli {
     kernel: Option<PathBuf>,
     #[arg(long)]
     rootfs: Option<PathBuf>,
+    #[arg(long)]
+    snapshot_root: Option<PathBuf>,
     #[arg(long, default_value = "/srv/ferrobox/jailer")]
     chroot_base: PathBuf,
     #[arg(long, default_value = "/var/lib/ferrobox/runtime")]
@@ -65,6 +67,7 @@ async fn main() -> anyhow::Result<()> {
                 jailer_binary: required(arguments.jailer, "--jailer")?,
                 kernel_image: required(arguments.kernel, "--kernel")?,
                 rootfs_template: required(arguments.rootfs, "--rootfs")?,
+                snapshot_root: arguments.snapshot_root,
                 chroot_base: arguments.chroot_base,
                 runtime_root: arguments.runtime_root,
                 jail_uid: arguments.jail_uid,

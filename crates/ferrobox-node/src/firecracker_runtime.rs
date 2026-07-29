@@ -29,7 +29,8 @@ use tonic::Request;
 use crate::{
     firecracker::{
         BootSource, Drive, FirecrackerClient, InstanceAction, InstanceActionType, MachineConfig,
-        NetworkInterface, VersionResponse, VmState, VmStateValue, Vsock,
+        MemoryBackend, MemoryBackendType, NetworkInterface, SnapshotCreate, SnapshotLoad,
+        SnapshotType, VersionResponse, VmState, VmStateValue, Vsock,
     },
     network::{NetworkLease, NetworkManager},
     rootfs::{clone_readonly_asset, clone_rootfs, verify_regular_file},
@@ -44,6 +45,7 @@ pub struct FirecrackerRuntimeConfig {
     pub jailer_binary: PathBuf,
     pub kernel_image: PathBuf,
     pub rootfs_template: PathBuf,
+    pub snapshot_root: Option<PathBuf>,
     pub chroot_base: PathBuf,
     pub runtime_root: PathBuf,
     pub jail_uid: u32,
@@ -74,6 +76,13 @@ impl FirecrackerRuntimeConfig {
         }
         if !self.chroot_base.is_absolute() || !self.runtime_root.is_absolute() {
             return Err(RuntimeError::invalid("runtime paths must be absolute"));
+        }
+        if self
+            .snapshot_root
+            .as_ref()
+            .is_some_and(|path| !path.is_absolute())
+        {
+            return Err(RuntimeError::invalid("snapshot root must be absolute"));
         }
         Ok(())
     }
@@ -217,6 +226,60 @@ impl FirecrackerRuntime {
         .map_err(fc_error)
     }
 
+    async fn load_snapshot(&self, api: &FirecrackerClient) -> Result<(), RuntimeError> {
+        let version: VersionResponse = api.get("/version").await.map_err(fc_error)?;
+        if version.firecracker_version != FIRECRACKER_VERSION {
+            return Err(RuntimeError::new(
+                RuntimeErrorKind::Unavailable,
+                format!(
+                    "expected Firecracker {FIRECRACKER_VERSION}, got {}",
+                    version.firecracker_version
+                ),
+            ));
+        }
+        api.put(
+            "/snapshot/load",
+            &SnapshotLoad {
+                snapshot_path: "/snapshot/vmstate".to_owned(),
+                mem_backend: MemoryBackend {
+                    backend_path: "/snapshot/memory".to_owned(),
+                    backend_type: MemoryBackendType::File,
+                },
+                track_dirty_pages: false,
+                resume_vm: true,
+            },
+        )
+        .await
+        .map_err(fc_error)
+    }
+
+    async fn wait_for_guest(
+        &self,
+        connector: &GuestConnector,
+    ) -> Result<
+        guest::guest_service_client::GuestServiceClient<tonic::transport::Channel>,
+        RuntimeError,
+    > {
+        let started = Instant::now();
+        loop {
+            if started.elapsed() >= self.config.boot_timeout {
+                return Err(RuntimeError::new(
+                    RuntimeErrorKind::Timeout,
+                    "guest agent did not become ready",
+                ));
+            }
+            if let Ok(mut client) = connector.client().await
+                && client
+                    .health(Request::new(HealthRequest {}))
+                    .await
+                    .is_ok()
+            {
+                return Ok(client);
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+    }
+
     async fn initialize_guest(
         &self,
         id: &SandboxId,
@@ -235,43 +298,130 @@ impl FirecrackerRuntime {
                     "guest agent did not become ready",
                 ));
             }
-            if let Ok(mut client) = connector.client().await {
-                let health = client.health(Request::new(HealthRequest {})).await;
-                if health.is_ok() {
-                    client
-                        .init(Request::new(InitRequest {
-                            request_id: uuid::Uuid::new_v4().to_string(),
-                            sandbox_id: id.to_string(),
-                            token: token_value.to_owned(),
-                            command_uid: 1000,
-                            command_gid: 1000,
-                            max_file_bytes: ferrobox_core::MAX_FILE_BYTES,
-                            max_processes: 256,
-                            guest_ipv4: network
-                                .map_or_else(String::new, |lease| lease.guest_address.clone()),
-                            guest_prefix_length: if network.is_some() { 24 } else { 0 },
-                            gateway_ipv4: network
-                                .map_or_else(String::new, |lease| lease.gateway.clone()),
-                            dns_ipv4: if network.is_some() {
-                                network
-                                    .map(|lease| lease.dns_ipv4.clone())
-                                    .unwrap_or_default()
-                            } else {
-                                String::new()
-                            },
-                        }))
-                        .await
-                        .map_err(|error| {
-                            RuntimeError::new(
-                                RuntimeErrorKind::Unavailable,
-                                format!("guest init: {error}"),
-                            )
-                        })?;
-                    return Ok(client);
+            if let Ok(mut client) = self.wait_for_guest(connector).await {
+                let response = client
+                    .init(Request::new(InitRequest {
+                        request_id: uuid::Uuid::new_v4().to_string(),
+                        sandbox_id: id.to_string(),
+                        token: token_value.to_owned(),
+                        command_uid: 1000,
+                        command_gid: 1000,
+                        max_file_bytes: ferrobox_core::MAX_FILE_BYTES,
+                        max_processes: 256,
+                        guest_ipv4: network
+                            .map_or_else(String::new, |lease| lease.guest_address.clone()),
+                        guest_prefix_length: if network.is_some() { 24 } else { 0 },
+                        gateway_ipv4: network
+                            .map_or_else(String::new, |lease| lease.gateway.clone()),
+                        dns_ipv4: if network.is_some() {
+                            network
+                                .map(|lease| lease.dns_ipv4.clone())
+                                .unwrap_or_default()
+                        } else {
+                            String::new()
+                        },
+                    }))
+                    .await;
+                match response {
+                    Ok(_) => return Ok(client),
+                    Err(error) if error.code() == tonic::Code::Unavailable => {}
+                    Err(error) => {
+                        return Err(RuntimeError::new(
+                            RuntimeErrorKind::Unavailable,
+                            format!("guest init: {error}"),
+                        ));
+                    }
                 }
             }
             sleep(Duration::from_millis(100)).await;
         }
+    }
+
+    fn snapshot_paths(root: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
+        (
+            root.join("vmstate"),
+            root.join("memory"),
+            root.join("rootfs.ext4"),
+            root.join("READY"),
+        )
+    }
+
+    async fn snapshot_available(&self) -> bool {
+        let Some(root) = &self.config.snapshot_root else {
+            return false;
+        };
+        let (state, memory, rootfs, ready) = Self::snapshot_paths(root);
+        let ready_version_matches = fs::read_to_string(&ready)
+            .await
+            .is_ok_and(|version| version == FIRECRACKER_VERSION);
+        fs::metadata(state).await.is_ok()
+            && fs::metadata(memory).await.is_ok()
+            && fs::metadata(rootfs).await.is_ok()
+            && ready_version_matches
+    }
+
+    async fn capture_snapshot(
+        &self,
+        api: &FirecrackerClient,
+        rootfs_path: &Path,
+        jail_snapshot_path: &Path,
+    ) -> Result<(), RuntimeError> {
+        let Some(snapshot_root) = &self.config.snapshot_root else {
+            return Ok(());
+        };
+        api.patch(
+            "/vm",
+            &VmState {
+                state: VmStateValue::Paused,
+            },
+        )
+        .await
+        .map_err(fc_error)?;
+        api.put(
+            "/snapshot/create",
+            &SnapshotCreate {
+                snapshot_type: SnapshotType::Full,
+                snapshot_path: "/snapshot/vmstate".to_owned(),
+                mem_file_path: "/snapshot/memory".to_owned(),
+            },
+        )
+        .await
+        .map_err(fc_error)?;
+
+        fs::create_dir_all(snapshot_root)
+            .await
+            .map_err(|error| RuntimeError::internal(format!("create snapshot root: {error}")))?;
+        let (state, memory, rootfs, ready) = Self::snapshot_paths(snapshot_root);
+        fs::copy(jail_snapshot_path.join("vmstate"), &state)
+            .await
+            .map_err(|error| RuntimeError::internal(format!("copy snapshot state: {error}")))?;
+        fs::copy(jail_snapshot_path.join("memory"), &memory)
+            .await
+            .map_err(|error| RuntimeError::internal(format!("copy snapshot memory: {error}")))?;
+        let readonly_status = Command::new("chmod")
+            .arg("0444")
+            .arg(&state)
+            .arg(&memory)
+            .status()
+            .await
+            .map_err(|error| RuntimeError::internal(format!("start snapshot chmod: {error}")))?;
+        if !readonly_status.success() {
+            return Err(RuntimeError::internal("chmod snapshot assets failed"));
+        }
+        clone_rootfs(rootfs_path, &rootfs)
+            .await
+            .map_err(|error| RuntimeError::internal(format!("copy snapshot rootfs: {error}")))?;
+        fs::write(&ready, FIRECRACKER_VERSION)
+            .await
+            .map_err(|error| RuntimeError::internal(format!("mark snapshot ready: {error}")))?;
+        api.patch(
+            "/vm",
+            &VmState {
+                state: VmStateValue::Resumed,
+            },
+        )
+        .await
+        .map_err(fc_error)
     }
 
     async fn record(&self, id: &SandboxId) -> Result<Arc<Mutex<FirecrackerSandbox>>, RuntimeError> {
@@ -317,11 +467,16 @@ impl SandboxRuntime for FirecrackerRuntime {
     async fn create(&self, spec: SandboxSpec) -> Result<SandboxHandle, RuntimeError> {
         spec.validate()
             .map_err(|error| RuntimeError::invalid(error.to_string()))?;
+        let snapshot_compatible = spec.cpu_count == 1
+            && spec.memory_mb == 512
+            && spec.network == ferrobox_core::NetworkMode::Disabled;
+        let restore_snapshot = snapshot_compatible && self.snapshot_available().await;
         let id = SandboxId::new();
         let chroot_root = self.jail_root(&id)?;
         let kernel_path = chroot_root.join("kernel").join("vmlinux");
         let rootfs_path = chroot_root.join("images").join("rootfs.ext4");
         let run_path = chroot_root.join("run");
+        let jail_snapshot_path = chroot_root.join("snapshot");
         fs::create_dir_all(kernel_path.parent().expect("kernel parent"))
             .await
             .map_err(|error| RuntimeError::internal(format!("create kernel dir: {error}")))?;
@@ -331,12 +486,43 @@ impl SandboxRuntime for FirecrackerRuntime {
         fs::create_dir_all(&run_path)
             .await
             .map_err(|error| RuntimeError::internal(format!("create run dir: {error}")))?;
+        fs::create_dir_all(&jail_snapshot_path)
+            .await
+            .map_err(|error| RuntimeError::internal(format!("create snapshot dir: {error}")))?;
         clone_readonly_asset(&self.config.kernel_image, &kernel_path)
             .await
             .map_err(|error| RuntimeError::internal(format!("clone kernel: {error}")))?;
-        clone_rootfs(&self.config.rootfs_template, &rootfs_path)
+        let rootfs_source = if restore_snapshot {
+            self.config
+                .snapshot_root
+                .as_ref()
+                .expect("available snapshot has a root")
+                .join("rootfs.ext4")
+        } else {
+            self.config.rootfs_template.clone()
+        };
+        clone_rootfs(&rootfs_source, &rootfs_path)
             .await
             .map_err(|error| RuntimeError::internal(error.to_string()))?;
+        if restore_snapshot {
+            let snapshot_root = self
+                .config
+                .snapshot_root
+                .as_ref()
+                .expect("available snapshot has a root");
+            clone_readonly_asset(
+                &snapshot_root.join("vmstate"),
+                &jail_snapshot_path.join("vmstate"),
+            )
+            .await
+            .map_err(|error| RuntimeError::internal(format!("clone snapshot state: {error}")))?;
+            clone_readonly_asset(
+                &snapshot_root.join("memory"),
+                &jail_snapshot_path.join("memory"),
+            )
+            .await
+            .map_err(|error| RuntimeError::internal(format!("clone snapshot memory: {error}")))?;
+        }
 
         let permission_status = Command::new("chmod")
             .arg("0600")
@@ -352,6 +538,7 @@ impl SandboxRuntime for FirecrackerRuntime {
             .arg(&owner)
             .arg(&rootfs_path)
             .arg(&run_path)
+            .arg(&jail_snapshot_path)
             .status()
             .await
             .map_err(|error| RuntimeError::internal(format!("start chown: {error}")))?;
@@ -410,10 +597,13 @@ impl SandboxRuntime for FirecrackerRuntime {
             return Err(error);
         }
         let api = FirecrackerClient::new(api_socket, self.config.api_timeout);
-        if let Err(error) = self
-            .configure_and_start(&api, &spec, network.as_ref())
-            .await
-        {
+        let start_result = if restore_snapshot {
+            self.load_snapshot(&api).await
+        } else {
+            self.configure_and_start(&api, &spec, network.as_ref())
+                .await
+        };
+        if let Err(error) = start_result {
             let _ = child.kill().await;
             if let Some(lease) = &network {
                 let _ = self.network.delete(lease).await;
@@ -425,6 +615,19 @@ impl SandboxRuntime for FirecrackerRuntime {
             self.config.guest_port,
             self.config.api_timeout,
         );
+        if snapshot_compatible && self.config.snapshot_root.is_some() && !restore_snapshot {
+            if let Err(error) = self.wait_for_guest(&connector).await {
+                let _ = child.kill().await;
+                return Err(error);
+            }
+            if let Err(error) = self
+                .capture_snapshot(&api, &rootfs_path, &jail_snapshot_path)
+                .await
+            {
+                let _ = child.kill().await;
+                return Err(error);
+            }
+        }
         let guest_token = format!("{}{}", uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
         let guest_client = match self
             .initialize_guest(&id, &connector, &guest_token, network.as_ref())

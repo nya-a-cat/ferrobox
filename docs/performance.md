@@ -85,3 +85,8 @@ below 2 ms after persistent vsock-channel reuse.
 3. Restore from the snapshot with a per-sandbox writable COW rootfs.
 4. Add a bounded ready pool for allocation without restore latency.
 5. Add concurrent-create throughput and host RSS measurements.
+
+The hosted-KVM workflow prepares the ready-state snapshot during its functional
+sandbox and measures five subsequent restores. A competitive claim is added
+only after those restore samples pass and the retained artifact shows the
+result.

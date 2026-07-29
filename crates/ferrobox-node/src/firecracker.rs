@@ -171,6 +171,37 @@ pub struct VmState {
     pub state: VmStateValue,
 }
 
+#[derive(Clone, Copy, Debug, Serialize)]
+pub enum SnapshotType {
+    Full,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct SnapshotCreate {
+    pub snapshot_type: SnapshotType,
+    pub snapshot_path: String,
+    pub mem_file_path: String,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+pub enum MemoryBackendType {
+    File,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct MemoryBackend {
+    pub backend_path: String,
+    pub backend_type: MemoryBackendType,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct SnapshotLoad {
+    pub snapshot_path: String,
+    pub mem_backend: MemoryBackend,
+    pub track_dirty_pages: bool,
+    pub resume_vm: bool,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct VersionResponse {
     pub firecracker_version: String,

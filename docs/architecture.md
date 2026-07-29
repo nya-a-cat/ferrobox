@@ -66,6 +66,28 @@ The guest exposes health, idempotent initialization, server-streamed process
 events, signal delivery, file write, server-streamed file read, and directory
 listing.
 
+## Ready-state snapshots
+
+Set `FERROBOX_SNAPSHOT_ROOT` for the node CLI or `--snapshot-root` for the API
+CLI to enable an absolute host snapshot directory. The first compatible
+sandbox uses the regular boot path. Once the guest health endpoint is ready
+and before sandbox identity is initialized, the runtime:
+
+1. pauses the microVM;
+2. creates a full Firecracker memory/device snapshot;
+3. clones the paused writable rootfs into the snapshot directory;
+4. marks the memory and state files read-only;
+5. resumes the source VM and performs its unique guest initialization.
+
+Later compatible sandboxes clone the saved rootfs, hard-link the immutable
+memory/state files into their jail, load the snapshot, reconnect vsock, and
+inject a new sandbox ID and token. The initial implementation supports one
+vCPU, 512 MiB, and disabled networking.
+
+The `READY` marker is written last. Operators must treat the snapshot directory
+as a trusted, versioned runtime asset and replace it whenever Firecracker,
+kernel, rootfs, or guest-agent inputs change.
+
 ## Network modes
 
 `Disabled` creates no guest data interface. `Internet` creates a dedicated

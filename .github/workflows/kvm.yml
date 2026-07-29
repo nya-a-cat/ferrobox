@@ -110,8 +110,9 @@ jobs:
           FERROBOX_JAILER: /opt/ferrobox/bin/jailer
           FERROBOX_KERNEL: /opt/ferrobox/images/vmlinux
           FERROBOX_ROOTFS: /opt/ferrobox/images/python.ext4
+          FERROBOX_SNAPSHOT_ROOT: /opt/ferrobox/snapshots/python
           FERROBOX_NODE_BINARY: target/debug/ferrobox-node
-        run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_NODE_BINARY bash scripts/e2e-kvm.sh
+        run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_SNAPSHOT_ROOT,FERROBOX_NODE_BINARY bash scripts/e2e-kvm.sh
 
       - name: Benchmark Firecracker runtime
         env:
@@ -119,11 +120,12 @@ jobs:
           FERROBOX_JAILER: /opt/ferrobox/bin/jailer
           FERROBOX_KERNEL: /opt/ferrobox/images/vmlinux
           FERROBOX_ROOTFS: /opt/ferrobox/images/python.ext4
+          FERROBOX_SNAPSHOT_ROOT: /opt/ferrobox/snapshots/python
           FERROBOX_NODE_BINARY: target/debug/ferrobox-node
           FERROBOX_BENCHMARK_OUTPUT: ${{ runner.temp }}/ferrobox-benchmark.json
           FERROBOX_BENCHMARK_CREATE_ITERATIONS: "5"
           FERROBOX_BENCHMARK_ITERATIONS: "20"
-        run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_NODE_BINARY,FERROBOX_BENCHMARK_OUTPUT,FERROBOX_BENCHMARK_CREATE_ITERATIONS,FERROBOX_BENCHMARK_ITERATIONS bash scripts/benchmark-kvm.sh
+        run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_SNAPSHOT_ROOT,FERROBOX_NODE_BINARY,FERROBOX_BENCHMARK_OUTPUT,FERROBOX_BENCHMARK_CREATE_ITERATIONS,FERROBOX_BENCHMARK_ITERATIONS bash scripts/benchmark-kvm.sh
 
       - name: Run Firecracker internet-policy end-to-end
         env:
