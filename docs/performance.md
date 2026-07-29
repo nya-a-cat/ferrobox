@@ -1,8 +1,10 @@
 # Performance
 
 Ferrobox performance claims are based on retained GitHub-hosted KVM artifacts.
-The benchmark records microseconds as integers and keeps every hot-execution
-sample so percentile calculations remain auditable.
+The benchmark records microseconds as integers and retains all cold-create,
+hot-execution, and deletion samples so percentile calculations remain
+auditable. Current hosted-KVM runs use five lifecycle samples and twenty hot
+execution samples.
 
 ## Baseline
 
@@ -38,10 +40,11 @@ claiming a latency improvement.
 
 ## Measurement boundary
 
-`create_to_ready_us` starts before `FirecrackerRuntime::create` and stops only
-after the guest health check and authenticated initialization complete. It
-includes jail preparation, kernel/rootfs cloning, Jailer startup, Firecracker
-configuration, Linux boot, vsock connection, guest health, and initialization.
+Each `create_to_ready_us` sample starts before `FirecrackerRuntime::create` and
+stops only after the guest health check and authenticated initialization
+complete. It includes jail preparation, kernel/rootfs cloning, Jailer startup,
+Firecracker configuration, Linux boot, vsock connection, guest health, and
+initialization. The regression gate uses the retained create P95.
 
 Hot execution includes host-side lookup, gRPC over virtio-vsock, guest process
 spawn, process cgroup assignment, exit collection, and response delivery.

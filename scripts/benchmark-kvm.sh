@@ -9,8 +9,10 @@ fi
 node_binary="${FERROBOX_NODE_BINARY:-target/debug/ferrobox-node}"
 output="${FERROBOX_BENCHMARK_OUTPUT:?FERROBOX_BENCHMARK_OUTPUT is required}"
 iterations="${FERROBOX_BENCHMARK_ITERATIONS:-20}"
+create_iterations="${FERROBOX_BENCHMARK_CREATE_ITERATIONS:-5}"
 
 "${node_binary}" benchmark \
+    --create-iterations "${create_iterations}" \
     --exec-iterations "${iterations}" \
     --firecracker "${FERROBOX_FIRECRACKER:?FERROBOX_FIRECRACKER is required}" \
     --jailer "${FERROBOX_JAILER:?FERROBOX_JAILER is required}" \
@@ -19,14 +21,15 @@ iterations="${FERROBOX_BENCHMARK_ITERATIONS:-20}"
     >"${output}"
 
 jq --exit-status '
-    .schema_version == 1 and
-    .create_to_ready_us > 0 and
+    .schema_version == 2 and
+    (.create_to_ready_us | length > 0) and
+    (.delete_us | length > 0) and
     (.exec_true_us | length > 0)
 ' "${output}" >/dev/null
 
-create_us="$(jq -r '.create_to_ready_us' "${output}")"
+create_us="$(jq -r '.create_to_ready_p95_us' "${output}")"
 exec_p95_us="$(jq -r '.exec_true_p95_us' "${output}")"
-delete_us="$(jq -r '.delete_us' "${output}")"
+delete_us="$(jq -r '.delete_p95_us' "${output}")"
 
 # Initial regression ceilings. They are intentionally recorded separately from
 # competitor targets and will be tightened only from retained hosted-KVM data.

@@ -35,10 +35,11 @@ supply-chain record.
 
 The same hosted-KVM job emits `ferrobox-benchmark.json` with:
 
-- `create_to_ready_us`;
+- five sorted create-to-ready samples plus P50 and P95;
 - all `/bin/true` execution samples plus P50 and P95;
 - one Python execution sample;
-- deletion and total lifecycle time.
+- five sorted deletion samples plus P50 and P95;
+- total benchmark time.
 
 The benchmark runs after the functional KVM path and applies conservative
 regression ceilings. Competitor targets are tracked separately so an

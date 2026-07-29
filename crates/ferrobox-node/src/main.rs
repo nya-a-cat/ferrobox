@@ -18,6 +18,8 @@ struct Cli {
 enum Command {
     Check(RuntimeArgs),
     Benchmark {
+        #[arg(long, default_value_t = 5)]
+        create_iterations: u32,
         #[arg(long, default_value_t = 20)]
         exec_iterations: u32,
         #[command(flatten)]
@@ -35,12 +37,16 @@ enum Command {
 #[derive(Debug, Serialize)]
 struct BenchmarkResult {
     schema_version: u32,
-    create_to_ready_us: u128,
+    create_to_ready_us: Vec<u128>,
+    create_to_ready_p50_us: u128,
+    create_to_ready_p95_us: u128,
     exec_true_us: Vec<u128>,
     exec_true_p50_us: u128,
     exec_true_p95_us: u128,
     exec_python_us: u128,
-    delete_us: u128,
+    delete_us: Vec<u128>,
+    delete_p50_us: u128,
+    delete_p95_us: u128,
     total_us: u128,
 }
 
@@ -100,17 +106,35 @@ async fn main() -> anyhow::Result<()> {
         .init();
     match Cli::parse().command {
         Command::Benchmark {
+            create_iterations,
             exec_iterations,
             runtime,
         } => {
+            if create_iterations == 0 || create_iterations > 20 {
+                anyhow::bail!("create-iterations must be between 1 and 20");
+            }
             if exec_iterations == 0 || exec_iterations > 1000 {
                 anyhow::bail!("exec-iterations must be between 1 and 1000");
             }
             let total_started = std::time::Instant::now();
             let runtime = FirecrackerRuntime::new(runtime.config()).await?;
-            let create_started = std::time::Instant::now();
-            let handle = runtime.create(benchmark_spec()).await?;
-            let create_to_ready_us = create_started.elapsed().as_micros();
+            let mut create_to_ready_us = Vec::with_capacity(create_iterations as usize);
+            let mut delete_us = Vec::with_capacity(create_iterations as usize);
+            let mut handle = None;
+            for iteration in 0..create_iterations {
+                let create_started = std::time::Instant::now();
+                let created = runtime.create(benchmark_spec()).await?;
+                create_to_ready_us.push(create_started.elapsed().as_micros());
+                if iteration + 1 == create_iterations {
+                    handle = Some(created);
+                } else {
+                    let delete_started = std::time::Instant::now();
+                    runtime.delete(&created.sandbox_id).await?;
+                    delete_us.push(delete_started.elapsed().as_micros());
+                }
+            }
+            create_to_ready_us.sort_unstable();
+            let handle = handle.expect("positive create iteration count is validated");
 
             let mut exec_true_us = Vec::with_capacity(exec_iterations as usize);
             for _ in 0..exec_iterations {
@@ -144,14 +168,19 @@ async fn main() -> anyhow::Result<()> {
 
             let delete_started = std::time::Instant::now();
             runtime.delete(&handle.sandbox_id).await?;
-            let delete_us = delete_started.elapsed().as_micros();
+            delete_us.push(delete_started.elapsed().as_micros());
+            delete_us.sort_unstable();
             let result = BenchmarkResult {
-                schema_version: 1,
+                schema_version: 2,
+                create_to_ready_p50_us: percentile(&create_to_ready_us, 50),
+                create_to_ready_p95_us: percentile(&create_to_ready_us, 95),
                 create_to_ready_us,
                 exec_true_p50_us: percentile(&exec_true_us, 50),
                 exec_true_p95_us: percentile(&exec_true_us, 95),
                 exec_true_us,
                 exec_python_us,
+                delete_p50_us: percentile(&delete_us, 50),
+                delete_p95_us: percentile(&delete_us, 95),
                 delete_us,
                 total_us: total_started.elapsed().as_micros(),
             };
