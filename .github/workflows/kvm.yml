@@ -393,8 +393,12 @@ jobs:
           FERROBOX_KATA_OUTPUT: ${{ runner.temp }}/kata-benchmark.json
           FERROBOX_KATA_RUNTIME_ROOT: /mnt/ferrobox/runtime/kata
           FERROBOX_KATA_IMAGE: docker.io/library/python:3.11-slim-bookworm
+          FERROBOX_KATA_IMAGE_ARCHIVE: ${{ runner.temp }}/kata-python-image.tar
         run: |
-          sudo --preserve-env=FERROBOX_CTR,FERROBOX_CONTAINERD,FERROBOX_KATA_OUTPUT,FERROBOX_KATA_RUNTIME_ROOT,FERROBOX_KATA_IMAGE \
+          docker save \
+            --output "${FERROBOX_KATA_IMAGE_ARCHIVE}" \
+            python:3.11-slim-bookworm
+          sudo --preserve-env=FERROBOX_CTR,FERROBOX_CONTAINERD,FERROBOX_KATA_OUTPUT,FERROBOX_KATA_RUNTIME_ROOT,FERROBOX_KATA_IMAGE,FERROBOX_KATA_IMAGE_ARCHIVE \
             bash scripts/benchmark-kata.sh
 
       - name: Validate microVM performance leadership

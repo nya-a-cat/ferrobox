@@ -10,6 +10,7 @@ ctr_binary="${FERROBOX_CTR:?FERROBOX_CTR is required}"
 containerd_binary="${FERROBOX_CONTAINERD:?FERROBOX_CONTAINERD is required}"
 output="${FERROBOX_KATA_OUTPUT:?FERROBOX_KATA_OUTPUT is required}"
 image="${FERROBOX_KATA_IMAGE:-docker.io/library/python:3.11-slim-bookworm}"
+image_archive="${FERROBOX_KATA_IMAGE_ARCHIVE:?FERROBOX_KATA_IMAGE_ARCHIVE is required}"
 runtime_root="${FERROBOX_KATA_RUNTIME_ROOT:-/mnt/ferrobox/runtime/kata}"
 containerd_socket="${runtime_root}/containerd.sock"
 containerd_root="${runtime_root}/containerd-root"
@@ -67,7 +68,9 @@ for _ in $(seq 1 200); do
     sleep 0.05
 done
 ctr version >/dev/null
-ctr images pull "${image}"
+ctr images import "${image_archive}" >/dev/null
+ctr images list --quiet |
+    grep --fixed-strings --line-regexp "${image}" >/dev/null
 
 cold_job_us=()
 for iteration in $(seq 1 5); do
