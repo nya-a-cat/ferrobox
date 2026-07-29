@@ -116,6 +116,16 @@ nested-KVM runner:
 | Docker/runc `python3 -c "print(42)"` | 46.769 ms | 48.847 ms | 21.349 ops/s |
 | gVisor/runsc `python3 -c "print(42)"` | 40.007 ms | 41.851 ms | 24.952 ops/s |
 
+GitHub Actions run
+[`30425743192`](https://github.com/nya-a-cat/ferrobox/actions/runs/30425743192)
+measured a Python 3.11 write/read/verify/delete roundtrip for a 1 MiB file:
+
+| 20-command file result | P50 | P95 | Sequential throughput |
+| --- | ---: | ---: | ---: |
+| Ferrobox | 20.049 ms | 30.875 ms | 44.558 ops/s |
+| Docker/runc | 49.542 ms | 51.994 ms | 20.051 ops/s |
+| gVisor/runsc | 45.934 ms | 48.097 ms | 21.724 ops/s |
+
 The workflow uses direct HTTP, preloads template images, matches the available
 resource settings, retains all raw samples, verifies the official gVisor
 archive with SHA-512, and gates Ferrobox P95 below both Docker/runc and

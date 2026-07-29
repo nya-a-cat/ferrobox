@@ -3,8 +3,9 @@
 Ferrobox performance claims are based on retained GitHub-hosted KVM artifacts.
 The benchmark records microseconds as integers and retains all cold-create,
 hot-execution, and deletion samples so percentile calculations remain
-auditable. Current hosted-KVM runs use five lifecycle samples and one hundred
-hot execution samples.
+auditable. Current hosted-KVM runs use five lifecycle samples, one hundred
+minimal-command samples, thirty Python samples, and twenty file-workload
+samples.
 
 Percentiles use the nearest-rank method. A five-sample P95 is therefore the
 maximum sample, which keeps small-sample gates conservative.
@@ -161,6 +162,27 @@ The same artifact retained one hundred `/bin/true` samples. Ferrobox measured
 22.975 ms, and 46.820 ops/s. This repeat confirms leadership while showing
 hosted-runner variation in the Ferrobox upper tail.
 
+Runs [30425633448](https://github.com/nya-a-cat/ferrobox/actions/runs/30425633448)
+and [30425743192](https://github.com/nya-a-cat/ferrobox/actions/runs/30425743192)
+independently passed a 1 MiB file-roundtrip leadership gate. The latest run
+recorded:
+
+| Runtime | File P50 | File P95 | Sequential throughput |
+| --- | ---: | ---: | ---: |
+| Ferrobox | 20.049 ms | 30.875 ms | 44.558 ops/s |
+| Docker/runc | 49.542 ms | 51.994 ms | 20.051 ops/s |
+| gVisor/runsc | 45.934 ms | 48.097 ms | 21.724 ops/s |
+
+Ferrobox had 2.47 times lower P50 and 1.68 times lower P95 than Docker/runc,
+and 2.29 times lower P50 and 1.56 times lower P95 than gVisor/runsc. Its
+sequential throughput was 2.22 times Docker/runc and 2.05 times gVisor/runsc.
+
+The preceding independent run measured Ferrobox at 25.485 ms P50 and
+26.565 ms P95, Docker/runc at 61.809 ms and 64.381 ms, and gVisor/runsc at
+57.950 ms and 59.198 ms. Both runs passed the mandatory final P95 gate, which
+provides initial cross-run evidence while preserving the raw arrays for
+variance analysis.
+
 ## Measurement boundary
 
 Each `create_to_ready_us` sample starts before `FirecrackerRuntime::create` and
@@ -226,6 +248,14 @@ requests in each already-running sandbox or container. Every sample includes
 runtime RPC/API handling, Python process creation, interpreter startup, script
 execution, output handling, and exit observation. It measures repeated short
 Python jobs inside warm environments.
+
+The file workload also starts with one untimed warmup. Each of twenty timed
+requests launches Python 3.11, allocates a 1 MiB byte string, writes it to the
+runtime's `/tmp` filesystem, reads and verifies the complete contents, and
+deletes the file. The timer includes runtime RPC/API handling, process and
+interpreter startup, filesystem work, and exit observation. Ferrobox uses its
+ext4 rootfs over Firecracker virtio-blk, Docker/runc uses the runner's Docker
+storage path, and gVisor/runsc uses its configured filesystem path.
 
 ## Targets
 
