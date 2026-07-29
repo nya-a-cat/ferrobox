@@ -138,6 +138,11 @@ with the Python image pulled beforehand. CPU, memory, PID, and network-disabled
 limits match the Ferrobox benchmark shape where the Docker API supports them.
 Container inspection and deletion occur outside the timed interval.
 
+The Docker command control runs twenty `/bin/true` requests in one warm
+container. Each timer covers exec creation, detached start, and Engine API
+inspection until exit. The workflow compares its P95 with Ferrobox's twenty
+hot `/bin/true` guest RPC samples.
+
 ## Targets
 
 The optimization program tracks two different thresholds:

@@ -61,6 +61,8 @@ The same job pulls a cached Python image, records its resolved Docker digest,
 and measures Docker Engine `create` plus `start` through its Unix-socket HTTP
 API. `docker-benchmark.json` retains five samples. The comparison gate requires
 Ferrobox HTTP create P95 to remain below Docker create-and-start P95.
+It also retains twenty `/bin/true` executions using Docker exec create, detached
+start, and inspect-to-exit; Ferrobox hot execution P95 must remain lower.
 
 The HTTP artifact also retains a five-request concurrent burst with each
 request's latency and total wall time. Sequential and concurrent P95 must both

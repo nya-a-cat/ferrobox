@@ -46,8 +46,8 @@ def main() -> None:
 
     connection = UnixConnection(arguments.socket)
     samples: list[int] = []
-    for _ in range(arguments.iterations):
-        started = time.perf_counter_ns()
+
+    def create_container() -> str:
         status, body = request(
             connection,
             "POST",
@@ -66,22 +66,18 @@ def main() -> None:
         )
         if status != 201:
             raise RuntimeError(f"Docker create returned {status}: {body.decode()}")
-        container_id = json.loads(body)["Id"]
+        return json.loads(body)["Id"]
+
+    def start_container(container_id: str) -> None:
         status, body = request(
             connection,
             "POST",
             f"/v1.44/containers/{container_id}/start",
         )
-        samples.append((time.perf_counter_ns() - started) // 1000)
         if status != 204:
             raise RuntimeError(f"Docker start returned {status}: {body.decode()}")
-        status, body = request(
-            connection,
-            "GET",
-            f"/v1.44/containers/{container_id}/json",
-        )
-        if status != 200 or not json.loads(body)["State"]["Running"]:
-            raise RuntimeError(f"Docker container did not reach running: {body.decode()}")
+
+    def delete_container(container_id: str) -> None:
         status, body = request(
             connection,
             "DELETE",
@@ -90,14 +86,72 @@ def main() -> None:
         if status != 204:
             raise RuntimeError(f"Docker delete returned {status}: {body.decode()}")
 
+    for _ in range(arguments.iterations):
+        started = time.perf_counter_ns()
+        container_id = create_container()
+        start_container(container_id)
+        samples.append((time.perf_counter_ns() - started) // 1000)
+        status, body = request(
+            connection,
+            "GET",
+            f"/v1.44/containers/{container_id}/json",
+        )
+        if status != 200 or not json.loads(body)["State"]["Running"]:
+            raise RuntimeError(f"Docker container did not reach running: {body.decode()}")
+        delete_container(container_id)
+
     samples.sort()
+    exec_container_id = create_container()
+    start_container(exec_container_id)
+    exec_samples: list[int] = []
+    for _ in range(20):
+        started = time.perf_counter_ns()
+        status, body = request(
+            connection,
+            "POST",
+            f"/v1.44/containers/{exec_container_id}/exec",
+            {"Cmd": ["/bin/true"], "AttachStdout": False, "AttachStderr": False},
+        )
+        if status != 201:
+            raise RuntimeError(f"Docker exec create returned {status}: {body.decode()}")
+        exec_id = json.loads(body)["Id"]
+        status, body = request(
+            connection,
+            "POST",
+            f"/v1.44/exec/{exec_id}/start",
+            {"Detach": True, "Tty": False},
+        )
+        if status != 200:
+            raise RuntimeError(f"Docker exec start returned {status}: {body.decode()}")
+        while True:
+            status, body = request(
+                connection,
+                "GET",
+                f"/v1.44/exec/{exec_id}/json",
+            )
+            if status != 200:
+                raise RuntimeError(
+                    f"Docker exec inspect returned {status}: {body.decode()}"
+                )
+            state = json.loads(body)
+            if not state["Running"]:
+                if state["ExitCode"] != 0:
+                    raise RuntimeError(f"Docker exec failed: {state}")
+                break
+            time.sleep(0.0005)
+        exec_samples.append((time.perf_counter_ns() - started) // 1000)
+    delete_container(exec_container_id)
+    exec_samples.sort()
     print(
         json.dumps(
             {
-                "schema_version": 2,
+                "schema_version": 3,
                 "docker_create_start_us": samples,
                 "docker_create_start_p50_us": percentile(samples, 50),
                 "docker_create_start_p95_us": percentile(samples, 95),
+                "docker_exec_true_us": exec_samples,
+                "docker_exec_true_p50_us": percentile(exec_samples, 50),
+                "docker_exec_true_p95_us": percentile(exec_samples, 95),
             },
             indent=2,
         )

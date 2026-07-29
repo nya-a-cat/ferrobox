@@ -221,11 +221,19 @@ jobs:
             >"${FERROBOX_DOCKER_BENCHMARK_OUTPUT}"
           jq --exit-status --slurp '
             .[0].schema_version == 3 and
-            .[1].schema_version == 2 and
+            .[1].schema_version == 3 and
             (.[1].docker_create_start_us | length == 5) and
+            (.[1].docker_exec_true_us | length == 20) and
             .[0].http_create_p95_us < .[1].docker_create_start_p95_us
           ' \
             "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" \
+            "${FERROBOX_DOCKER_BENCHMARK_OUTPUT}" >/dev/null
+          jq --exit-status --slurp '
+            .[0].schema_version == 5 and
+            .[1].schema_version == 3 and
+            .[0].exec_true_p95_us < .[1].docker_exec_true_p95_us
+          ' \
+            "${RUNNER_TEMP}/ferrobox-benchmark.json" \
             "${FERROBOX_DOCKER_BENCHMARK_OUTPUT}" >/dev/null
           cat "${FERROBOX_DOCKER_BENCHMARK_OUTPUT}"
 
