@@ -93,20 +93,26 @@ is recorded in [Scope and acceptance](docs/scope.md).
 ## Measured startup performance
 
 GitHub Actions run
-[`30422952630`](https://github.com/nya-a-cat/ferrobox/actions/runs/30422952630)
+[`30423283407`](https://github.com/nya-a-cat/ferrobox/actions/runs/30423283407)
 measured the real HTTP control plane on hosted nested KVM:
 
 | Five-sample P95 | Latency |
 | --- | ---: |
-| Ferrobox `POST /v1/sandboxes` from a ready pool | 2.742 ms |
-| Ferrobox five-client concurrent create | 6.534 ms |
-| Docker Engine container create + start on the same host | 672.967 ms |
+| Ferrobox `POST /v1/sandboxes` from a ready pool | 5.888 ms |
+| Ferrobox five-client concurrent create | 7.224 ms |
+| Docker Engine container create + start on the same host | 125.341 ms |
+
+| Twenty-sample P95 | Latency |
+| --- | ---: |
+| Ferrobox guest `/bin/true` RPC | 22.044 ms |
+| Docker Engine `/bin/true` exec-to-exit | 35.803 ms |
 
 The workflow uses direct HTTP for both engines, preloads template images,
 matches the available resource settings, retains raw JSON, and gates Ferrobox
-P95 below Docker P95. Percentiles use the conservative nearest-rank method.
-Snapshot restore cost, ready-pool allocation, burst wall time, and resident
-memory are reported separately in [Performance evidence](docs/performance.md).
+P95 below Docker P95 for startup and command execution. Percentiles use the
+conservative nearest-rank method. Snapshot restore cost, ready-pool allocation,
+burst wall time, and resident memory are reported separately in
+[Performance evidence](docs/performance.md).
 
 ## API example
 

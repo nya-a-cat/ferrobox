@@ -66,28 +66,31 @@ Snapshot restore reduced create-to-ready P95 by 86.3%. This remains above the
 first competitive target, so the project does not claim a startup-latency lead
 from this result.
 
-Run [30422952630](https://github.com/nya-a-cat/ferrobox/actions/runs/30422952630)
-is the retained nearest-rank same-host control-plane comparison:
+Run [30423283407](https://github.com/nya-a-cat/ferrobox/actions/runs/30423283407)
+is the retained nearest-rank same-host startup and command comparison:
 
 | Metric | P50 | P95 |
 | --- | ---: | ---: |
-| Ferrobox ready-pool internal allocation | 0.012 ms | 0.017 ms |
-| Ferrobox HTTP sandbox create | 1.887 ms | 2.742 ms |
-| Ferrobox five-client HTTP burst | 4.871 ms | 6.534 ms |
-| Docker Engine container create + start | 159.892 ms | 672.967 ms |
+| Ferrobox ready-pool internal allocation | 0.010 ms | 0.016 ms |
+| Ferrobox HTTP sandbox create | 1.220 ms | 5.888 ms |
+| Ferrobox five-client HTTP burst | 5.133 ms | 7.224 ms |
+| Docker Engine container create + start | 76.084 ms | 125.341 ms |
+| Ferrobox guest `/bin/true` RPC | 6.500 ms | 22.044 ms |
+| Docker Engine `/bin/true` exec-to-exit | 34.115 ms | 35.803 ms |
 
-The five-client Ferrobox burst completed in 15.627 ms. On this runner,
-Ferrobox HTTP create was 84.7 times lower at P50 and 245.4 times lower at P95
-than Docker Engine create-and-start. The raw samples are retained because the
-Docker control had substantial tail variance. The Docker image was resolved to
+The five-client Ferrobox burst completed in 25.176 ms. On this runner,
+Ferrobox HTTP create was 62.4 times lower at P50 and 21.3 times lower at P95
+than Docker Engine create-and-start. Ferrobox command completion was 5.25 times
+lower at P50 and 1.62 times lower at P95 than Docker exec-to-exit. The Docker
+image was resolved to
 `python@sha256:b18992999dbe963a45a8a4da40ac2b1975be1a776d939d098c647482bcad5cba`.
 The comparison covers allocation/startup latency for a warm service and cached
 template image. It does not equate container and microVM isolation strength.
 
 The same runtime artifact recorded snapshot/Python pool preparation at
-572.306 ms P50 and 640.017 ms P95. Five warmed Firecracker processes consumed
-326,852 KiB RSS in total, approximately 63.8 MiB per ready microVM. First
-Python execution after allocation was 69.791 ms.
+768.726 ms P50 and 841.545 ms P95. Five warmed Firecracker processes consumed
+319,872 KiB RSS in total, approximately 62.5 MiB per ready microVM. First
+Python execution after allocation was 21.694 ms.
 
 [E2B currently advertises 80 ms sandbox startup](https://www.e2b.dev/) on its
 product page. Ferrobox's same-host HTTP measurement is below that published
