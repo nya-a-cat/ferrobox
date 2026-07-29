@@ -144,10 +144,7 @@ impl FirecrackerRuntime {
         api: &FirecrackerClient,
         spec: &SandboxSpec,
         network: Option<&NetworkLease>,
-    ) -> Result<
-        guest::guest_service_client::GuestServiceClient<tonic::transport::Channel>,
-        RuntimeError,
-    > {
+    ) -> Result<(), RuntimeError> {
         let version: VersionResponse = api.get("/version").await.map_err(fc_error)?;
         if version.firecracker_version != FIRECRACKER_VERSION {
             return Err(RuntimeError::new(
@@ -226,7 +223,10 @@ impl FirecrackerRuntime {
         connector: &GuestConnector,
         token_value: &str,
         network: Option<&NetworkLease>,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<
+        guest::guest_service_client::GuestServiceClient<tonic::transport::Channel>,
+        RuntimeError,
+    > {
         let started = Instant::now();
         loop {
             if started.elapsed() >= self.config.boot_timeout {
