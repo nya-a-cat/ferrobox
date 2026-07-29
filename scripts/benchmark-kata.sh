@@ -33,11 +33,21 @@ ctr() {
         "$@"
 }
 
+ctr_admin() {
+    local limit="$1"
+    shift
+    timeout --signal=TERM "${limit}" \
+        "${ctr_binary}" \
+        --address "${containerd_socket}" \
+        --namespace "${namespace}" \
+        "$@"
+}
+
 cleanup() {
     if [[ -n "${persistent_id:-}" ]]; then
-        ctr tasks kill --signal SIGKILL "${persistent_id}" 2>/dev/null || true
-        ctr tasks delete --force "${persistent_id}" 2>/dev/null || true
-        ctr containers delete "${persistent_id}" 2>/dev/null || true
+        ctr_admin 10s tasks kill --signal SIGKILL "${persistent_id}" 2>/dev/null || true
+        ctr_admin 10s tasks delete --force "${persistent_id}" 2>/dev/null || true
+        ctr_admin 10s containers delete "${persistent_id}" 2>/dev/null || true
     fi
     if [[ -n "${containerd_pid:-}" ]]; then
         kill "${containerd_pid}" 2>/dev/null || true
@@ -48,14 +58,14 @@ trap cleanup EXIT
 
 start_persistent() {
     persistent_id="$1"
-    ctr run --runtime "${runtime}" --detach \
+    ctr_admin 30s run --runtime "${runtime}" --detach \
         "${image}" "${persistent_id}" sleep 300
 }
 
 stop_persistent() {
-    ctr tasks kill --signal SIGKILL "${persistent_id}" 2>/dev/null || true
-    ctr tasks delete --force "${persistent_id}" 2>/dev/null || true
-    ctr containers delete "${persistent_id}" 2>/dev/null || true
+    ctr_admin 10s tasks kill --signal SIGKILL "${persistent_id}" 2>/dev/null || true
+    ctr_admin 10s tasks delete --force "${persistent_id}" 2>/dev/null || true
+    ctr_admin 10s containers delete "${persistent_id}" 2>/dev/null || true
     persistent_id=
 }
 
@@ -81,7 +91,7 @@ for _ in $(seq 1 200); do
     sleep 0.05
 done
 ctr version >/dev/null
-ctr images import "${image_archive}" >/dev/null
+ctr_admin 60s images import "${image_archive}" >/dev/null
 ctr images list --quiet |
     grep --fixed-strings --line-regexp "${image}" >/dev/null
 
@@ -97,6 +107,7 @@ done
 
 exec_true_us=()
 for batch in $(seq 1 5); do
+    echo "Kata /bin/true batch ${batch}/5" >&2
     start_persistent "kata-true-${batch}"
     ctr tasks exec --exec-id "true-warmup-${batch}" \
         "${persistent_id}" /bin/true
@@ -112,6 +123,7 @@ done
 
 exec_python_us=()
 for batch in $(seq 1 2); do
+    echo "Kata Python batch ${batch}/2" >&2
     start_persistent "kata-python-${batch}"
     ctr tasks exec --exec-id "python-warmup-${batch}" \
         "${persistent_id}" python3 -c 'print(42)' >/dev/null
