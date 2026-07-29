@@ -63,6 +63,26 @@ Snapshot restore reduced create-to-ready P95 by 86.3%. This remains above the
 first competitive target, so the project does not claim a startup-latency lead
 from this result.
 
+Run [30421738775](https://github.com/nya-a-cat/ferrobox/actions/runs/30421738775)
+is the first retained same-host control-plane comparison:
+
+| Metric | P50 | P95 |
+| --- | ---: | ---: |
+| Ferrobox ready-pool internal allocation | 0.010 ms | 0.011 ms |
+| Ferrobox HTTP sandbox create | 1.052 ms | 2.913 ms |
+| Docker Engine container create + start | 83.169 ms | 83.590 ms |
+
+On this runner, Ferrobox HTTP create P95 was 28.7 times lower than Docker
+Engine create-and-start P95. The Docker image was resolved to
+`python@sha256:b18992999dbe963a45a8a4da40ac2b1975be1a776d939d098c647482bcad5cba`.
+The comparison covers allocation/startup latency for a warm service and cached
+template image. It does not equate container and microVM isolation strength.
+
+[E2B currently advertises 80 ms sandbox startup](https://www.e2b.dev/) on its
+product page. Ferrobox's same-host HTTP measurement is below that published
+value, while the network and deployment boundaries differ. No cross-cloud
+speedup ratio is claimed.
+
 ## Measurement boundary
 
 Each `create_to_ready_us` sample starts before `FirecrackerRuntime::create` and
@@ -106,10 +126,10 @@ The optimization program tracks two different thresholds:
 1. Regression ceilings derived from Ferrobox hosted-KVM history.
 2. Competitive targets derived from a reproducible same-host harness.
 
-The first competitive create-to-ready target is below 200 ms, matching the
-public E2B product claim. It does not become a Ferrobox claim until the retained
-benchmark artifact passes. Hot `/bin/true` targets are P50 below 1 ms and P95
-below 2 ms after persistent vsock-channel reuse.
+The first competitive restore-to-ready target is below 200 ms. Ready-pool HTTP
+allocation targets P95 below 80 ms, matching the current E2B product-page
+startup value. Hot `/bin/true` still targets P50 below 1 ms and P95 below 2 ms.
+Each target becomes a Ferrobox claim only after a retained artifact passes.
 
 ## Optimization order
 

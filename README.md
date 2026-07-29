@@ -90,6 +90,22 @@ Public port routing, domain policy, persistent volumes, multi-node scheduling,
 and object storage are planned after the v0.1 runtime gate. The full boundary
 is recorded in [Scope and acceptance](docs/scope.md).
 
+## Measured startup performance
+
+GitHub Actions run
+[`30421738775`](https://github.com/nya-a-cat/ferrobox/actions/runs/30421738775)
+measured the real HTTP control plane on hosted nested KVM:
+
+| Five-sample P95 | Latency |
+| --- | ---: |
+| Ferrobox `POST /v1/sandboxes` from a ready pool | 2.913 ms |
+| Docker Engine container create + start on the same host | 83.590 ms |
+
+The workflow uses direct HTTP for both engines, preloads template images,
+matches the available resource settings, retains raw JSON, and gates Ferrobox
+P95 below Docker P95. Snapshot restore cost and ready-pool allocation are
+reported separately in [Performance evidence](docs/performance.md).
+
 ## API example
 
 Create a Python sandbox:
