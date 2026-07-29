@@ -609,7 +609,7 @@ fn assign_guest_cgroup(pid: u32, available: bool) -> Result<(), Status> {
         "/sys/fs/cgroup/ferrobox-guest/cgroup.procs",
         pid.to_string(),
     )
-        .map_err(|error| Status::internal(format!("assign process cgroup: {error}")))
+    .map_err(|error| Status::internal(format!("assign process cgroup: {error}")))
 }
 
 fn map_file_error(error: std::io::Error) -> Status {
