@@ -38,6 +38,20 @@ The hot-command P95 improved by 48.7%. Single-sample create and Python results
 show runner noise, so future cold-start evidence uses repeated samples before
 claiming a latency improvement.
 
+Run [30419522732](https://github.com/nya-a-cat/ferrobox/actions/runs/30419522732)
+is the first schema-v2 repeated lifecycle sample:
+
+| Metric | P50 | P95 |
+| --- | ---: | ---: |
+| create to guest ready | 2,532.207 ms | 2,535.104 ms |
+| `/bin/true` | 3.270 ms | 7.258 ms |
+| delete | 1.410 ms | 1.498 ms |
+
+The artifact retains all five create/delete samples and all twenty command
+samples. The performance step passed its regression ceilings. The workflow
+conclusion is red because the later, separately measured Internet DNS test
+failed; this does not change the retained benchmark result.
+
 ## Measurement boundary
 
 Each `create_to_ready_us` sample starts before `FirecrackerRuntime::create` and
