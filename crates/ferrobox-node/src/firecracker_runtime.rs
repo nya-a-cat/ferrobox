@@ -253,7 +253,9 @@ impl FirecrackerRuntime {
                             gateway_ipv4: network
                                 .map_or_else(String::new, |lease| lease.gateway.clone()),
                             dns_ipv4: if network.is_some() {
-                                "1.1.1.1".to_owned()
+                                network
+                                    .map(|lease| lease.dns_ipv4.clone())
+                                    .unwrap_or_default()
                             } else {
                                 String::new()
                             },

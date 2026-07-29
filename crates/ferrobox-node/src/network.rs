@@ -11,6 +11,7 @@ pub struct NetworkLease {
     pub guest_mac: String,
     pub guest_address: String,
     pub gateway: String,
+    pub dns_ipv4: String,
     host_veth: String,
     nft_table: String,
 }
@@ -51,6 +52,7 @@ impl NetworkManager {
         let gateway = format!("10.200.{octet}.1");
         let guest_address = format!("10.200.{octet}.2");
         let subnet = format!("10.200.{octet}.0/24");
+        let dns_ipv4 = public_host_dns().await;
         let lease = NetworkLease {
             namespace_path: PathBuf::from(format!("/run/netns/{namespace}")),
             namespace: namespace.clone(),
@@ -58,6 +60,7 @@ impl NetworkManager {
             guest_mac: "06:00:ac:10:00:02".to_owned(),
             guest_address,
             gateway: gateway.clone(),
+            dns_ipv4,
             host_veth: host_veth.clone(),
             nft_table: nft_table.clone(),
         };
@@ -167,6 +170,27 @@ impl NetworkManager {
         }
         Ok(())
     }
+}
+
+#[cfg(target_os = "linux")]
+async fn public_host_dns() -> String {
+    let contents = tokio::fs::read_to_string("/etc/resolv.conf")
+        .await
+        .unwrap_or_default();
+    contents
+        .lines()
+        .filter_map(|line| line.split_whitespace().nth(1))
+        .filter_map(|value| value.parse::<std::net::Ipv4Addr>().ok())
+        .find(|address| {
+            !address.is_private()
+                && !address.is_loopback()
+                && !address.is_link_local()
+                && !address.is_multicast()
+                && !address.is_unspecified()
+                && address.octets()[0] < 240
+        })
+        .unwrap_or(std::net::Ipv4Addr::new(1, 1, 1, 1))
+        .to_string()
 }
 
 #[cfg(target_os = "linux")]

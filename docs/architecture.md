@@ -74,5 +74,9 @@ rules. Public egress is permitted after private, link-local metadata,
 control-plane, host-management, and other-sandbox ranges are rejected. Cleanup
 is keyed by sandbox ID and is idempotent.
 
+Internet mode selects the host's first public IPv4 resolver for the guest and
+falls back to `1.1.1.1`. Loopback, private, link-local, multicast, unspecified,
+and reserved resolvers are never propagated into a sandbox.
+
 Host networking changes are ephemeral. The implementation never edits a
 persistent distribution firewall configuration.

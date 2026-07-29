@@ -21,6 +21,21 @@ on `ubuntu-24.04` established the first baseline:
 The run failed its initial two-second create ceiling and successfully retained
 the JSON artifact. The failure is evidence that the gate is active.
 
+Run [30417866400](https://github.com/nya-a-cat/ferrobox/actions/runs/30417866400)
+measured the first channel-reuse revision:
+
+| Metric | Baseline | Channel reuse |
+| --- | ---: | ---: |
+| create to guest ready | 2,384.304 ms | 2,540.730 ms |
+| `/bin/true` P50 | 2.237 ms | 3.208 ms |
+| `/bin/true` P95 | 7.544 ms | 3.868 ms |
+| Python `print(42)` | 16.247 ms | 35.464 ms |
+| delete | 3.228 ms | 1.582 ms |
+
+The hot-command P95 improved by 48.7%. Single-sample create and Python results
+show runner noise, so future cold-start evidence uses repeated samples before
+claiming a latency improvement.
+
 ## Measurement boundary
 
 `create_to_ready_us` starts before `FirecrackerRuntime::create` and stops only
@@ -53,4 +68,3 @@ below 2 ms after persistent vsock-channel reuse.
 3. Restore from the snapshot with a per-sandbox writable COW rootfs.
 4. Add a bounded ready pool for allocation without restore latency.
 5. Add concurrent-create throughput and host RSS measurements.
-
