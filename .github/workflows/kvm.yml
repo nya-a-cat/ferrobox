@@ -333,6 +333,18 @@ jobs:
           printf '%s  %s\n' "${actual_sha256}" cloud-hypervisor-static \
             >"${RUNNER_TEMP}/cloud-hypervisor.sha256"
 
+      - name: Benchmark direct Firecracker guest boundary
+        env:
+          FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
+          FERROBOX_KERNEL: /mnt/ferrobox/images/vmlinux
+          FERROBOX_ROOTFS: /mnt/ferrobox/images/python.ext4
+          FERROBOX_MICROVM_PROBE: target/debug/microvm-probe
+          FERROBOX_FIRECRACKER_DIRECT_OUTPUT: ${{ runner.temp }}/firecracker-direct-benchmark.json
+          FERROBOX_FIRECRACKER_DIRECT_RUNTIME_ROOT: /mnt/ferrobox/runtime/firecracker-direct
+        run: |
+          sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_MICROVM_PROBE,FERROBOX_FIRECRACKER_DIRECT_OUTPUT,FERROBOX_FIRECRACKER_DIRECT_RUNTIME_ROOT \
+            bash scripts/benchmark-firecracker-direct.sh
+
       - name: Benchmark Cloud Hypervisor guest boundary
         env:
           FERROBOX_CLOUD_HYPERVISOR: /opt/ferrobox/bin/cloud-hypervisor
@@ -483,6 +495,7 @@ jobs:
             ${{ runner.temp }}/cloud-hypervisor-benchmark.json
             ${{ runner.temp }}/cloud-hypervisor-version.txt
             ${{ runner.temp }}/cloud-hypervisor.sha256
+            ${{ runner.temp }}/firecracker-direct-benchmark.json
             ${{ runner.temp }}/kata-benchmark.json
             ${{ runner.temp }}/kata-version.txt
             ${{ runner.temp }}/kata-static.sha256
