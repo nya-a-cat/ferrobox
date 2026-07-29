@@ -610,6 +610,53 @@ impl FirecrackerRuntime {
         self.execute_measured(sandbox_id, request).await
     }
 
+    pub async fn benchmark_raw_true_us(
+        &self,
+        sandbox_id: &SandboxId,
+    ) -> Result<u128, RuntimeError> {
+        let started = Instant::now();
+        let (mut client, token_value) = self.guest_client(sandbox_id).await?;
+        let response = client
+            .start_process(Request::new(StartProcessRequest {
+                auth: Some(Auth { token: token_value }),
+                request_id: uuid::Uuid::new_v4().to_string(),
+                argv: vec!["/bin/true".to_owned()],
+                cwd: "/home/sandbox".to_owned(),
+                environment: HashMap::new(),
+                timeout_millis: 30_000,
+                max_output_bytes: 1024 * 1024,
+            }))
+            .await
+            .map_err(guest_error)?;
+        let mut stream = response.into_inner();
+        let mut successful_exit = false;
+        while let Some(event) = stream.message().await.map_err(guest_error)? {
+            match event.event {
+                Some(process_event::Event::Exit(exit)) if exit.exit_code == Some(0) => {
+                    successful_exit = true;
+                }
+                Some(process_event::Event::Exit(exit)) => {
+                    return Err(RuntimeError::internal(format!(
+                        "benchmark guest command failed: {exit:?}"
+                    )));
+                }
+                Some(process_event::Event::Error(error)) => {
+                    return Err(RuntimeError::new(
+                        RuntimeErrorKind::Unavailable,
+                        format!("guest {}: {}", error.code, error.message),
+                    ));
+                }
+                _ => {}
+            }
+        }
+        if !successful_exit {
+            return Err(RuntimeError::internal(
+                "benchmark guest command omitted a successful exit",
+            ));
+        }
+        Ok(started.elapsed().as_micros())
+    }
+
     async fn execute_measured(
         &self,
         sandbox_id: &SandboxId,

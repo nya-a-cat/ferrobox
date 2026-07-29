@@ -26,7 +26,7 @@ prepare_ceiling_us="${FERROBOX_BENCHMARK_PREPARE_CEILING_US:-1200000}"
     >"${output}"
 
 jq --exit-status '
-    .schema_version == 10 and
+    .schema_version == 11 and
     (.pool_prepare_us | length > 0) and
     .pool_size > 0 and
     .pool_firecracker_rss_kib > 0 and
@@ -37,6 +37,7 @@ jq --exit-status '
     (.delete_us | length > 0) and
     (.exec_true_us | length > 0) and
     ((.exec_true_timings | length) == (.exec_true_us | length)) and
+    ((.raw_guest_true_us | length) == (.exec_true_us | length)) and
     (.exec_python_us | length > 0) and
     (.exec_file_roundtrip_us | length > 0)
 ' "${output}" >/dev/null

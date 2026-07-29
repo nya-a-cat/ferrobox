@@ -73,6 +73,10 @@ clone separately as `guest_lookup_us`. It also splits minimal command execution
 into validation, guest lookup, start-RPC, stream, and total durations under
 `exec_true_timings`. These diagnostics identify where the remaining median gap
 occurs without changing runtime semantics.
+Schema 11 additionally runs the minimal raw guest RPC against the exact same
+Ferrobox sandbox after the full-runtime samples. Comparing
+`raw_guest_true_us` with `exec_true_us` isolates result construction and runtime
+validation from VM, Jailer, cgroup, and guest effects.
 MicroVM probe schema 2 adds a second minimal-command series that clones the
 tonic client before each request. The persistent-client and cloned-client
 series run against the same guest, isolating client reuse from VMM and guest

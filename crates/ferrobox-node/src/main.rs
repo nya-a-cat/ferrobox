@@ -54,6 +54,9 @@ struct BenchmarkResult {
     guest_lookup_p95_us: u128,
     exec_true_us: Vec<u128>,
     exec_true_timings: Vec<BenchmarkExecutionTimings>,
+    raw_guest_true_us: Vec<u128>,
+    raw_guest_true_p50_us: u128,
+    raw_guest_true_p95_us: u128,
     exec_true_p50_us: u128,
     exec_true_p95_us: u128,
     exec_true_total_us: u128,
@@ -220,6 +223,16 @@ async fn main() -> anyhow::Result<()> {
             let exec_true_total_us = exec_true_started.elapsed().as_micros();
             exec_true_us.sort_unstable();
 
+            let mut raw_guest_true_us = Vec::with_capacity(exec_iterations as usize);
+            for _ in 0..exec_iterations {
+                raw_guest_true_us.push(
+                    runtime
+                        .benchmark_raw_true_us(&handle.sandbox_id)
+                        .await?,
+                );
+            }
+            raw_guest_true_us.sort_unstable();
+
             ensure_exit_success(
                 &runtime
                     .execute(
@@ -282,7 +295,7 @@ async fn main() -> anyhow::Result<()> {
             delete_us.push(delete_started.elapsed().as_micros());
             delete_us.sort_unstable();
             let result = BenchmarkResult {
-                schema_version: 10,
+                schema_version: 11,
                 pool_prepare_p50_us: percentile(&pool_prepare_us, 50),
                 pool_prepare_p95_us: percentile(&pool_prepare_us, 95),
                 pool_prepare_us,
@@ -303,6 +316,9 @@ async fn main() -> anyhow::Result<()> {
                     .unwrap_or_default(),
                 exec_true_us,
                 exec_true_timings,
+                raw_guest_true_p50_us: percentile(&raw_guest_true_us, 50),
+                raw_guest_true_p95_us: percentile(&raw_guest_true_us, 95),
+                raw_guest_true_us,
                 exec_python_p50_us: percentile(&exec_python_us, 50),
                 exec_python_p95_us: percentile(&exec_python_us, 95),
                 exec_python_total_us,
