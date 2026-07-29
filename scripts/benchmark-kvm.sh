@@ -9,11 +9,13 @@ fi
 node_binary="${FERROBOX_NODE_BINARY:-target/debug/ferrobox-node}"
 output="${FERROBOX_BENCHMARK_OUTPUT:?FERROBOX_BENCHMARK_OUTPUT is required}"
 iterations="${FERROBOX_BENCHMARK_ITERATIONS:-20}"
+python_iterations="${FERROBOX_BENCHMARK_PYTHON_ITERATIONS:-30}"
 create_iterations="${FERROBOX_BENCHMARK_CREATE_ITERATIONS:-5}"
 
 "${node_binary}" benchmark \
     --create-iterations "${create_iterations}" \
     --exec-iterations "${iterations}" \
+    --python-iterations "${python_iterations}" \
     --firecracker "${FERROBOX_FIRECRACKER:?FERROBOX_FIRECRACKER is required}" \
     --jailer "${FERROBOX_JAILER:?FERROBOX_JAILER is required}" \
     --kernel "${FERROBOX_KERNEL:?FERROBOX_KERNEL is required}" \
@@ -21,13 +23,14 @@ create_iterations="${FERROBOX_BENCHMARK_CREATE_ITERATIONS:-5}"
     >"${output}"
 
 jq --exit-status '
-    .schema_version == 6 and
+    .schema_version == 7 and
     (.pool_prepare_us | length > 0) and
     .pool_size > 0 and
     .pool_firecracker_rss_kib > 0 and
     (.create_to_ready_us | length > 0) and
     (.delete_us | length > 0) and
-    (.exec_true_us | length > 0)
+    (.exec_true_us | length > 0) and
+    (.exec_python_us | length > 0)
 ' "${output}" >/dev/null
 
 create_us="$(jq -r '.create_to_ready_p95_us' "${output}")"

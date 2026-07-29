@@ -41,12 +41,15 @@ def main() -> None:
     parser.add_argument("--image", required=True)
     parser.add_argument("--iterations", type=int, default=5)
     parser.add_argument("--exec-iterations", type=int, default=20)
+    parser.add_argument("--python-iterations", type=int, default=30)
     parser.add_argument("--runtime", default="")
     arguments = parser.parse_args()
     if arguments.iterations < 1 or arguments.iterations > 100:
         raise ValueError("iterations must be between 1 and 100")
     if arguments.exec_iterations < 1 or arguments.exec_iterations > 1000:
         raise ValueError("exec iterations must be between 1 and 1000")
+    if arguments.python_iterations < 1 or arguments.python_iterations > 1000:
+        raise ValueError("python iterations must be between 1 and 1000")
 
     connection = UnixConnection(arguments.socket)
     samples: list[int] = []
@@ -110,49 +113,63 @@ def main() -> None:
     samples.sort()
     exec_container_id = create_container()
     start_container(exec_container_id)
-    exec_samples: list[int] = []
-    for _ in range(arguments.exec_iterations):
-        started = time.perf_counter_ns()
-        status, body = request(
-            connection,
-            "POST",
-            f"/v1.44/containers/{exec_container_id}/exec",
-            {"Cmd": ["/bin/true"], "AttachStdout": False, "AttachStderr": False},
-        )
-        if status != 201:
-            raise RuntimeError(f"Docker exec create returned {status}: {body.decode()}")
-        exec_id = json.loads(body)["Id"]
-        status, body = request(
-            connection,
-            "POST",
-            f"/v1.44/exec/{exec_id}/start",
-            {"Detach": True, "Tty": False},
-        )
-        if status != 200:
-            raise RuntimeError(f"Docker exec start returned {status}: {body.decode()}")
-        while True:
+
+    def benchmark_exec(command: list[str], iterations: int) -> list[int]:
+        command_samples: list[int] = []
+        for _ in range(iterations):
+            started = time.perf_counter_ns()
             status, body = request(
                 connection,
-                "GET",
-                f"/v1.44/exec/{exec_id}/json",
+                "POST",
+                f"/v1.44/containers/{exec_container_id}/exec",
+                {"Cmd": command, "AttachStdout": False, "AttachStderr": False},
+            )
+            if status != 201:
+                raise RuntimeError(
+                    f"Docker exec create returned {status}: {body.decode()}"
+                )
+            exec_id = json.loads(body)["Id"]
+            status, body = request(
+                connection,
+                "POST",
+                f"/v1.44/exec/{exec_id}/start",
+                {"Detach": True, "Tty": False},
             )
             if status != 200:
                 raise RuntimeError(
-                    f"Docker exec inspect returned {status}: {body.decode()}"
+                    f"Docker exec start returned {status}: {body.decode()}"
                 )
-            state = json.loads(body)
-            if not state["Running"]:
-                if state["ExitCode"] != 0:
-                    raise RuntimeError(f"Docker exec failed: {state}")
-                break
-            time.sleep(0.0005)
-        exec_samples.append((time.perf_counter_ns() - started) // 1000)
+            while True:
+                status, body = request(
+                    connection,
+                    "GET",
+                    f"/v1.44/exec/{exec_id}/json",
+                )
+                if status != 200:
+                    raise RuntimeError(
+                        f"Docker exec inspect returned {status}: {body.decode()}"
+                    )
+                state = json.loads(body)
+                if not state["Running"]:
+                    if state["ExitCode"] != 0:
+                        raise RuntimeError(f"Docker exec failed: {state}")
+                    break
+                time.sleep(0.0005)
+            command_samples.append((time.perf_counter_ns() - started) // 1000)
+        command_samples.sort()
+        return command_samples
+
+    exec_samples = benchmark_exec(["/bin/true"], arguments.exec_iterations)
+    benchmark_exec(["python3", "-c", "print(42)"], 1)
+    python_samples = benchmark_exec(
+        ["python3", "-c", "print(42)"],
+        arguments.python_iterations,
+    )
     delete_container(exec_container_id)
-    exec_samples.sort()
     print(
         json.dumps(
             {
-                "schema_version": 4,
+                "schema_version": 5,
                 "runtime": arguments.runtime or "runc",
                 "docker_create_start_us": samples,
                 "docker_create_start_p50_us": percentile(samples, 50),
@@ -163,6 +180,15 @@ def main() -> None:
                 "docker_exec_true_total_us": sum(exec_samples),
                 "docker_exec_true_throughput_milli_ops_per_second": (
                     arguments.exec_iterations * 1_000_000_000 // sum(exec_samples)
+                ),
+                "docker_exec_python_us": python_samples,
+                "docker_exec_python_p50_us": percentile(python_samples, 50),
+                "docker_exec_python_p95_us": percentile(python_samples, 95),
+                "docker_exec_python_total_us": sum(python_samples),
+                "docker_exec_python_throughput_milli_ops_per_second": (
+                    arguments.python_iterations
+                    * 1_000_000_000
+                    // sum(python_samples)
                 ),
             },
             indent=2,
