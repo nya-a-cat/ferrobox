@@ -35,7 +35,8 @@ jobs:
             e2fsprogs \
             jq \
             musl-tools \
-            protobuf-compiler
+            protobuf-compiler \
+            zstd
 
       - name: Require nested KVM
         run: |
@@ -344,6 +345,50 @@ jobs:
           sudo --preserve-env=FERROBOX_CLOUD_HYPERVISOR,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_MICROVM_PROBE,FERROBOX_CLOUD_HYPERVISOR_OUTPUT,FERROBOX_CLOUD_HYPERVISOR_RUNTIME_ROOT \
             bash scripts/benchmark-cloud-hypervisor.sh
 
+      - name: Cache Kata Containers release bundle
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/kata-static-3.31.0-amd64.tar.zst
+          key: kata-static-3.31.0-amd64-68c2786a
+
+      - name: Install verified Kata Containers
+        shell: bash
+        run: |
+          set -euo pipefail
+          kata_archive="${RUNNER_TEMP}/kata-static-3.31.0-amd64.tar.zst"
+          kata_url='https://github.com/kata-containers/kata-containers/releases/download/3.31.0/kata-static-3.31.0-amd64.tar.zst'
+          expected_sha256='68c2786a0b97023f62f3eca02dc868b78a794e5469d4ddd6cc9e0bd4a7212b0b'
+          if [[ ! -f "${kata_archive}" ]]; then
+            curl --fail --location --silent --show-error \
+              --output "${kata_archive}" \
+              "${kata_url}"
+          fi
+          actual_sha256="$(sha256sum "${kata_archive}" | awk '{print $1}')"
+          [[ "${actual_sha256}" == "${expected_sha256}" ]]
+          sudo tar --extract --use-compress-program=unzstd \
+            --file "${kata_archive}" \
+            --directory /
+          sudo ln --symbolic --force \
+            /opt/kata/bin/containerd-shim-kata-v2 \
+            /usr/local/bin/containerd-shim-kata-v2
+          /opt/kata/bin/kata-runtime --version |
+            tee "${RUNNER_TEMP}/kata-version.txt"
+          /opt/kata/bin/kata-runtime check --no-network-checks
+          printf '%s  %s\n' "${actual_sha256}" \
+            kata-static-3.31.0-amd64.tar.zst \
+            >"${RUNNER_TEMP}/kata-static.sha256"
+
+      - name: Benchmark Kata Containers QEMU boundary
+        env:
+          FERROBOX_CTR: /usr/bin/ctr
+          FERROBOX_CONTAINERD: /usr/bin/containerd
+          FERROBOX_KATA_OUTPUT: ${{ runner.temp }}/kata-benchmark.json
+          FERROBOX_KATA_RUNTIME_ROOT: /mnt/ferrobox/runtime/kata
+          FERROBOX_KATA_IMAGE: docker.io/library/python:3.11-slim-bookworm
+        run: |
+          sudo --preserve-env=FERROBOX_CTR,FERROBOX_CONTAINERD,FERROBOX_KATA_OUTPUT,FERROBOX_KATA_RUNTIME_ROOT,FERROBOX_KATA_IMAGE \
+            bash scripts/benchmark-kata.sh
+
       - name: Validate file-workload performance leadership
         run: |
           jq --exit-status --slurp '
@@ -400,7 +445,11 @@ jobs:
             ${{ runner.temp }}/cloud-hypervisor-benchmark.json
             ${{ runner.temp }}/cloud-hypervisor-version.txt
             ${{ runner.temp }}/cloud-hypervisor.sha256
+            ${{ runner.temp }}/kata-benchmark.json
+            ${{ runner.temp }}/kata-version.txt
+            ${{ runner.temp }}/kata-static.sha256
             ${{ runner.temp }}/ferrobox-api.log
+            /mnt/ferrobox/runtime/kata/containerd.log
             /opt/ferrobox/images/python.ext4.manifest.json
             /mnt/ferrobox/jailer/**/root/*.log
             /srv/ferrobox/jailer/**/root/*.log
