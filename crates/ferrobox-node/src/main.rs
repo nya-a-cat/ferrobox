@@ -244,8 +244,7 @@ async fn main() -> anyhow::Result<()> {
                 )?;
                 exec_file_roundtrip_us.push(started.elapsed().as_micros());
             }
-            let exec_file_roundtrip_total_us =
-                exec_file_roundtrip_started.elapsed().as_micros();
+            let exec_file_roundtrip_total_us = exec_file_roundtrip_started.elapsed().as_micros();
             exec_file_roundtrip_us.sort_unstable();
 
             let delete_started = std::time::Instant::now();
