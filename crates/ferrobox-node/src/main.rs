@@ -49,6 +49,9 @@ struct BenchmarkResult {
     create_to_ready_us: Vec<u128>,
     create_to_ready_p50_us: u128,
     create_to_ready_p95_us: u128,
+    guest_lookup_us: Vec<u128>,
+    guest_lookup_p50_us: u128,
+    guest_lookup_p95_us: u128,
     exec_true_us: Vec<u128>,
     exec_true_p50_us: u128,
     exec_true_p95_us: u128,
@@ -173,6 +176,16 @@ async fn main() -> anyhow::Result<()> {
             create_to_ready_us.sort_unstable();
             let handle = handle.expect("positive create iteration count is validated");
 
+            let mut guest_lookup_us = Vec::with_capacity(exec_iterations as usize);
+            for _ in 0..exec_iterations {
+                guest_lookup_us.push(
+                    runtime
+                        .benchmark_guest_lookup_us(&handle.sandbox_id)
+                        .await?,
+                );
+            }
+            guest_lookup_us.sort_unstable();
+
             let mut exec_true_us = Vec::with_capacity(exec_iterations as usize);
             let exec_true_started = std::time::Instant::now();
             for _ in 0..exec_iterations {
@@ -252,7 +265,7 @@ async fn main() -> anyhow::Result<()> {
             delete_us.push(delete_started.elapsed().as_micros());
             delete_us.sort_unstable();
             let result = BenchmarkResult {
-                schema_version: 8,
+                schema_version: 9,
                 pool_prepare_p50_us: percentile(&pool_prepare_us, 50),
                 pool_prepare_p95_us: percentile(&pool_prepare_us, 95),
                 pool_prepare_us,
@@ -261,6 +274,9 @@ async fn main() -> anyhow::Result<()> {
                 create_to_ready_p50_us: percentile(&create_to_ready_us, 50),
                 create_to_ready_p95_us: percentile(&create_to_ready_us, 95),
                 create_to_ready_us,
+                guest_lookup_p50_us: percentile(&guest_lookup_us, 50),
+                guest_lookup_p95_us: percentile(&guest_lookup_us, 95),
+                guest_lookup_us,
                 exec_true_p50_us: percentile(&exec_true_us, 50),
                 exec_true_p95_us: percentile(&exec_true_us, 95),
                 exec_true_total_us,

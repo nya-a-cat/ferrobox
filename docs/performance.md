@@ -68,6 +68,10 @@ cause. Direct Firecracker and Cloud Hypervisor are within 0.019 ms at
 Ferrobox's remaining gap appears above that boundary: snapshot-backed memory
 produces a larger tail, and full runtime bookkeeping adds roughly one
 millisecond to the minimal-command median relative to direct Firecracker.
+Benchmark schema 9 records the sandbox lookup, state check, and guest-client
+clone separately as `guest_lookup_us`. This diagnostic identifies whether that
+host bookkeeping accounts for the remaining median gap without changing the
+runtime's concurrency semantics.
 
 The mandatory microVM leadership step remains red because the snapshot-pooled
 full runtime does not yet beat direct Cloud Hypervisor at `/bin/true` P50.

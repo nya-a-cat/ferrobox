@@ -26,11 +26,14 @@ prepare_ceiling_us="${FERROBOX_BENCHMARK_PREPARE_CEILING_US:-1200000}"
     >"${output}"
 
 jq --exit-status '
-    .schema_version == 8 and
+    .schema_version == 9 and
     (.pool_prepare_us | length > 0) and
     .pool_size > 0 and
     .pool_firecracker_rss_kib > 0 and
     (.create_to_ready_us | length > 0) and
+    (.guest_lookup_us | length > 0) and
+    .guest_lookup_p50_us >= 0 and
+    .guest_lookup_p95_us >= .guest_lookup_p50_us and
     (.delete_us | length > 0) and
     (.exec_true_us | length > 0) and
     (.exec_python_us | length > 0) and

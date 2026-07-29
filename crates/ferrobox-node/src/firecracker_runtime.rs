@@ -584,6 +584,15 @@ impl FirecrackerRuntime {
 }
 
 impl FirecrackerRuntime {
+    pub async fn benchmark_guest_lookup_us(
+        &self,
+        sandbox_id: &SandboxId,
+    ) -> Result<u128, RuntimeError> {
+        let started = std::time::Instant::now();
+        let _ = self.guest_client(sandbox_id).await?;
+        Ok(started.elapsed().as_micros())
+    }
+
     async fn create_fresh(&self, spec: SandboxSpec) -> Result<SandboxHandle, RuntimeError> {
         spec.validate()
             .map_err(|error| RuntimeError::invalid(error.to_string()))?;
