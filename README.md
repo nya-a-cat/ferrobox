@@ -32,6 +32,7 @@ the agent process itself. Ferrobox concentrates on that runtime boundary:
 - direct argv execution with no implicit shell;
 - confined file access below `/home/sandbox`;
 - default-disabled networking and restricted public egress;
+- ready-state snapshots, reflink rootfs clones, and an optional ready pool;
 - Jailer, cgroup v2, seccomp, TTL cleanup, and structured audit events;
 - a local process backend for deterministic API tests;
 - no Kubernetes dependency for the single-node MVP.
@@ -81,12 +82,13 @@ protocol details.
 | Isolation | Firecracker, Jailer, cgroup v2, default seccomp |
 | Control plane | Per-sandbox tokens stored as SHA-256 digests |
 | Network | Disabled by default; restricted public egress mode |
+| Startup | Firecracker snapshot restore and configurable ready pool |
 | Observability | Structured lifecycle and workload audit events |
 | Testing | Process/API E2E and hosted nested-KVM E2E workflows |
 
-Snapshots, public port routing, domain policy, persistent volumes, multi-node
-scheduling, and object storage are planned after the v0.1 runtime gate. The
-full boundary is recorded in [Scope and acceptance](docs/scope.md).
+Public port routing, domain policy, persistent volumes, multi-node scheduling,
+and object storage are planned after the v0.1 runtime gate. The full boundary
+is recorded in [Scope and acceptance](docs/scope.md).
 
 ## API example
 

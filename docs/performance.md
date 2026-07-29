@@ -82,6 +82,11 @@ one temporary Btrfs volume. The workflow verifies `cp --reflink=always` before
 measurement. This matches the runtime's COW storage requirement and prevents a
 full sparse-image copy from being counted as sandbox allocation.
 
+`pool_prepare_us` measures a complete snapshot restore, guest health check, and
+unique guest initialization for each prepared microVM. `create_to_ready_us`
+measures a compatible API allocation from that ready pool. Both sample sets
+are retained; pool construction is never hidden inside workflow setup time.
+
 ## Targets
 
 The optimization program tracks two different thresholds:
@@ -103,6 +108,6 @@ below 2 ms after persistent vsock-channel reuse.
 5. Add concurrent-create throughput and host RSS measurements.
 
 The hosted-KVM workflow prepares the ready-state snapshot during its functional
-sandbox and measures five subsequent restores. A competitive claim is added
-only after those restore samples pass and the retained artifact shows the
-result.
+sandbox, restores and initializes five ready-pool entries, and then measures
+five allocations. A competitive claim is added only after both sample sets
+pass and the retained artifact shows the result.

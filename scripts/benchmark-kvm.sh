@@ -21,19 +21,22 @@ create_iterations="${FERROBOX_BENCHMARK_CREATE_ITERATIONS:-5}"
     >"${output}"
 
 jq --exit-status '
-    .schema_version == 2 and
+    .schema_version == 3 and
+    (.pool_prepare_us | length > 0) and
     (.create_to_ready_us | length > 0) and
     (.delete_us | length > 0) and
     (.exec_true_us | length > 0)
 ' "${output}" >/dev/null
 
 create_us="$(jq -r '.create_to_ready_p95_us' "${output}")"
+prepare_us="$(jq -r '.pool_prepare_p95_us' "${output}")"
 exec_p95_us="$(jq -r '.exec_true_p95_us' "${output}")"
 delete_us="$(jq -r '.delete_p95_us' "${output}")"
 
 # Initial regression ceilings. They are intentionally recorded separately from
 # competitor targets and will be tightened only from retained hosted-KVM data.
-(( create_us <= 2750000 ))
+(( prepare_us <= 500000 ))
+(( create_us <= 80000 ))
 (( exec_p95_us <= 50000 ))
 (( delete_us <= 2500000 ))
 

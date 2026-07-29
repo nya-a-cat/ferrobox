@@ -102,6 +102,7 @@ pub struct FirecrackerRuntime {
     config: FirecrackerRuntimeConfig,
     network: NetworkManager,
     sandboxes: RwLock<HashMap<SandboxId, Arc<Mutex<FirecrackerSandbox>>>>,
+    ready_pool: Mutex<Vec<SandboxHandle>>,
 }
 
 impl FirecrackerRuntime {
@@ -117,7 +118,32 @@ impl FirecrackerRuntime {
             config,
             network: NetworkManager,
             sandboxes: RwLock::new(HashMap::new()),
+            ready_pool: Mutex::new(Vec::new()),
         })
+    }
+
+    pub async fn prewarm(
+        &self,
+        spec: SandboxSpec,
+        count: usize,
+    ) -> Result<Vec<u128>, RuntimeError> {
+        if spec.template_id != "python"
+            || spec.cpu_count != 1
+            || spec.memory_mb != 512
+            || spec.network != ferrobox_core::NetworkMode::Disabled
+        {
+            return Err(RuntimeError::invalid(
+                "ready pool supports 1 vCPU, 512 MiB, and disabled networking",
+            ));
+        }
+        let mut samples = Vec::with_capacity(count);
+        for _ in 0..count {
+            let started = std::time::Instant::now();
+            let handle = self.create_fresh(spec.clone()).await?;
+            samples.push(started.elapsed().as_micros());
+            self.ready_pool.lock().await.push(handle);
+        }
+        Ok(samples)
     }
 
     fn jail_root(&self, id: &SandboxId) -> Result<PathBuf, RuntimeError> {
@@ -459,9 +485,8 @@ impl FirecrackerRuntime {
     }
 }
 
-#[async_trait]
-impl SandboxRuntime for FirecrackerRuntime {
-    async fn create(&self, spec: SandboxSpec) -> Result<SandboxHandle, RuntimeError> {
+impl FirecrackerRuntime {
+    async fn create_fresh(&self, spec: SandboxSpec) -> Result<SandboxHandle, RuntimeError> {
         spec.validate()
             .map_err(|error| RuntimeError::invalid(error.to_string()))?;
         let snapshot_compatible = spec.cpu_count == 1
@@ -656,6 +681,23 @@ impl SandboxRuntime for FirecrackerRuntime {
             node_id: self.config.node_id.clone(),
             state: SandboxState::Running,
         })
+    }
+}
+
+#[async_trait]
+impl SandboxRuntime for FirecrackerRuntime {
+    async fn create(&self, spec: SandboxSpec) -> Result<SandboxHandle, RuntimeError> {
+        spec.validate()
+            .map_err(|error| RuntimeError::invalid(error.to_string()))?;
+        if spec.template_id == "python"
+            && spec.cpu_count == 1
+            && spec.memory_mb == 512
+            && spec.network == ferrobox_core::NetworkMode::Disabled
+            && let Some(handle) = self.ready_pool.lock().await.pop()
+        {
+            return Ok(handle);
+        }
+        self.create_fresh(spec).await
     }
 
     async fn execute(

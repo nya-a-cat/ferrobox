@@ -35,6 +35,7 @@ supply-chain record.
 
 The same hosted-KVM job emits `ferrobox-benchmark.json` with:
 
+- five sorted ready-pool preparation samples plus P50 and P95;
 - five sorted create-to-ready samples plus P50 and P95;
 - all `/bin/true` execution samples plus P50 and P95;
 - one Python execution sample;
@@ -45,7 +46,8 @@ The benchmark runs after the functional KVM path and applies conservative
 regression ceilings. Competitor targets are tracked separately so an
 unverified marketing number cannot silently become a project success claim.
 When `FERROBOX_SNAPSHOT_ROOT` is set, the functional path prepares a snapshot
-and the later benchmark measures restore-to-ready latency.
+and the later benchmark measures restore-to-ready preparation and ready-pool
+allocation independently.
 
 ## Completion rule
 

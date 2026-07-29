@@ -33,6 +33,8 @@ struct Cli {
     rootfs: Option<PathBuf>,
     #[arg(long)]
     snapshot_root: Option<PathBuf>,
+    #[arg(long, default_value_t = 0)]
+    ready_pool_size: usize,
     #[arg(long, default_value = "/srv/ferrobox/jailer")]
     chroot_base: PathBuf,
     #[arg(long, default_value = "/var/lib/ferrobox/runtime")]
@@ -61,8 +63,8 @@ async fn main() -> anyhow::Result<()> {
             }
             Arc::new(ProcessRuntime::new(arguments.process_root).await?)
         }
-        Backend::Firecracker => Arc::new(
-            FirecrackerRuntime::new(FirecrackerRuntimeConfig {
+        Backend::Firecracker => {
+            let runtime = FirecrackerRuntime::new(FirecrackerRuntimeConfig {
                 firecracker_binary: required(arguments.firecracker, "--firecracker")?,
                 jailer_binary: required(arguments.jailer, "--jailer")?,
                 kernel_image: required(arguments.kernel, "--kernel")?,
@@ -77,8 +79,23 @@ async fn main() -> anyhow::Result<()> {
                 boot_timeout: Duration::from_secs(30),
                 node_id: "local-kvm".to_owned(),
             })
-            .await?,
-        ),
+            .await?;
+            if arguments.ready_pool_size > 0 {
+                runtime
+                    .prewarm(
+                        ferrobox_core::SandboxSpec {
+                            template_id: "python".to_owned(),
+                            cpu_count: 1,
+                            memory_mb: 512,
+                            timeout_seconds: 300,
+                            network: ferrobox_core::NetworkMode::Disabled,
+                        },
+                        arguments.ready_pool_size,
+                    )
+                    .await?;
+            }
+            Arc::new(runtime)
+        }
     };
     let state = AppState::new(runtime, arguments.audit_log).await?;
     let listener = tokio::net::TcpListener::bind(arguments.listen).await?;

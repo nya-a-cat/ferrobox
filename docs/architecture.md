@@ -84,6 +84,11 @@ memory/state files into their jail, load the snapshot, reconnect vsock, and
 inject a new sandbox ID and token. The initial implementation supports one
 vCPU, 512 MiB, and disabled networking.
 
+The API CLI accepts `--ready-pool-size`. Startup restores and initializes that
+many isolated sandboxes before accepting requests. A compatible create call
+claims one prepared sandbox; pool preparation latency remains observable
+separately from user-facing allocation latency.
+
 The `READY` marker is written last. Operators must treat the snapshot directory
 as a trusted, versioned runtime asset and replace it whenever Firecracker,
 kernel, rootfs, or guest-agent inputs change.

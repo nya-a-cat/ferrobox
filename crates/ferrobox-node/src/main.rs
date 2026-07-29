@@ -37,6 +37,9 @@ enum Command {
 #[derive(Debug, Serialize)]
 struct BenchmarkResult {
     schema_version: u32,
+    pool_prepare_us: Vec<u128>,
+    pool_prepare_p50_us: u128,
+    pool_prepare_p95_us: u128,
     create_to_ready_us: Vec<u128>,
     create_to_ready_p50_us: u128,
     create_to_ready_p95_us: u128,
@@ -121,6 +124,10 @@ async fn main() -> anyhow::Result<()> {
             }
             let total_started = std::time::Instant::now();
             let runtime = FirecrackerRuntime::new(runtime.config()).await?;
+            let mut pool_prepare_us = runtime
+                .prewarm(benchmark_spec(), create_iterations as usize)
+                .await?;
+            pool_prepare_us.sort_unstable();
             let mut create_to_ready_us = Vec::with_capacity(create_iterations as usize);
             let mut delete_us = Vec::with_capacity(create_iterations as usize);
             let mut handle = None;
@@ -174,7 +181,10 @@ async fn main() -> anyhow::Result<()> {
             delete_us.push(delete_started.elapsed().as_micros());
             delete_us.sort_unstable();
             let result = BenchmarkResult {
-                schema_version: 2,
+                schema_version: 3,
+                pool_prepare_p50_us: percentile(&pool_prepare_us, 50),
+                pool_prepare_p95_us: percentile(&pool_prepare_us, 95),
+                pool_prepare_us,
                 create_to_ready_p50_us: percentile(&create_to_ready_us, 50),
                 create_to_ready_p95_us: percentile(&create_to_ready_us, 95),
                 create_to_ready_us,
