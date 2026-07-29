@@ -88,6 +88,11 @@ The `READY` marker is written last. Operators must treat the snapshot directory
 as a trusted, versioned runtime asset and replace it whenever Firecracker,
 kernel, rootfs, or guest-agent inputs change.
 
+Template rootfs files, snapshot assets, and jail roots should share a
+reflink-capable filesystem. Ferrobox requests `cp --reflink=auto`; the hosted
+performance workflow requires Btrfs and proves reflink support before measuring
+restore latency.
+
 ## Network modes
 
 `Disabled` creates no guest data interface. `Internet` creates a dedicated

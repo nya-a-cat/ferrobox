@@ -31,6 +31,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes \
             debootstrap \
+            btrfs-progs \
             e2fsprogs \
             jq \
             musl-tools \
@@ -93,11 +94,30 @@ jobs:
             /opt/ferrobox/images/python.ext4
           sudo chmod 0444 /opt/ferrobox/images/python.ext4
 
-      - name: Prepare Jailer host directories
+      - name: Prepare copy-on-write runtime storage
         run: |
+          sudo truncate -s 8G "${RUNNER_TEMP}/ferrobox.btrfs"
+          sudo mkfs.btrfs --force --quiet "${RUNNER_TEMP}/ferrobox.btrfs"
+          sudo install -d -o root -g root -m 0755 /mnt/ferrobox
+          sudo mount -o loop "${RUNNER_TEMP}/ferrobox.btrfs" /mnt/ferrobox
           sudo install -d -o root -g root -m 0755 \
+            /mnt/ferrobox/images \
+            /mnt/ferrobox/jailer \
+            /mnt/ferrobox/runtime \
+            /mnt/ferrobox/snapshots \
             /srv/ferrobox/jailer \
             /var/lib/ferrobox/runtime
+          sudo cp --sparse=always /opt/ferrobox/images/vmlinux \
+            /mnt/ferrobox/images/vmlinux
+          sudo cp --sparse=always /opt/ferrobox/images/python.ext4 \
+            /mnt/ferrobox/images/python.ext4
+          sudo chmod 0444 \
+            /mnt/ferrobox/images/vmlinux \
+            /mnt/ferrobox/images/python.ext4
+          sudo cp --reflink=always \
+            /mnt/ferrobox/images/python.ext4 \
+            /mnt/ferrobox/images/reflink-check.ext4
+          sudo rm /mnt/ferrobox/images/reflink-check.ext4
           sudo sysctl -w net.ipv4.ip_forward=1
           if [[ -w /sys/fs/cgroup/cgroup.subtree_control ]]; then
             echo '+cpu +memory +pids' |
@@ -108,24 +128,28 @@ jobs:
         env:
           FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
           FERROBOX_JAILER: /opt/ferrobox/bin/jailer
-          FERROBOX_KERNEL: /opt/ferrobox/images/vmlinux
-          FERROBOX_ROOTFS: /opt/ferrobox/images/python.ext4
-          FERROBOX_SNAPSHOT_ROOT: /opt/ferrobox/snapshots/python
+          FERROBOX_KERNEL: /mnt/ferrobox/images/vmlinux
+          FERROBOX_ROOTFS: /mnt/ferrobox/images/python.ext4
+          FERROBOX_SNAPSHOT_ROOT: /mnt/ferrobox/snapshots/python
+          FERROBOX_CHROOT_BASE: /mnt/ferrobox/jailer
+          FERROBOX_RUNTIME_ROOT: /mnt/ferrobox/runtime
           FERROBOX_NODE_BINARY: target/debug/ferrobox-node
-        run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_SNAPSHOT_ROOT,FERROBOX_NODE_BINARY bash scripts/e2e-kvm.sh
+        run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_SNAPSHOT_ROOT,FERROBOX_CHROOT_BASE,FERROBOX_RUNTIME_ROOT,FERROBOX_NODE_BINARY bash scripts/e2e-kvm.sh
 
       - name: Benchmark Firecracker runtime
         env:
           FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
           FERROBOX_JAILER: /opt/ferrobox/bin/jailer
-          FERROBOX_KERNEL: /opt/ferrobox/images/vmlinux
-          FERROBOX_ROOTFS: /opt/ferrobox/images/python.ext4
-          FERROBOX_SNAPSHOT_ROOT: /opt/ferrobox/snapshots/python
+          FERROBOX_KERNEL: /mnt/ferrobox/images/vmlinux
+          FERROBOX_ROOTFS: /mnt/ferrobox/images/python.ext4
+          FERROBOX_SNAPSHOT_ROOT: /mnt/ferrobox/snapshots/python
+          FERROBOX_CHROOT_BASE: /mnt/ferrobox/jailer
+          FERROBOX_RUNTIME_ROOT: /mnt/ferrobox/runtime
           FERROBOX_NODE_BINARY: target/debug/ferrobox-node
           FERROBOX_BENCHMARK_OUTPUT: ${{ runner.temp }}/ferrobox-benchmark.json
           FERROBOX_BENCHMARK_CREATE_ITERATIONS: "5"
           FERROBOX_BENCHMARK_ITERATIONS: "20"
-        run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_SNAPSHOT_ROOT,FERROBOX_NODE_BINARY,FERROBOX_BENCHMARK_OUTPUT,FERROBOX_BENCHMARK_CREATE_ITERATIONS,FERROBOX_BENCHMARK_ITERATIONS bash scripts/benchmark-kvm.sh
+        run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_SNAPSHOT_ROOT,FERROBOX_CHROOT_BASE,FERROBOX_RUNTIME_ROOT,FERROBOX_NODE_BINARY,FERROBOX_BENCHMARK_OUTPUT,FERROBOX_BENCHMARK_CREATE_ITERATIONS,FERROBOX_BENCHMARK_ITERATIONS bash scripts/benchmark-kvm.sh
 
       - name: Run Firecracker internet-policy end-to-end
         env:
@@ -147,4 +171,5 @@ jobs:
             ${{ runner.temp }}/kernel.manifest
             ${{ runner.temp }}/ferrobox-benchmark.json
             /opt/ferrobox/images/python.ext4.manifest.json
+            /mnt/ferrobox/jailer/**/root/*.log
             /srv/ferrobox/jailer/**/root/*.log

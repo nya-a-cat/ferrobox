@@ -77,6 +77,11 @@ spawn, process cgroup assignment, exit collection, and response delivery.
 The benchmark excludes workflow checkout, compilation, rootfs construction,
 and artifact upload.
 
+The KVM benchmark places template images, snapshot assets, and jail roots on
+one temporary Btrfs volume. The workflow verifies `cp --reflink=always` before
+measurement. This matches the runtime's COW storage requirement and prevents a
+full sparse-image copy from being counted as sandbox allocation.
+
 ## Targets
 
 The optimization program tracks two different thresholds:
