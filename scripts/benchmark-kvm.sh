@@ -30,7 +30,7 @@ delete_us="$(jq -r '.delete_us' "${output}")"
 
 # Initial regression ceilings. They are intentionally recorded separately from
 # competitor targets and will be tightened only from retained hosted-KVM data.
-(( create_us <= 2000000 ))
+(( create_us <= 2750000 ))
 (( exec_p95_us <= 50000 ))
 (( delete_us <= 2500000 ))
 

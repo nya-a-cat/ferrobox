@@ -32,7 +32,7 @@ use crate::{
         NetworkInterface, VersionResponse, VmState, VmStateValue, Vsock,
     },
     network::{NetworkLease, NetworkManager},
-    rootfs::{clone_rootfs, verify_regular_file},
+    rootfs::{clone_readonly_asset, clone_rootfs, verify_regular_file},
     vsock::GuestConnector,
 };
 
@@ -83,7 +83,7 @@ struct FirecrackerSandbox {
     state: SandboxState,
     child: Child,
     api: FirecrackerClient,
-    guest: GuestConnector,
+    guest_client: guest::guest_service_client::GuestServiceClient<tonic::transport::Channel>,
     guest_token: String,
     chroot_root: PathBuf,
     network: Option<NetworkLease>,
@@ -144,7 +144,10 @@ impl FirecrackerRuntime {
         api: &FirecrackerClient,
         spec: &SandboxSpec,
         network: Option<&NetworkLease>,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<
+        guest::guest_service_client::GuestServiceClient<tonic::transport::Channel>,
+        RuntimeError,
+    > {
         let version: VersionResponse = api.get("/version").await.map_err(fc_error)?;
         if version.firecracker_version != FIRECRACKER_VERSION {
             return Err(RuntimeError::new(
@@ -262,7 +265,7 @@ impl FirecrackerRuntime {
                                 format!("guest init: {error}"),
                             )
                         })?;
-                    return Ok(());
+                    return Ok(client);
                 }
             }
             sleep(Duration::from_millis(100)).await;
@@ -289,10 +292,10 @@ impl FirecrackerRuntime {
         RuntimeError,
     > {
         let record = self.record(id).await?;
-        let (connector, token_value, state) = {
+        let (client, token_value, state) = {
             let record = record.lock().await;
             (
-                record.guest.clone(),
+                record.guest_client.clone(),
                 record.guest_token.clone(),
                 record.state,
             )
@@ -303,10 +306,6 @@ impl FirecrackerRuntime {
                 "sandbox is not running",
             ));
         }
-        let client = connector
-            .client()
-            .await
-            .map_err(|error| RuntimeError::new(RuntimeErrorKind::Unavailable, error.to_string()))?;
         Ok((client, token_value))
     }
 }
@@ -330,9 +329,9 @@ impl SandboxRuntime for FirecrackerRuntime {
         fs::create_dir_all(&run_path)
             .await
             .map_err(|error| RuntimeError::internal(format!("create run dir: {error}")))?;
-        fs::copy(&self.config.kernel_image, &kernel_path)
+        clone_readonly_asset(&self.config.kernel_image, &kernel_path)
             .await
-            .map_err(|error| RuntimeError::internal(format!("copy kernel: {error}")))?;
+            .map_err(|error| RuntimeError::internal(format!("clone kernel: {error}")))?;
         clone_rootfs(&self.config.rootfs_template, &rootfs_path)
             .await
             .map_err(|error| RuntimeError::internal(error.to_string()))?;
@@ -425,23 +424,26 @@ impl SandboxRuntime for FirecrackerRuntime {
             self.config.api_timeout,
         );
         let guest_token = format!("{}{}", uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
-        if let Err(error) = self
+        let guest_client = match self
             .initialize_guest(&id, &connector, &guest_token, network.as_ref())
             .await
         {
-            let _ = child.kill().await;
-            if let Some(lease) = &network {
-                let _ = self.network.delete(lease).await;
+            Ok(client) => client,
+            Err(error) => {
+                let _ = child.kill().await;
+                if let Some(lease) = &network {
+                    let _ = self.network.delete(lease).await;
+                }
+                return Err(error);
             }
-            return Err(error);
-        }
+        };
         self.sandboxes.write().await.insert(
             id.clone(),
             Arc::new(Mutex::new(FirecrackerSandbox {
                 state: SandboxState::Running,
                 child,
                 api,
-                guest: connector,
+                guest_client,
                 guest_token,
                 chroot_root,
                 network,

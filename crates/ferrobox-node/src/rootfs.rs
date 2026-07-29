@@ -42,6 +42,26 @@ pub async fn clone_rootfs(source: &Path, destination: &Path) -> Result<(), Rootf
     Ok(())
 }
 
+pub async fn clone_readonly_asset(
+    source: &Path,
+    destination: &Path,
+) -> Result<(), RootfsError> {
+    if !source.is_absolute() || !destination.is_absolute() || source == destination {
+        return Err(RootfsError::InvalidPath);
+    }
+    let parent = destination.parent().ok_or(RootfsError::InvalidPath)?;
+    fs::create_dir_all(parent)
+        .await
+        .map_err(|error| RootfsError::Io(error.to_string()))?;
+    match fs::hard_link(source, destination).await {
+        Ok(()) => Ok(()),
+        Err(_) => fs::copy(source, destination)
+            .await
+            .map(|_| ())
+            .map_err(|error| RootfsError::Io(error.to_string())),
+    }
+}
+
 pub async fn verify_regular_file(path: &Path) -> Result<PathBuf, RootfsError> {
     let canonical = fs::canonicalize(path)
         .await

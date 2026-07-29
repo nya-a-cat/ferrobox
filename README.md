@@ -181,6 +181,7 @@ Workflow files:
 - [Standard CI](.github/workflows/ci.yml)
 - [Firecracker KVM E2E](.github/workflows/kvm.yml)
 - [Verification policy](docs/testing.md)
+- [Performance evidence](docs/performance.md)
 - [Supply-chain pins](docs/supply-chain.md)
 
 ## Linux host requirements
