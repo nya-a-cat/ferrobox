@@ -313,6 +313,37 @@ jobs:
             "${FERROBOX_GVISOR_BENCHMARK_OUTPUT}" >/dev/null
           cat "${FERROBOX_GVISOR_BENCHMARK_OUTPUT}"
 
+      - name: Install verified Cloud Hypervisor
+        shell: bash
+        run: |
+          set -euo pipefail
+          cloud_hypervisor_url='https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v53.0/cloud-hypervisor-static'
+          expected_sha256='448af3d4e59b22c2987f7df94c213ad40fb53a10d437e42b5ee6c4fce7c29ecc'
+          curl --fail --location --silent --show-error \
+            --output "${RUNNER_TEMP}/cloud-hypervisor" \
+            "${cloud_hypervisor_url}"
+          actual_sha256="$(sha256sum "${RUNNER_TEMP}/cloud-hypervisor" | awk '{print $1}')"
+          [[ "${actual_sha256}" == "${expected_sha256}" ]]
+          sudo install -o root -g root -m 0755 \
+            "${RUNNER_TEMP}/cloud-hypervisor" \
+            /opt/ferrobox/bin/cloud-hypervisor
+          /opt/ferrobox/bin/cloud-hypervisor --version |
+            tee "${RUNNER_TEMP}/cloud-hypervisor-version.txt"
+          printf '%s  %s\n' "${actual_sha256}" cloud-hypervisor-static \
+            >"${RUNNER_TEMP}/cloud-hypervisor.sha256"
+
+      - name: Benchmark Cloud Hypervisor guest boundary
+        env:
+          FERROBOX_CLOUD_HYPERVISOR: /opt/ferrobox/bin/cloud-hypervisor
+          FERROBOX_KERNEL: /mnt/ferrobox/images/vmlinux
+          FERROBOX_ROOTFS: /mnt/ferrobox/images/python.ext4
+          FERROBOX_MICROVM_PROBE: target/debug/microvm-probe
+          FERROBOX_CLOUD_HYPERVISOR_OUTPUT: ${{ runner.temp }}/cloud-hypervisor-benchmark.json
+          FERROBOX_CLOUD_HYPERVISOR_RUNTIME_ROOT: /mnt/ferrobox/runtime/cloud-hypervisor
+        run: |
+          sudo --preserve-env=FERROBOX_CLOUD_HYPERVISOR,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_MICROVM_PROBE,FERROBOX_CLOUD_HYPERVISOR_OUTPUT,FERROBOX_CLOUD_HYPERVISOR_RUNTIME_ROOT \
+            bash scripts/benchmark-cloud-hypervisor.sh
+
       - name: Validate file-workload performance leadership
         run: |
           jq --exit-status --slurp '
@@ -366,6 +397,9 @@ jobs:
             ${{ runner.temp }}/gvisor-benchmark.json
             ${{ runner.temp }}/gvisor-version.txt
             ${{ runner.temp }}/gvisor-tarball.sha512
+            ${{ runner.temp }}/cloud-hypervisor-benchmark.json
+            ${{ runner.temp }}/cloud-hypervisor-version.txt
+            ${{ runner.temp }}/cloud-hypervisor.sha256
             ${{ runner.temp }}/ferrobox-api.log
             /opt/ferrobox/images/python.ext4.manifest.json
             /mnt/ferrobox/jailer/**/root/*.log
