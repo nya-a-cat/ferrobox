@@ -149,7 +149,7 @@ jobs:
           FERROBOX_NODE_BINARY: target/debug/ferrobox-node
           FERROBOX_BENCHMARK_OUTPUT: ${{ runner.temp }}/ferrobox-benchmark.json
           FERROBOX_BENCHMARK_CREATE_ITERATIONS: "5"
-          FERROBOX_BENCHMARK_ITERATIONS: "20"
+          FERROBOX_BENCHMARK_ITERATIONS: "100"
         run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_SNAPSHOT_ROOT,FERROBOX_CHROOT_BASE,FERROBOX_RUNTIME_ROOT,FERROBOX_NODE_BINARY,FERROBOX_BENCHMARK_OUTPUT,FERROBOX_BENCHMARK_CREATE_ITERATIONS,FERROBOX_BENCHMARK_ITERATIONS bash scripts/benchmark-kvm.sh
 
       - name: Benchmark HTTP ready-pool allocation
@@ -218,19 +218,20 @@ jobs:
           python3 scripts/benchmark-docker.py \
             --image "${FERROBOX_DOCKER_IMAGE}" \
             --iterations 5 \
+            --exec-iterations 100 \
             >"${FERROBOX_DOCKER_BENCHMARK_OUTPUT}"
           jq --exit-status --slurp '
             .[0].schema_version == 3 and
-            .[1].schema_version == 3 and
+            .[1].schema_version == 4 and
             (.[1].docker_create_start_us | length == 5) and
-            (.[1].docker_exec_true_us | length == 20) and
+            (.[1].docker_exec_true_us | length == 100) and
             .[0].http_create_p95_us < .[1].docker_create_start_p95_us
           ' \
             "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" \
             "${FERROBOX_DOCKER_BENCHMARK_OUTPUT}" >/dev/null
           jq --exit-status --slurp '
-            .[0].schema_version == 5 and
-            .[1].schema_version == 3 and
+            .[0].schema_version == 6 and
+            .[1].schema_version == 4 and
             .[0].exec_true_p95_us < .[1].docker_exec_true_p95_us
           ' \
             "${RUNNER_TEMP}/ferrobox-benchmark.json" \
@@ -273,20 +274,21 @@ jobs:
             --image "${FERROBOX_DOCKER_IMAGE}" \
             --runtime runsc \
             --iterations 5 \
+            --exec-iterations 100 \
             >"${FERROBOX_GVISOR_BENCHMARK_OUTPUT}"
           jq --exit-status --slurp '
             .[0].schema_version == 3 and
-            .[1].schema_version == 3 and
+            .[1].schema_version == 4 and
             .[1].runtime == "runsc" and
             (.[1].docker_create_start_us | length == 5) and
-            (.[1].docker_exec_true_us | length == 20) and
+            (.[1].docker_exec_true_us | length == 100) and
             .[0].http_create_p95_us < .[1].docker_create_start_p95_us
           ' \
             "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" \
             "${FERROBOX_GVISOR_BENCHMARK_OUTPUT}" >/dev/null
           jq --exit-status --slurp '
-            .[0].schema_version == 5 and
-            .[1].schema_version == 3 and
+            .[0].schema_version == 6 and
+            .[1].schema_version == 4 and
             .[0].exec_true_p95_us < .[1].docker_exec_true_p95_us
           ' \
             "${FERROBOX_RUNTIME_BENCHMARK_OUTPUT}" \

@@ -40,10 +40,13 @@ def main() -> None:
     parser.add_argument("--socket", default="/var/run/docker.sock")
     parser.add_argument("--image", required=True)
     parser.add_argument("--iterations", type=int, default=5)
+    parser.add_argument("--exec-iterations", type=int, default=20)
     parser.add_argument("--runtime", default="")
     arguments = parser.parse_args()
     if arguments.iterations < 1 or arguments.iterations > 100:
         raise ValueError("iterations must be between 1 and 100")
+    if arguments.exec_iterations < 1 or arguments.exec_iterations > 1000:
+        raise ValueError("exec iterations must be between 1 and 1000")
 
     connection = UnixConnection(arguments.socket)
     samples: list[int] = []
@@ -108,7 +111,7 @@ def main() -> None:
     exec_container_id = create_container()
     start_container(exec_container_id)
     exec_samples: list[int] = []
-    for _ in range(20):
+    for _ in range(arguments.exec_iterations):
         started = time.perf_counter_ns()
         status, body = request(
             connection,
@@ -149,7 +152,7 @@ def main() -> None:
     print(
         json.dumps(
             {
-                "schema_version": 3,
+                "schema_version": 4,
                 "runtime": arguments.runtime or "runc",
                 "docker_create_start_us": samples,
                 "docker_create_start_p50_us": percentile(samples, 50),
@@ -157,6 +160,10 @@ def main() -> None:
                 "docker_exec_true_us": exec_samples,
                 "docker_exec_true_p50_us": percentile(exec_samples, 50),
                 "docker_exec_true_p95_us": percentile(exec_samples, 95),
+                "docker_exec_true_total_us": sum(exec_samples),
+                "docker_exec_true_throughput_milli_ops_per_second": (
+                    arguments.exec_iterations * 1_000_000_000 // sum(exec_samples)
+                ),
             },
             indent=2,
         )

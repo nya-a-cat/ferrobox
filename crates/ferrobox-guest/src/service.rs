@@ -44,6 +44,7 @@ struct InitState {
     uid: u32,
     gid: u32,
     max_file_bytes: u64,
+    guest_cgroup_available: bool,
 }
 
 pub struct GuestService {
@@ -156,6 +157,7 @@ impl guest_service_server::GuestService for GuestService {
             uid: request.command_uid,
             gid: request.command_gid,
             max_file_bytes: request.max_file_bytes,
+            guest_cgroup_available: configure_pids_limit(request.max_processes).await?,
         };
         let mut state = self.initialization.write().await;
         if let Some(existing) = state.as_ref() {
@@ -180,7 +182,6 @@ impl guest_service_server::GuestService for GuestService {
             &request.dns_ipv4,
         )
         .await?;
-        configure_pids_limit(request.max_processes).await?;
         *state = Some(candidate);
         Ok(Response::new(InitResponse {
             initialized: true,
@@ -234,7 +235,7 @@ impl guest_service_server::GuestService for GuestService {
                 send_error(&sender, &process_id, "spawn", "process has no pid").await;
                 return;
             };
-            if let Err(error) = assign_guest_cgroup(pid).await {
+            if let Err(error) = assign_guest_cgroup(pid, state.guest_cgroup_available) {
                 let _ = child.kill().await;
                 send_error(&sender, &process_id, "cgroup", error.message()).await;
                 return;
@@ -588,24 +589,26 @@ async fn run_guest_command(program: &str, arguments: &[&str]) -> Result<(), Stat
         )))
     }
 }
-async fn configure_pids_limit(maximum: u32) -> Result<(), Status> {
+async fn configure_pids_limit(maximum: u32) -> Result<bool, Status> {
     let root = Path::new("/sys/fs/cgroup/ferrobox-guest");
     if tokio::fs::create_dir_all(root).await.is_err() {
         tracing::warn!("guest cgroup is unavailable; relying on host pids limit");
-        return Ok(());
+        return Ok(false);
     }
     tokio::fs::write(root.join("pids.max"), maximum.to_string())
         .await
-        .map_err(|error| Status::internal(format!("set pids.max: {error}")))
+        .map_err(|error| Status::internal(format!("set pids.max: {error}")))?;
+    Ok(true)
 }
 
-async fn assign_guest_cgroup(pid: u32) -> Result<(), Status> {
-    let path = Path::new("/sys/fs/cgroup/ferrobox-guest/cgroup.procs");
-    if tokio::fs::metadata(path).await.is_err() {
+fn assign_guest_cgroup(pid: u32, available: bool) -> Result<(), Status> {
+    if !available {
         return Ok(());
     }
-    tokio::fs::write(path, pid.to_string())
-        .await
+    std::fs::write(
+        "/sys/fs/cgroup/ferrobox-guest/cgroup.procs",
+        pid.to_string(),
+    )
         .map_err(|error| Status::internal(format!("assign process cgroup: {error}")))
 }
 

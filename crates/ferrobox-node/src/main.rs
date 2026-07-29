@@ -48,6 +48,8 @@ struct BenchmarkResult {
     exec_true_us: Vec<u128>,
     exec_true_p50_us: u128,
     exec_true_p95_us: u128,
+    exec_true_total_us: u128,
+    exec_true_throughput_milli_ops_per_second: u128,
     exec_python_us: u128,
     delete_us: Vec<u128>,
     delete_p50_us: u128,
@@ -151,6 +153,7 @@ async fn main() -> anyhow::Result<()> {
             let handle = handle.expect("positive create iteration count is validated");
 
             let mut exec_true_us = Vec::with_capacity(exec_iterations as usize);
+            let exec_true_started = std::time::Instant::now();
             for _ in 0..exec_iterations {
                 let started = std::time::Instant::now();
                 ensure_exit_success(
@@ -163,6 +166,7 @@ async fn main() -> anyhow::Result<()> {
                 )?;
                 exec_true_us.push(started.elapsed().as_micros());
             }
+            let exec_true_total_us = exec_true_started.elapsed().as_micros();
             exec_true_us.sort_unstable();
 
             let python_started = std::time::Instant::now();
@@ -185,7 +189,7 @@ async fn main() -> anyhow::Result<()> {
             delete_us.push(delete_started.elapsed().as_micros());
             delete_us.sort_unstable();
             let result = BenchmarkResult {
-                schema_version: 5,
+                schema_version: 6,
                 pool_prepare_p50_us: percentile(&pool_prepare_us, 50),
                 pool_prepare_p95_us: percentile(&pool_prepare_us, 95),
                 pool_prepare_us,
@@ -196,6 +200,11 @@ async fn main() -> anyhow::Result<()> {
                 create_to_ready_us,
                 exec_true_p50_us: percentile(&exec_true_us, 50),
                 exec_true_p95_us: percentile(&exec_true_us, 95),
+                exec_true_total_us,
+                exec_true_throughput_milli_ops_per_second: u128::from(exec_iterations)
+                    .saturating_mul(1_000_000_000)
+                    .checked_div(exec_true_total_us)
+                    .unwrap_or_default(),
                 exec_true_us,
                 exec_python_us,
                 delete_p50_us: percentile(&delete_us, 50),
