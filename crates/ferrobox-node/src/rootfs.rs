@@ -42,10 +42,7 @@ pub async fn clone_rootfs(source: &Path, destination: &Path) -> Result<(), Rootf
     Ok(())
 }
 
-pub async fn clone_readonly_asset(
-    source: &Path,
-    destination: &Path,
-) -> Result<(), RootfsError> {
+pub async fn clone_readonly_asset(source: &Path, destination: &Path) -> Result<(), RootfsError> {
     if !source.is_absolute() || !destination.is_absolute() || source == destination {
         return Err(RootfsError::InvalidPath);
     }
