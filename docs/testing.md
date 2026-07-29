@@ -33,6 +33,17 @@ Each run uploads the kernel key/hash and rootfs build manifest as provenance
 evidence. The workflow rejects any kernel whose SHA-256 differs from the pinned
 supply-chain record.
 
+The same hosted-KVM job emits `ferrobox-benchmark.json` with:
+
+- `create_to_ready_us`;
+- all `/bin/true` execution samples plus P50 and P95;
+- one Python execution sample;
+- deletion and total lifecycle time.
+
+The benchmark runs after the functional KVM path and applies conservative
+regression ceilings. Competitor targets are tracked separately so an
+unverified marketing number cannot silently become a project success claim.
+
 ## Completion rule
 
 Workflow presence is not evidence of success. Ferrobox remains incomplete until

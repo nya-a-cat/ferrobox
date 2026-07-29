@@ -5,6 +5,7 @@ use ferrobox_core::{
     ExecRequest, ExecResult, ExecTermination, NetworkMode, SandboxPath, SandboxRuntime, SandboxSpec,
 };
 use ferrobox_node::{FirecrackerRuntime, FirecrackerRuntimeConfig};
+use serde::Serialize;
 
 #[derive(Debug, Parser)]
 #[command(name = "ferrobox-node", version)]
@@ -16,6 +17,12 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     Check(RuntimeArgs),
+    Benchmark {
+        #[arg(long, default_value_t = 20)]
+        exec_iterations: u32,
+        #[command(flatten)]
+        runtime: RuntimeArgs,
+    },
     RunTemplate {
         template: String,
         #[arg(long)]
@@ -23,6 +30,18 @@ enum Command {
         #[command(flatten)]
         runtime: RuntimeArgs,
     },
+}
+
+#[derive(Debug, Serialize)]
+struct BenchmarkResult {
+    schema_version: u32,
+    create_to_ready_us: u128,
+    exec_true_us: Vec<u128>,
+    exec_true_p50_us: u128,
+    exec_true_p95_us: u128,
+    exec_python_us: u128,
+    delete_us: u128,
+    total_us: u128,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -80,6 +99,64 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
     match Cli::parse().command {
+        Command::Benchmark {
+            exec_iterations,
+            runtime,
+        } => {
+            if exec_iterations == 0 || exec_iterations > 1000 {
+                anyhow::bail!("exec-iterations must be between 1 and 1000");
+            }
+            let total_started = std::time::Instant::now();
+            let runtime = FirecrackerRuntime::new(runtime.config()).await?;
+            let create_started = std::time::Instant::now();
+            let handle = runtime.create(benchmark_spec()).await?;
+            let create_to_ready_us = create_started.elapsed().as_micros();
+
+            let mut exec_true_us = Vec::with_capacity(exec_iterations as usize);
+            for _ in 0..exec_iterations {
+                let started = std::time::Instant::now();
+                ensure_exit_success(
+                    &runtime
+                        .execute(
+                            &handle.sandbox_id,
+                            exec_request(vec!["/bin/true".to_owned()]),
+                        )
+                        .await?,
+                )?;
+                exec_true_us.push(started.elapsed().as_micros());
+            }
+            exec_true_us.sort_unstable();
+
+            let python_started = std::time::Instant::now();
+            ensure_exit_success(
+                &runtime
+                    .execute(
+                        &handle.sandbox_id,
+                        exec_request(vec![
+                            "python3".to_owned(),
+                            "-c".to_owned(),
+                            "print(42)".to_owned(),
+                        ]),
+                    )
+                    .await?,
+            )?;
+            let exec_python_us = python_started.elapsed().as_micros();
+
+            let delete_started = std::time::Instant::now();
+            runtime.delete(&handle.sandbox_id).await?;
+            let delete_us = delete_started.elapsed().as_micros();
+            let result = BenchmarkResult {
+                schema_version: 1,
+                create_to_ready_us,
+                exec_true_p50_us: percentile(&exec_true_us, 50),
+                exec_true_p95_us: percentile(&exec_true_us, 95),
+                exec_true_us,
+                exec_python_us,
+                delete_us,
+                total_us: total_started.elapsed().as_micros(),
+            };
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        }
         Command::Check(arguments) => {
             arguments.config().validate().await?;
             let kvm = tokio::fs::OpenOptions::new()
@@ -160,6 +237,31 @@ async fn main() -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+fn benchmark_spec() -> SandboxSpec {
+    SandboxSpec {
+        template_id: "python".to_owned(),
+        cpu_count: 1,
+        memory_mb: 512,
+        timeout_seconds: 300,
+        network: NetworkMode::Disabled,
+    }
+}
+
+fn exec_request(argv: Vec<String>) -> ExecRequest {
+    ExecRequest {
+        argv,
+        cwd: SandboxPath::workspace(),
+        environment: BTreeMap::new(),
+        timeout_seconds: 30,
+        max_output_bytes: 1024 * 1024,
+    }
+}
+
+fn percentile(sorted: &[u128], percentile: usize) -> u128 {
+    let index = (sorted.len() - 1) * percentile / 100;
+    sorted[index]
 }
 
 fn ensure_exit_success(result: &ExecResult) -> anyhow::Result<()> {

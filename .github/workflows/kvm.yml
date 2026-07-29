@@ -112,6 +112,18 @@ jobs:
           FERROBOX_ROOTFS: /opt/ferrobox/images/python.ext4
           FERROBOX_NODE_BINARY: target/debug/ferrobox-node
         run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_NODE_BINARY bash scripts/e2e-kvm.sh
+
+      - name: Benchmark Firecracker runtime
+        env:
+          FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
+          FERROBOX_JAILER: /opt/ferrobox/bin/jailer
+          FERROBOX_KERNEL: /opt/ferrobox/images/vmlinux
+          FERROBOX_ROOTFS: /opt/ferrobox/images/python.ext4
+          FERROBOX_NODE_BINARY: target/debug/ferrobox-node
+          FERROBOX_BENCHMARK_OUTPUT: ${{ runner.temp }}/ferrobox-benchmark.json
+          FERROBOX_BENCHMARK_ITERATIONS: "20"
+        run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_NODE_BINARY,FERROBOX_BENCHMARK_OUTPUT,FERROBOX_BENCHMARK_ITERATIONS bash scripts/benchmark-kvm.sh
+
       - name: Run Firecracker internet-policy end-to-end
         env:
           FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
@@ -130,5 +142,6 @@ jobs:
           if-no-files-found: warn
           path: |
             ${{ runner.temp }}/kernel.manifest
+            ${{ runner.temp }}/ferrobox-benchmark.json
             /opt/ferrobox/images/python.ext4.manifest.json
             /srv/ferrobox/jailer/**/root/*.log

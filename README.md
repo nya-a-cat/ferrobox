@@ -143,6 +143,7 @@ crates/
   ferrobox-protocol/  Protobuf/gRPC guest protocol
 scripts/
   build-python-rootfs.sh
+  benchmark-kvm.sh
   e2e-process.sh
   e2e-kvm.sh
   fetch-firecracker.sh
@@ -168,6 +169,8 @@ process-backed HTTP flow, and pinned Firecracker tooling.
 The KVM workflow runs on a hosted Linux runner with `/dev/kvm`. It builds a
 Python rootfs, verifies the pinned kernel and Firecracker checksums, boots the
 guest through Jailer, executes `python3 -c "print(42)"`, and checks cleanup.
+It also retains phase-level create, hot-exec, Python-exec, delete, and total
+lifecycle timings as a JSON benchmark artifact.
 
 ```text
 Jailer -> Firecracker -> guest READY -> execute -> delete -> leak check
