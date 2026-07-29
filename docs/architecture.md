@@ -89,7 +89,8 @@ many isolated sandboxes before accepting requests. A compatible create call
 claims one prepared sandbox; pool preparation latency remains observable
 separately from user-facing allocation latency. A single maintainer detects
 claims and restores missing entries concurrently until the configured target
-is reached.
+is reached. Preparation runs one native no-op and one Python no-op to resolve
+the main lazy snapshot pages before allocation.
 
 The `READY` marker is written last. Operators must treat the snapshot directory
 as a trusted, versioned runtime asset and replace it whenever Firecracker,

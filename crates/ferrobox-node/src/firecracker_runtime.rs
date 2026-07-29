@@ -140,6 +140,10 @@ impl FirecrackerRuntime {
         if count > 0 && !self.snapshot_available().await {
             let started = std::time::Instant::now();
             let handle = self.create_fresh(spec.clone()).await?;
+            if let Err(error) = self.warm_ready_sandbox(&handle).await {
+                let _ = <Self as SandboxRuntime>::delete(self, &handle.sandbox_id).await;
+                return Err(error);
+            }
             samples.push(started.elapsed().as_micros());
             self.ready_pool.lock().await.push(handle);
         }
@@ -149,6 +153,10 @@ impl FirecrackerRuntime {
             async move {
                 let started = std::time::Instant::now();
                 let handle = self.create_fresh(spec).await?;
+                if let Err(error) = self.warm_ready_sandbox(&handle).await {
+                    let _ = <Self as SandboxRuntime>::delete(self, &handle.sandbox_id).await;
+                    return Err(error);
+                }
                 Ok::<_, RuntimeError>((handle, started.elapsed().as_micros()))
             }
         }))
@@ -163,6 +171,33 @@ impl FirecrackerRuntime {
 
     pub async fn ready_pool_len(&self) -> usize {
         self.ready_pool.lock().await.len()
+    }
+
+    async fn warm_ready_sandbox(&self, handle: &SandboxHandle) -> Result<(), RuntimeError> {
+        for argv in [
+            vec!["/bin/true".to_owned()],
+            vec!["python3".to_owned(), "-c".to_owned(), "pass".to_owned()],
+        ] {
+            let result = <Self as SandboxRuntime>::execute(
+                self,
+                &handle.sandbox_id,
+                ExecRequest {
+                    argv,
+                    cwd: SandboxPath::workspace(),
+                    environment: Default::default(),
+                    timeout_seconds: 30,
+                    max_output_bytes: 1024,
+                },
+            )
+            .await?;
+            if result.termination != (ExecTermination::Exited { exit_code: 0 }) {
+                return Err(RuntimeError::new(
+                    RuntimeErrorKind::Unavailable,
+                    format!("ready-pool warmup failed: {:?}", result.termination),
+                ));
+            }
+        }
+        Ok(())
     }
 
     fn jail_root(&self, id: &SandboxId) -> Result<PathBuf, RuntimeError> {

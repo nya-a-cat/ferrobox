@@ -103,10 +103,12 @@ measurement. This matches the runtime's COW storage requirement and prevents a
 full sparse-image copy from being counted as sandbox allocation.
 
 `pool_prepare_us` measures a complete snapshot restore, guest health check, and
-unique guest initialization for each prepared microVM. `create_to_ready_us`
-measures a compatible API allocation from that ready pool. Both sample sets
-are retained; pool construction is never hidden inside workflow setup time.
-Once a snapshot exists, missing pool entries restore concurrently.
+unique guest initialization for each prepared microVM. It also warms one
+minimal native process and the Python interpreter so lazy snapshot page faults
+stay in the background boundary. `create_to_ready_us` measures a compatible API
+allocation from that ready pool. Both sample sets are retained; pool
+construction is never hidden inside workflow setup time. Once a snapshot
+exists, missing pool entries restore concurrently.
 
 `http_create_us` is the user-facing same-host boundary. It starts immediately
 before an HTTP `POST /v1/sandboxes` and ends after the complete 201 response is
