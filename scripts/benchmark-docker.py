@@ -42,6 +42,7 @@ def main() -> None:
     parser.add_argument("--iterations", type=int, default=5)
     parser.add_argument("--exec-iterations", type=int, default=20)
     parser.add_argument("--python-iterations", type=int, default=30)
+    parser.add_argument("--file-iterations", type=int, default=20)
     parser.add_argument("--runtime", default="")
     arguments = parser.parse_args()
     if arguments.iterations < 1 or arguments.iterations > 100:
@@ -50,6 +51,8 @@ def main() -> None:
         raise ValueError("exec iterations must be between 1 and 1000")
     if arguments.python_iterations < 1 or arguments.python_iterations > 1000:
         raise ValueError("python iterations must be between 1 and 1000")
+    if arguments.file_iterations < 1 or arguments.file_iterations > 1000:
+        raise ValueError("file iterations must be between 1 and 1000")
 
     connection = UnixConnection(arguments.socket)
     samples: list[int] = []
@@ -165,11 +168,18 @@ def main() -> None:
         ["python3", "-c", "print(42)"],
         arguments.python_iterations,
     )
+    file_command = [
+        "python3",
+        "-c",
+        "from pathlib import Path; p=Path('/tmp/ferrobox-bench.bin'); data=b'x'*1048576; p.write_bytes(data); assert p.read_bytes()==data; p.unlink()",
+    ]
+    benchmark_exec(file_command, 1)
+    file_samples = benchmark_exec(file_command, arguments.file_iterations)
     delete_container(exec_container_id)
     print(
         json.dumps(
             {
-                "schema_version": 5,
+                "schema_version": 6,
                 "runtime": arguments.runtime or "runc",
                 "docker_create_start_us": samples,
                 "docker_create_start_p50_us": percentile(samples, 50),
@@ -189,6 +199,15 @@ def main() -> None:
                     arguments.python_iterations
                     * 1_000_000_000
                     // sum(python_samples)
+                ),
+                "docker_exec_file_roundtrip_us": file_samples,
+                "docker_exec_file_roundtrip_p50_us": percentile(file_samples, 50),
+                "docker_exec_file_roundtrip_p95_us": percentile(file_samples, 95),
+                "docker_exec_file_roundtrip_total_us": sum(file_samples),
+                "docker_exec_file_roundtrip_throughput_milli_ops_per_second": (
+                    arguments.file_iterations
+                    * 1_000_000_000
+                    // sum(file_samples)
                 ),
             },
             indent=2,

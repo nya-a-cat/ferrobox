@@ -24,6 +24,8 @@ enum Command {
         exec_iterations: u32,
         #[arg(long, default_value_t = 30)]
         python_iterations: u32,
+        #[arg(long, default_value_t = 20)]
+        file_iterations: u32,
         #[command(flatten)]
         runtime: RuntimeArgs,
     },
@@ -57,6 +59,11 @@ struct BenchmarkResult {
     exec_python_p95_us: u128,
     exec_python_total_us: u128,
     exec_python_throughput_milli_ops_per_second: u128,
+    exec_file_roundtrip_us: Vec<u128>,
+    exec_file_roundtrip_p50_us: u128,
+    exec_file_roundtrip_p95_us: u128,
+    exec_file_roundtrip_total_us: u128,
+    exec_file_roundtrip_throughput_milli_ops_per_second: u128,
     delete_us: Vec<u128>,
     delete_p50_us: u128,
     delete_p95_us: u128,
@@ -125,6 +132,7 @@ async fn main() -> anyhow::Result<()> {
             create_iterations,
             exec_iterations,
             python_iterations,
+            file_iterations,
             runtime,
         } => {
             if create_iterations == 0 || create_iterations > 20 {
@@ -135,6 +143,9 @@ async fn main() -> anyhow::Result<()> {
             }
             if python_iterations == 0 || python_iterations > 1000 {
                 anyhow::bail!("python-iterations must be between 1 and 1000");
+            }
+            if file_iterations == 0 || file_iterations > 1000 {
+                anyhow::bail!("file-iterations must be between 1 and 1000");
             }
             let total_started = std::time::Instant::now();
             let runtime = FirecrackerRuntime::new(runtime.config()).await?;
@@ -212,12 +223,37 @@ async fn main() -> anyhow::Result<()> {
             let exec_python_total_us = exec_python_started.elapsed().as_micros();
             exec_python_us.sort_unstable();
 
+            let file_command = vec![
+                "python3".to_owned(),
+                "-c".to_owned(),
+                "from pathlib import Path; p=Path('/tmp/ferrobox-bench.bin'); data=b'x'*1048576; p.write_bytes(data); assert p.read_bytes()==data; p.unlink()".to_owned(),
+            ];
+            ensure_exit_success(
+                &runtime
+                    .execute(&handle.sandbox_id, exec_request(file_command.clone()))
+                    .await?,
+            )?;
+            let mut exec_file_roundtrip_us = Vec::with_capacity(file_iterations as usize);
+            let exec_file_roundtrip_started = std::time::Instant::now();
+            for _ in 0..file_iterations {
+                let started = std::time::Instant::now();
+                ensure_exit_success(
+                    &runtime
+                        .execute(&handle.sandbox_id, exec_request(file_command.clone()))
+                        .await?,
+                )?;
+                exec_file_roundtrip_us.push(started.elapsed().as_micros());
+            }
+            let exec_file_roundtrip_total_us =
+                exec_file_roundtrip_started.elapsed().as_micros();
+            exec_file_roundtrip_us.sort_unstable();
+
             let delete_started = std::time::Instant::now();
             runtime.delete(&handle.sandbox_id).await?;
             delete_us.push(delete_started.elapsed().as_micros());
             delete_us.sort_unstable();
             let result = BenchmarkResult {
-                schema_version: 7,
+                schema_version: 8,
                 pool_prepare_p50_us: percentile(&pool_prepare_us, 50),
                 pool_prepare_p95_us: percentile(&pool_prepare_us, 95),
                 pool_prepare_us,
@@ -242,6 +278,14 @@ async fn main() -> anyhow::Result<()> {
                     .checked_div(exec_python_total_us)
                     .unwrap_or_default(),
                 exec_python_us,
+                exec_file_roundtrip_p50_us: percentile(&exec_file_roundtrip_us, 50),
+                exec_file_roundtrip_p95_us: percentile(&exec_file_roundtrip_us, 95),
+                exec_file_roundtrip_total_us,
+                exec_file_roundtrip_throughput_milli_ops_per_second: u128::from(file_iterations)
+                    .saturating_mul(1_000_000_000)
+                    .checked_div(exec_file_roundtrip_total_us)
+                    .unwrap_or_default(),
+                exec_file_roundtrip_us,
                 delete_p50_us: percentile(&delete_us, 50),
                 delete_p95_us: percentile(&delete_us, 95),
                 delete_us,
