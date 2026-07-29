@@ -184,11 +184,7 @@ impl FirecrackerRuntime {
             .await
             .map_err(|error| RuntimeError::internal(format!("read /proc entry: {error}")))?
         {
-            let process_id = entry
-                .file_name()
-                .to_string_lossy()
-                .parse::<u32>()
-                .ok();
+            let process_id = entry.file_name().to_string_lossy().parse::<u32>().ok();
             let Some(process_id) = process_id else {
                 continue;
             };
