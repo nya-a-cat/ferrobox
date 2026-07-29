@@ -373,7 +373,7 @@ jobs:
             /usr/local/bin/containerd-shim-kata-v2
           /opt/kata/bin/kata-runtime --version |
             tee "${RUNNER_TEMP}/kata-version.txt"
-          /opt/kata/bin/kata-runtime check --no-network-checks
+          sudo /opt/kata/bin/kata-runtime check --no-network-checks
           printf '%s  %s\n' "${actual_sha256}" \
             kata-static-3.31.0-amd64.tar.zst \
             >"${RUNNER_TEMP}/kata-static.sha256"
