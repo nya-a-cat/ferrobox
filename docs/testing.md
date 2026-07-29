@@ -54,6 +54,11 @@ The workflow also starts the real HTTP API with five ready microVMs and retains
 allocation, control-plane state registration, token issuance, audit writing,
 JSON serialization, and loopback response transfer.
 
+The same job pulls a cached Python image, records its resolved Docker digest,
+and measures Docker Engine `create` plus `start` through its Unix-socket HTTP
+API. `docker-benchmark.json` retains five samples. The comparison gate requires
+Ferrobox HTTP create P95 to remain below Docker create-and-start P95.
+
 ## Completion rule
 
 Workflow presence is not evidence of success. Ferrobox remains incomplete until

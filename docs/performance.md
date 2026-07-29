@@ -93,6 +93,12 @@ before an HTTP `POST /v1/sandboxes` and ends after the complete 201 response is
 read. It includes request parsing, pool allocation, state registration, token
 issuance, audit persistence, JSON serialization, and loopback transport.
 
+The Docker control uses the same host and direct HTTP rather than CLI process
+startup. Its timer covers Docker Engine container create and start responses,
+with the Python image pulled beforehand. CPU, memory, PID, and network-disabled
+limits match the Ferrobox benchmark shape where the Docker API supports them.
+Container inspection and deletion occur outside the timed interval.
+
 ## Targets
 
 The optimization program tracks two different thresholds:

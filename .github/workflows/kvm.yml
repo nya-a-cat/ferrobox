@@ -200,6 +200,32 @@ jobs:
           ' "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" >/dev/null
           cat "${FERROBOX_HTTP_BENCHMARK_OUTPUT}"
 
+      - name: Compare Docker Engine create and start
+        env:
+          FERROBOX_HTTP_BENCHMARK_OUTPUT: ${{ runner.temp }}/ferrobox-http-benchmark.json
+          FERROBOX_DOCKER_BENCHMARK_OUTPUT: ${{ runner.temp }}/docker-benchmark.json
+          FERROBOX_DOCKER_IMAGE: python:3.11-slim-bookworm
+        run: |
+          set -euo pipefail
+          docker pull "${FERROBOX_DOCKER_IMAGE}"
+          docker image inspect \
+            --format '{{json .RepoDigests}}' \
+            "${FERROBOX_DOCKER_IMAGE}" \
+            >"${RUNNER_TEMP}/docker-image-digests.json"
+          python3 scripts/benchmark-docker.py \
+            --image "${FERROBOX_DOCKER_IMAGE}" \
+            --iterations 5 \
+            >"${FERROBOX_DOCKER_BENCHMARK_OUTPUT}"
+          jq --exit-status --slurp '
+            .[0].schema_version == 1 and
+            .[1].schema_version == 1 and
+            (.[1].docker_create_start_us | length == 5) and
+            .[0].http_create_p95_us < .[1].docker_create_start_p95_us
+          ' \
+            "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" \
+            "${FERROBOX_DOCKER_BENCHMARK_OUTPUT}" >/dev/null
+          cat "${FERROBOX_DOCKER_BENCHMARK_OUTPUT}"
+
       - name: Run Firecracker internet-policy end-to-end
         env:
           FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
@@ -220,6 +246,8 @@ jobs:
             ${{ runner.temp }}/kernel.manifest
             ${{ runner.temp }}/ferrobox-benchmark.json
             ${{ runner.temp }}/ferrobox-http-benchmark.json
+            ${{ runner.temp }}/docker-benchmark.json
+            ${{ runner.temp }}/docker-image-digests.json
             ${{ runner.temp }}/ferrobox-api.log
             /opt/ferrobox/images/python.ext4.manifest.json
             /mnt/ferrobox/jailer/**/root/*.log
