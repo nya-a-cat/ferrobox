@@ -6,8 +6,8 @@ use std::{
 use clap::Parser;
 use ferrobox_node::vsock::GuestConnector;
 use ferrobox_protocol::guest::v1::{
-    Auth, HealthRequest, InitRequest, StartProcessRequest, guest_service_client::GuestServiceClient,
-    process_event,
+    Auth, HealthRequest, InitRequest, StartProcessRequest,
+    guest_service_client::GuestServiceClient, process_event,
 };
 use serde::Serialize;
 use tonic::{Request, transport::Channel};
@@ -39,12 +39,8 @@ async fn main() -> anyhow::Result<()> {
     let arguments = Args::parse();
     let connector = GuestConnector::new(arguments.vsock, 5000, Duration::from_secs(1));
     let mut client = wait_for_guest(&connector).await?;
-    let ready_unix_nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)?
-        .as_nanos();
-    let ready_us = ready_unix_nanos
-        .saturating_sub(arguments.launched_unix_nanos)
-        / 1000;
+    let ready_unix_nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let ready_us = ready_unix_nanos.saturating_sub(arguments.launched_unix_nanos) / 1000;
 
     if arguments.health_only {
         print_result(ready_us, Vec::new(), Vec::new())?;
@@ -70,14 +66,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut exec_true_us = Vec::with_capacity(20);
     for _ in 0..20 {
-        exec_true_us.push(
-            execute(
-                &mut client,
-                &token,
-                vec!["/bin/true".to_owned()],
-            )
-            .await?,
-        );
+        exec_true_us.push(execute(&mut client, &token, vec!["/bin/true".to_owned()]).await?);
     }
 
     execute(
@@ -108,9 +97,7 @@ async fn main() -> anyhow::Result<()> {
     print_result(ready_us, exec_true_us, exec_python_us)
 }
 
-async fn wait_for_guest(
-    connector: &GuestConnector,
-) -> anyhow::Result<GuestServiceClient<Channel>> {
+async fn wait_for_guest(connector: &GuestConnector) -> anyhow::Result<GuestServiceClient<Channel>> {
     let started = Instant::now();
     loop {
         if let Ok(mut client) = connector.client().await
