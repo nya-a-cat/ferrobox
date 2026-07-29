@@ -214,23 +214,32 @@ impl FirecrackerRuntime {
     }
 
     async fn warm_ready_sandbox(&self, handle: &SandboxHandle) -> Result<(), RuntimeError> {
-        let result = <Self as SandboxRuntime>::execute(
-            self,
-            &handle.sandbox_id,
-            ExecRequest {
-                argv: vec!["python3".to_owned(), "-c".to_owned(), "pass".to_owned()],
-                cwd: SandboxPath::workspace(),
-                environment: Default::default(),
-                timeout_seconds: 30,
-                max_output_bytes: 1024,
-            },
-        )
-        .await?;
-        if result.termination != (ExecTermination::Exited { exit_code: 0 }) {
-            return Err(RuntimeError::new(
-                RuntimeErrorKind::Unavailable,
-                format!("ready-pool warmup failed: {:?}", result.termination),
-            ));
+        for argv in [
+            vec!["/bin/true".to_owned()],
+            vec![
+                "python3".to_owned(),
+                "-c".to_owned(),
+                "print(42)".to_owned(),
+            ],
+        ] {
+            let result = <Self as SandboxRuntime>::execute(
+                self,
+                &handle.sandbox_id,
+                ExecRequest {
+                    argv,
+                    cwd: SandboxPath::workspace(),
+                    environment: Default::default(),
+                    timeout_seconds: 30,
+                    max_output_bytes: 1024,
+                },
+            )
+            .await?;
+            if result.termination != (ExecTermination::Exited { exit_code: 0 }) {
+                return Err(RuntimeError::new(
+                    RuntimeErrorKind::Unavailable,
+                    format!("ready-pool warmup failed: {:?}", result.termination),
+                ));
+            }
         }
         Ok(())
     }
