@@ -174,21 +174,30 @@ impl FirecrackerRuntime {
     }
 
     pub async fn firecracker_rss_kib(&self) -> Result<u64, RuntimeError> {
-        let records = self
-            .sandboxes
-            .read()
+        let mut processes = fs::read_dir("/proc")
             .await
-            .values()
-            .cloned()
-            .collect::<Vec<_>>();
+            .map_err(|error| RuntimeError::internal(format!("read /proc: {error}")))?;
         let mut total = 0_u64;
-        for record in records {
-            let process_id = record
-                .lock()
+        let mut count = 0_usize;
+        while let Some(entry) = processes
+            .next_entry()
+            .await
+            .map_err(|error| RuntimeError::internal(format!("read /proc entry: {error}")))?
+        {
+            let process_id = entry
+                .file_name()
+                .to_string_lossy()
+                .parse::<u32>()
+                .ok();
+            let Some(process_id) = process_id else {
+                continue;
+            };
+            let process_name = fs::read_to_string(format!("/proc/{process_id}/comm"))
                 .await
-                .child
-                .id()
-                .ok_or_else(|| RuntimeError::internal("Firecracker process has no PID"))?;
+                .unwrap_or_default();
+            if process_name.trim() != "firecracker" {
+                continue;
+            }
             let status = fs::read_to_string(format!("/proc/{process_id}/status"))
                 .await
                 .map_err(|error| {
@@ -198,6 +207,12 @@ impl FirecrackerRuntime {
                 parse_vm_rss_kib(&status)
                     .ok_or_else(|| RuntimeError::internal("Firecracker VmRSS is missing"))?,
             );
+            count += 1;
+        }
+        if count == 0 {
+            return Err(RuntimeError::internal(
+                "no Firecracker processes found for RSS measurement",
+            ));
         }
         Ok(total)
     }
