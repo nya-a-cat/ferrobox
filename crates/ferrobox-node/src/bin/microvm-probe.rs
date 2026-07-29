@@ -29,6 +29,9 @@ struct ProbeResult {
     exec_true_us: Vec<u128>,
     exec_true_p50_us: Option<u128>,
     exec_true_p95_us: Option<u128>,
+    exec_true_cloned_client_us: Vec<u128>,
+    exec_true_cloned_client_p50_us: Option<u128>,
+    exec_true_cloned_client_p95_us: Option<u128>,
     exec_python_us: Vec<u128>,
     exec_python_p50_us: Option<u128>,
     exec_python_p95_us: Option<u128>,
@@ -43,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
     let ready_us = ready_unix_nanos.saturating_sub(arguments.launched_unix_nanos) / 1000;
 
     if arguments.health_only {
-        print_result(ready_us, Vec::new(), Vec::new())?;
+        print_result(ready_us, Vec::new(), Vec::new(), Vec::new())?;
         return Ok(());
     }
 
@@ -67,6 +70,19 @@ async fn main() -> anyhow::Result<()> {
     let mut exec_true_us = Vec::with_capacity(100);
     for _ in 0..100 {
         exec_true_us.push(execute(&mut client, &token, vec!["/bin/true".to_owned()]).await?);
+    }
+
+    let mut exec_true_cloned_client_us = Vec::with_capacity(100);
+    for _ in 0..100 {
+        let mut cloned_client = client.clone();
+        exec_true_cloned_client_us.push(
+            execute(
+                &mut cloned_client,
+                &token,
+                vec!["/bin/true".to_owned()],
+            )
+            .await?,
+        );
     }
 
     execute(
@@ -94,7 +110,12 @@ async fn main() -> anyhow::Result<()> {
             .await?,
         );
     }
-    print_result(ready_us, exec_true_us, exec_python_us)
+    print_result(
+        ready_us,
+        exec_true_us,
+        exec_true_cloned_client_us,
+        exec_python_us,
+    )
 }
 
 async fn wait_for_guest(connector: &GuestConnector) -> anyhow::Result<GuestServiceClient<Channel>> {
@@ -157,16 +178,21 @@ async fn execute(
 fn print_result(
     ready_us: u128,
     mut exec_true_us: Vec<u128>,
+    mut exec_true_cloned_client_us: Vec<u128>,
     mut exec_python_us: Vec<u128>,
 ) -> anyhow::Result<()> {
     exec_true_us.sort_unstable();
+    exec_true_cloned_client_us.sort_unstable();
     exec_python_us.sort_unstable();
     let result = ProbeResult {
-        schema_version: 1,
+        schema_version: 2,
         ready_us,
         exec_true_p50_us: percentile(&exec_true_us, 50),
         exec_true_p95_us: percentile(&exec_true_us, 95),
         exec_true_us,
+        exec_true_cloned_client_p50_us: percentile(&exec_true_cloned_client_us, 50),
+        exec_true_cloned_client_p95_us: percentile(&exec_true_cloned_client_us, 95),
+        exec_true_cloned_client_us,
         exec_python_p50_us: percentile(&exec_python_us, 50),
         exec_python_p95_us: percentile(&exec_python_us, 95),
         exec_python_us,

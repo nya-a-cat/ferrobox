@@ -107,7 +107,7 @@ done
 jq --slurp '
     (map(.ready_us) | sort) as $ready |
     .[-1] + {
-        schema_version: 1,
+        schema_version: 2,
         runtime: "firecracker-direct",
         ready_us: $ready,
         ready_p50_us: $ready[2],
@@ -116,10 +116,11 @@ jq --slurp '
 ' "${results[@]}" >"${output}"
 
 jq --exit-status '
-    .schema_version == 1 and
+    .schema_version == 2 and
     .runtime == "firecracker-direct" and
     (.ready_us | length == 5) and
     (.exec_true_us | length == 100) and
+    (.exec_true_cloned_client_us | length == 100) and
     (.exec_python_us | length == 30)
 ' "${output}" >/dev/null
 

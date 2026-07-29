@@ -435,9 +435,10 @@ jobs:
           jq --exit-status --slurp '
             .[0].schema_version == 10 and
             .[1].schema_version == 4 and
-            .[2].schema_version == 1 and
+            .[2].schema_version == 2 and
             .[3].schema_version == 1 and
             (.[2].exec_true_us | length == 100) and
+            (.[2].exec_true_cloned_client_us | length == 100) and
             (.[2].exec_python_us | length == 30) and
             (.[3].exec_true_us | length == 100) and
             (.[3].exec_python_us | length == 30) and

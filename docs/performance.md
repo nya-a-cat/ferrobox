@@ -73,6 +73,10 @@ clone separately as `guest_lookup_us`. It also splits minimal command execution
 into validation, guest lookup, start-RPC, stream, and total durations under
 `exec_true_timings`. These diagnostics identify where the remaining median gap
 occurs without changing runtime semantics.
+MicroVM probe schema 2 adds a second minimal-command series that clones the
+tonic client before each request. The persistent-client and cloned-client
+series run against the same guest, isolating client reuse from VMM and guest
+variation.
 
 The mandatory microVM leadership step remains red because the snapshot-pooled
 full runtime does not yet beat direct Cloud Hypervisor at `/bin/true` P50.
