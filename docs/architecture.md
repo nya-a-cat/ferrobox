@@ -87,7 +87,9 @@ vCPU, 512 MiB, and disabled networking.
 The API CLI accepts `--ready-pool-size`. Startup restores and initializes that
 many isolated sandboxes before accepting requests. A compatible create call
 claims one prepared sandbox; pool preparation latency remains observable
-separately from user-facing allocation latency.
+separately from user-facing allocation latency. A single maintainer detects
+claims and restores missing entries concurrently until the configured target
+is reached.
 
 The `READY` marker is written last. Operators must treat the snapshot directory
 as a trusted, versioned runtime asset and replace it whenever Firecracker,

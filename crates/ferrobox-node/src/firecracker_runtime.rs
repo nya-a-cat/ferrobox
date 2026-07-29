@@ -137,13 +137,32 @@ impl FirecrackerRuntime {
             ));
         }
         let mut samples = Vec::with_capacity(count);
-        for _ in 0..count {
+        if count > 0 && !self.snapshot_available().await {
             let started = std::time::Instant::now();
             let handle = self.create_fresh(spec.clone()).await?;
             samples.push(started.elapsed().as_micros());
             self.ready_pool.lock().await.push(handle);
         }
+        let remaining = count.saturating_sub(samples.len());
+        let prepared = futures::future::try_join_all((0..remaining).map(|_| {
+            let spec = spec.clone();
+            async move {
+                let started = std::time::Instant::now();
+                let handle = self.create_fresh(spec).await?;
+                Ok::<_, RuntimeError>((handle, started.elapsed().as_micros()))
+            }
+        }))
+        .await?;
+        let mut pool = self.ready_pool.lock().await;
+        for (handle, elapsed) in prepared {
+            pool.push(handle);
+            samples.push(elapsed);
+        }
         Ok(samples)
+    }
+
+    pub async fn ready_pool_len(&self) -> usize {
+        self.ready_pool.lock().await.len()
     }
 
     fn jail_root(&self, id: &SandboxId) -> Result<PathBuf, RuntimeError> {

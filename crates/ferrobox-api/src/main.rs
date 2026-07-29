@@ -64,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(ProcessRuntime::new(arguments.process_root).await?)
         }
         Backend::Firecracker => {
-            let runtime = FirecrackerRuntime::new(FirecrackerRuntimeConfig {
+            let runtime = Arc::new(FirecrackerRuntime::new(FirecrackerRuntimeConfig {
                 firecracker_binary: required(arguments.firecracker, "--firecracker")?,
                 jailer_binary: required(arguments.jailer, "--jailer")?,
                 kernel_image: required(arguments.kernel, "--kernel")?,
@@ -79,22 +79,35 @@ async fn main() -> anyhow::Result<()> {
                 boot_timeout: Duration::from_secs(30),
                 node_id: "local-kvm".to_owned(),
             })
-            .await?;
+            .await?);
             if arguments.ready_pool_size > 0 {
+                let pool_spec = ferrobox_core::SandboxSpec {
+                    template_id: "python".to_owned(),
+                    cpu_count: 1,
+                    memory_mb: 512,
+                    timeout_seconds: 300,
+                    network: ferrobox_core::NetworkMode::Disabled,
+                };
                 runtime
-                    .prewarm(
-                        ferrobox_core::SandboxSpec {
-                            template_id: "python".to_owned(),
-                            cpu_count: 1,
-                            memory_mb: 512,
-                            timeout_seconds: 300,
-                            network: ferrobox_core::NetworkMode::Disabled,
-                        },
-                        arguments.ready_pool_size,
-                    )
+                    .prewarm(pool_spec.clone(), arguments.ready_pool_size)
                     .await?;
+                let maintainer = Arc::clone(&runtime);
+                let target_size = arguments.ready_pool_size;
+                tokio::spawn(async move {
+                    loop {
+                        let missing = target_size.saturating_sub(maintainer.ready_pool_len().await);
+                        if missing > 0
+                            && let Err(error) = maintainer.prewarm(pool_spec.clone(), missing).await
+                        {
+                            tracing::error!(%error, "ready pool replenishment failed");
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                        } else {
+                            tokio::time::sleep(Duration::from_millis(10)).await;
+                        }
+                    }
+                });
             }
-            Arc::new(runtime)
+            runtime
         }
     };
     let state = AppState::new(runtime, arguments.audit_log).await?;
