@@ -237,6 +237,62 @@ jobs:
             "${FERROBOX_DOCKER_BENCHMARK_OUTPUT}" >/dev/null
           cat "${FERROBOX_DOCKER_BENCHMARK_OUTPUT}"
 
+      - name: Install verified gVisor runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          gvisor_url='https://storage.googleapis.com/gvisor/releases/release/latest/x86_64'
+          curl --fail --location --silent --show-error \
+            --output "${RUNNER_TEMP}/gvisor.tar.bz2" \
+            "${gvisor_url}/gvisor.tar.bz2"
+          curl --fail --location --silent --show-error \
+            --output "${RUNNER_TEMP}/gvisor.tar.bz2.sha512" \
+            "${gvisor_url}/gvisor.tar.bz2.sha512"
+          (
+            cd "${RUNNER_TEMP}"
+            sha512sum --check gvisor.tar.bz2.sha512
+          )
+          sudo tar -xjf "${RUNNER_TEMP}/gvisor.tar.bz2" -C /usr/local/bin
+          sudo /usr/local/bin/runsc install
+          sudo systemctl restart docker
+          /usr/local/bin/runsc --version | tee "${RUNNER_TEMP}/gvisor-version.txt"
+          sha512sum "${RUNNER_TEMP}/gvisor.tar.bz2" \
+            >"${RUNNER_TEMP}/gvisor-tarball.sha512"
+          docker info --format '{{json .Runtimes}}' |
+            jq --exit-status 'has("runsc")' >/dev/null
+
+      - name: Compare gVisor create and start
+        env:
+          FERROBOX_HTTP_BENCHMARK_OUTPUT: ${{ runner.temp }}/ferrobox-http-benchmark.json
+          FERROBOX_RUNTIME_BENCHMARK_OUTPUT: ${{ runner.temp }}/ferrobox-benchmark.json
+          FERROBOX_GVISOR_BENCHMARK_OUTPUT: ${{ runner.temp }}/gvisor-benchmark.json
+          FERROBOX_DOCKER_IMAGE: python:3.11-slim-bookworm
+        run: |
+          set -euo pipefail
+          python3 scripts/benchmark-docker.py \
+            --image "${FERROBOX_DOCKER_IMAGE}" \
+            --runtime runsc \
+            --iterations 5 \
+            >"${FERROBOX_GVISOR_BENCHMARK_OUTPUT}"
+          jq --exit-status --slurp '
+            .[0].schema_version == 3 and
+            .[1].schema_version == 3 and
+            .[1].runtime == "runsc" and
+            (.[1].docker_create_start_us | length == 5) and
+            (.[1].docker_exec_true_us | length == 20) and
+            .[0].http_create_p95_us < .[1].docker_create_start_p95_us
+          ' \
+            "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" \
+            "${FERROBOX_GVISOR_BENCHMARK_OUTPUT}" >/dev/null
+          jq --exit-status --slurp '
+            .[0].schema_version == 5 and
+            .[1].schema_version == 3 and
+            .[0].exec_true_p95_us < .[1].docker_exec_true_p95_us
+          ' \
+            "${FERROBOX_RUNTIME_BENCHMARK_OUTPUT}" \
+            "${FERROBOX_GVISOR_BENCHMARK_OUTPUT}" >/dev/null
+          cat "${FERROBOX_GVISOR_BENCHMARK_OUTPUT}"
+
       - name: Run Firecracker internet-policy end-to-end
         env:
           FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
@@ -259,6 +315,9 @@ jobs:
             ${{ runner.temp }}/ferrobox-http-benchmark.json
             ${{ runner.temp }}/docker-benchmark.json
             ${{ runner.temp }}/docker-image-digests.json
+            ${{ runner.temp }}/gvisor-benchmark.json
+            ${{ runner.temp }}/gvisor-version.txt
+            ${{ runner.temp }}/gvisor-tarball.sha512
             ${{ runner.temp }}/ferrobox-api.log
             /opt/ferrobox/images/python.ext4.manifest.json
             /mnt/ferrobox/jailer/**/root/*.log

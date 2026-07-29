@@ -40,6 +40,7 @@ def main() -> None:
     parser.add_argument("--socket", default="/var/run/docker.sock")
     parser.add_argument("--image", required=True)
     parser.add_argument("--iterations", type=int, default=5)
+    parser.add_argument("--runtime", default="")
     arguments = parser.parse_args()
     if arguments.iterations < 1 or arguments.iterations > 100:
         raise ValueError("iterations must be between 1 and 100")
@@ -48,6 +49,14 @@ def main() -> None:
     samples: list[int] = []
 
     def create_container() -> str:
+        host_config = {
+            "Memory": 512 * 1024 * 1024,
+            "NanoCpus": 1_000_000_000,
+            "PidsLimit": 512,
+            "NetworkMode": "none",
+        }
+        if arguments.runtime:
+            host_config["Runtime"] = arguments.runtime
         status, body = request(
             connection,
             "POST",
@@ -56,12 +65,7 @@ def main() -> None:
                 "Image": arguments.image,
                 "Cmd": ["sleep", "300"],
                 "NetworkDisabled": True,
-                "HostConfig": {
-                    "Memory": 512 * 1024 * 1024,
-                    "NanoCpus": 1_000_000_000,
-                    "PidsLimit": 512,
-                    "NetworkMode": "none",
-                },
+                "HostConfig": host_config,
             },
         )
         if status != 201:
@@ -146,6 +150,7 @@ def main() -> None:
         json.dumps(
             {
                 "schema_version": 3,
+                "runtime": arguments.runtime or "runc",
                 "docker_create_start_us": samples,
                 "docker_create_start_p50_us": percentile(samples, 50),
                 "docker_create_start_p95_us": percentile(samples, 95),
