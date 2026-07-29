@@ -53,6 +53,7 @@ struct BenchmarkResult {
     guest_lookup_p50_us: u128,
     guest_lookup_p95_us: u128,
     exec_true_us: Vec<u128>,
+    exec_true_timings: Vec<BenchmarkExecutionTimings>,
     exec_true_p50_us: u128,
     exec_true_p95_us: u128,
     exec_true_total_us: u128,
@@ -70,6 +71,15 @@ struct BenchmarkResult {
     delete_us: Vec<u128>,
     delete_p50_us: u128,
     delete_p95_us: u128,
+    total_us: u128,
+}
+
+#[derive(Debug, Serialize)]
+struct BenchmarkExecutionTimings {
+    validation_us: u128,
+    guest_lookup_us: u128,
+    start_rpc_us: u128,
+    stream_us: u128,
     total_us: u128,
 }
 
@@ -187,17 +197,24 @@ async fn main() -> anyhow::Result<()> {
             guest_lookup_us.sort_unstable();
 
             let mut exec_true_us = Vec::with_capacity(exec_iterations as usize);
+            let mut exec_true_timings = Vec::with_capacity(exec_iterations as usize);
             let exec_true_started = std::time::Instant::now();
             for _ in 0..exec_iterations {
                 let started = std::time::Instant::now();
-                ensure_exit_success(
-                    &runtime
-                        .execute(
-                            &handle.sandbox_id,
-                            exec_request(vec!["/bin/true".to_owned()]),
-                        )
-                        .await?,
-                )?;
+                let (result, timings) = runtime
+                    .benchmark_execute(
+                        &handle.sandbox_id,
+                        exec_request(vec!["/bin/true".to_owned()]),
+                    )
+                    .await?;
+                ensure_exit_success(&result)?;
+                exec_true_timings.push(BenchmarkExecutionTimings {
+                    validation_us: timings.validation_us,
+                    guest_lookup_us: timings.guest_lookup_us,
+                    start_rpc_us: timings.start_rpc_us,
+                    stream_us: timings.stream_us,
+                    total_us: timings.total_us,
+                });
                 exec_true_us.push(started.elapsed().as_micros());
             }
             let exec_true_total_us = exec_true_started.elapsed().as_micros();
@@ -265,7 +282,7 @@ async fn main() -> anyhow::Result<()> {
             delete_us.push(delete_started.elapsed().as_micros());
             delete_us.sort_unstable();
             let result = BenchmarkResult {
-                schema_version: 9,
+                schema_version: 10,
                 pool_prepare_p50_us: percentile(&pool_prepare_us, 50),
                 pool_prepare_p95_us: percentile(&pool_prepare_us, 95),
                 pool_prepare_us,
@@ -285,6 +302,7 @@ async fn main() -> anyhow::Result<()> {
                     .checked_div(exec_true_total_us)
                     .unwrap_or_default(),
                 exec_true_us,
+                exec_true_timings,
                 exec_python_p50_us: percentile(&exec_python_us, 50),
                 exec_python_p95_us: percentile(&exec_python_us, 95),
                 exec_python_total_us,

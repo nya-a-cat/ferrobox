@@ -258,7 +258,7 @@ jobs:
             "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" \
             "${FERROBOX_DOCKER_BENCHMARK_OUTPUT}" >/dev/null
           jq --exit-status --slurp '
-            .[0].schema_version == 9 and
+            .[0].schema_version == 10 and
             .[1].schema_version == 7 and
             .[0].exec_true_p95_us < .[1].docker_exec_true_p95_us and
             .[0].exec_python_p95_us < .[1].docker_exec_python_p95_us
@@ -322,7 +322,7 @@ jobs:
             "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" \
             "${FERROBOX_GVISOR_BENCHMARK_OUTPUT}" >/dev/null
           jq --exit-status --slurp '
-            .[0].schema_version == 9 and
+            .[0].schema_version == 10 and
             .[1].schema_version == 7 and
             .[0].exec_true_p95_us < .[1].docker_exec_true_p95_us and
             .[0].exec_python_p95_us < .[1].docker_exec_python_p95_us
@@ -433,7 +433,7 @@ jobs:
       - name: Validate microVM performance leadership
         run: |
           jq --exit-status --slurp '
-            .[0].schema_version == 9 and
+            .[0].schema_version == 10 and
             .[1].schema_version == 4 and
             .[2].schema_version == 1 and
             .[3].schema_version == 1 and
@@ -459,7 +459,7 @@ jobs:
       - name: Validate file-workload performance leadership
         run: |
           jq --exit-status --slurp '
-            .[0].schema_version == 9 and
+            .[0].schema_version == 10 and
             .[1].schema_version == 7 and
             .[2].schema_version == 7 and
             .[0].exec_file_roundtrip_p95_us < .[1].docker_exec_file_roundtrip_p95_us and

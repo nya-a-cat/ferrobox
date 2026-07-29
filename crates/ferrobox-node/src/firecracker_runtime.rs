@@ -105,6 +105,15 @@ pub struct FirecrackerRuntime {
     ready_pool: Mutex<Vec<SandboxHandle>>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct ExecutionTimings {
+    pub validation_us: u128,
+    pub guest_lookup_us: u128,
+    pub start_rpc_us: u128,
+    pub stream_us: u128,
+    pub total_us: u128,
+}
+
 impl FirecrackerRuntime {
     pub async fn new(config: FirecrackerRuntimeConfig) -> Result<Self, RuntimeError> {
         config.validate().await?;
@@ -593,6 +602,110 @@ impl FirecrackerRuntime {
         Ok(started.elapsed().as_micros())
     }
 
+    pub async fn benchmark_execute(
+        &self,
+        sandbox_id: &SandboxId,
+        request: ExecRequest,
+    ) -> Result<(ExecResult, ExecutionTimings), RuntimeError> {
+        self.execute_measured(sandbox_id, request).await
+    }
+
+    async fn execute_measured(
+        &self,
+        sandbox_id: &SandboxId,
+        request: ExecRequest,
+    ) -> Result<(ExecResult, ExecutionTimings), RuntimeError> {
+        let total_started = Instant::now();
+        let validation_started = Instant::now();
+        request
+            .validate()
+            .map_err(|error| RuntimeError::invalid(error.to_string()))?;
+        let validation_us = validation_started.elapsed().as_micros();
+
+        let lookup_started = Instant::now();
+        let (mut client, token_value) = self.guest_client(sandbox_id).await?;
+        let guest_lookup_us = lookup_started.elapsed().as_micros();
+
+        let rpc_started = Instant::now();
+        let response = client
+            .start_process(Request::new(StartProcessRequest {
+                auth: Some(Auth { token: token_value }),
+                request_id: uuid::Uuid::new_v4().to_string(),
+                argv: request.argv,
+                cwd: request.cwd.to_string(),
+                environment: request.environment.into_iter().collect(),
+                timeout_millis: request.timeout_seconds.saturating_mul(1000),
+                max_output_bytes: request.max_output_bytes,
+            }))
+            .await
+            .map_err(guest_error)?;
+        let start_rpc_us = rpc_started.elapsed().as_micros();
+
+        let stream_started = Instant::now();
+        let mut stream = response.into_inner();
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let mut process_id = None;
+        let mut termination = None;
+        let mut truncation = OutputTruncation::default();
+        while let Some(event) = stream.message().await.map_err(guest_error)? {
+            if process_id.is_none() && !event.process_id.is_empty() {
+                process_id = Some(
+                    ProcessId::new(event.process_id)
+                        .map_err(|error| RuntimeError::internal(error.to_string()))?,
+                );
+            }
+            match event.event {
+                Some(process_event::Event::Stdout(data)) => stdout.extend(data),
+                Some(process_event::Event::Stderr(data)) => stderr.extend(data),
+                Some(process_event::Event::Exit(exit)) => {
+                    truncation = OutputTruncation {
+                        stdout: exit.stdout_truncated,
+                        stderr: exit.stderr_truncated,
+                    };
+                    termination = Some(if exit.timed_out {
+                        ExecTermination::TimedOut
+                    } else if exit.output_limit_exceeded {
+                        ExecTermination::OutputLimitExceeded
+                    } else if let Some(code) = exit.exit_code {
+                        ExecTermination::Exited { exit_code: code }
+                    } else {
+                        ExecTermination::Signaled {
+                            signal: exit.signal.unwrap_or_default(),
+                        }
+                    });
+                }
+                Some(process_event::Event::Error(error)) => {
+                    return Err(RuntimeError::new(
+                        RuntimeErrorKind::Unavailable,
+                        format!("guest {}: {}", error.code, error.message),
+                    ));
+                }
+                None => {}
+            }
+        }
+        let stream_us = stream_started.elapsed().as_micros();
+        let result = ExecResult {
+            process_id: process_id
+                .ok_or_else(|| RuntimeError::internal("guest omitted process id"))?,
+            termination: termination
+                .ok_or_else(|| RuntimeError::internal("guest omitted process exit"))?,
+            stdout,
+            stderr,
+            truncation,
+        };
+        Ok((
+            result,
+            ExecutionTimings {
+                validation_us,
+                guest_lookup_us,
+                start_rpc_us,
+                stream_us,
+                total_us: total_started.elapsed().as_micros(),
+            },
+        ))
+    }
+
     async fn create_fresh(&self, spec: SandboxSpec) -> Result<SandboxHandle, RuntimeError> {
         spec.validate()
             .map_err(|error| RuntimeError::invalid(error.to_string()))?;
@@ -812,73 +925,9 @@ impl SandboxRuntime for FirecrackerRuntime {
         sandbox_id: &SandboxId,
         request: ExecRequest,
     ) -> Result<ExecResult, RuntimeError> {
-        request
-            .validate()
-            .map_err(|error| RuntimeError::invalid(error.to_string()))?;
-        let (mut client, token_value) = self.guest_client(sandbox_id).await?;
-        let response = client
-            .start_process(Request::new(StartProcessRequest {
-                auth: Some(Auth { token: token_value }),
-                request_id: uuid::Uuid::new_v4().to_string(),
-                argv: request.argv,
-                cwd: request.cwd.to_string(),
-                environment: request.environment.into_iter().collect(),
-                timeout_millis: request.timeout_seconds.saturating_mul(1000),
-                max_output_bytes: request.max_output_bytes,
-            }))
+        self.execute_measured(sandbox_id, request)
             .await
-            .map_err(guest_error)?;
-        let mut stream = response.into_inner();
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
-        let mut process_id = None;
-        let mut termination = None;
-        let mut truncation = OutputTruncation::default();
-        while let Some(event) = stream.message().await.map_err(guest_error)? {
-            if process_id.is_none() && !event.process_id.is_empty() {
-                process_id = Some(
-                    ProcessId::new(event.process_id)
-                        .map_err(|error| RuntimeError::internal(error.to_string()))?,
-                );
-            }
-            match event.event {
-                Some(process_event::Event::Stdout(data)) => stdout.extend(data),
-                Some(process_event::Event::Stderr(data)) => stderr.extend(data),
-                Some(process_event::Event::Exit(exit)) => {
-                    truncation = OutputTruncation {
-                        stdout: exit.stdout_truncated,
-                        stderr: exit.stderr_truncated,
-                    };
-                    termination = Some(if exit.timed_out {
-                        ExecTermination::TimedOut
-                    } else if exit.output_limit_exceeded {
-                        ExecTermination::OutputLimitExceeded
-                    } else if let Some(code) = exit.exit_code {
-                        ExecTermination::Exited { exit_code: code }
-                    } else {
-                        ExecTermination::Signaled {
-                            signal: exit.signal.unwrap_or_default(),
-                        }
-                    });
-                }
-                Some(process_event::Event::Error(error)) => {
-                    return Err(RuntimeError::new(
-                        RuntimeErrorKind::Unavailable,
-                        format!("guest {}: {}", error.code, error.message),
-                    ));
-                }
-                None => {}
-            }
-        }
-        Ok(ExecResult {
-            process_id: process_id
-                .ok_or_else(|| RuntimeError::internal("guest omitted process id"))?,
-            termination: termination
-                .ok_or_else(|| RuntimeError::internal("guest omitted process exit"))?,
-            stdout,
-            stderr,
-            truncation,
-        })
+            .map(|(result, _)| result)
     }
 
     async fn signal(
