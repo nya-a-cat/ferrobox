@@ -3,7 +3,10 @@ import argparse
 import http.client
 import json
 import socket
+import tarfile
 import time
+from io import BytesIO
+from urllib.parse import quote
 
 
 class UnixConnection(http.client.HTTPConnection):
@@ -175,11 +178,59 @@ def main() -> None:
     ]
     benchmark_exec(file_command, 1)
     file_samples = benchmark_exec(file_command, arguments.file_iterations)
+
+    archive_data = b"x" * (1024 * 1024)
+    archive_buffer = BytesIO()
+    with tarfile.open(fileobj=archive_buffer, mode="w") as archive:
+        info = tarfile.TarInfo("ferrobox-api.bin")
+        info.size = len(archive_data)
+        info.mode = 0o600
+        archive.addfile(info, BytesIO(archive_data))
+    archive_payload = archive_buffer.getvalue()
+    archive_path = quote("/tmp", safe="")
+    archive_write_samples: list[int] = []
+    archive_read_samples: list[int] = []
+    for _ in range(20):
+        started = time.perf_counter_ns()
+        connection.request(
+            "PUT",
+            f"/v1.44/containers/{exec_container_id}/archive?path={archive_path}",
+            body=archive_payload,
+            headers={"content-type": "application/x-tar"},
+        )
+        response = connection.getresponse()
+        body = response.read()
+        archive_write_samples.append((time.perf_counter_ns() - started) // 1000)
+        if response.status != 200:
+            raise RuntimeError(
+                f"Docker archive write returned {response.status}: {body.decode()}"
+            )
+
+        started = time.perf_counter_ns()
+        file_path = quote("/tmp/ferrobox-api.bin", safe="")
+        connection.request(
+            "GET",
+            f"/v1.44/containers/{exec_container_id}/archive?path={file_path}",
+        )
+        response = connection.getresponse()
+        body = response.read()
+        archive_read_samples.append((time.perf_counter_ns() - started) // 1000)
+        if response.status != 200:
+            raise RuntimeError(
+                f"Docker archive read returned {response.status}: {body.decode()}"
+            )
+        with tarfile.open(fileobj=BytesIO(body), mode="r:*") as archive:
+            member = archive.next()
+            extracted = archive.extractfile(member) if member is not None else None
+            if extracted is None or extracted.read() != archive_data:
+                raise RuntimeError("Docker archive read did not match uploaded file")
+    archive_write_samples.sort()
+    archive_read_samples.sort()
     delete_container(exec_container_id)
     print(
         json.dumps(
             {
-                "schema_version": 6,
+                "schema_version": 7,
                 "runtime": arguments.runtime or "runc",
                 "docker_create_start_us": samples,
                 "docker_create_start_p50_us": percentile(samples, 50),
@@ -208,6 +259,20 @@ def main() -> None:
                     arguments.file_iterations
                     * 1_000_000_000
                     // sum(file_samples)
+                ),
+                "docker_archive_write_1mib_us": archive_write_samples,
+                "docker_archive_write_1mib_p50_us": percentile(
+                    archive_write_samples, 50
+                ),
+                "docker_archive_write_1mib_p95_us": percentile(
+                    archive_write_samples, 95
+                ),
+                "docker_archive_read_1mib_us": archive_read_samples,
+                "docker_archive_read_1mib_p50_us": percentile(
+                    archive_read_samples, 50
+                ),
+                "docker_archive_read_1mib_p95_us": percentile(
+                    archive_read_samples, 95
                 ),
             },
             indent=2,

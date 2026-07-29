@@ -197,9 +197,11 @@ jobs:
             --concurrency 5 \
             >"${FERROBOX_HTTP_BENCHMARK_OUTPUT}"
           jq --exit-status '
-            .schema_version == 3 and
+            .schema_version == 4 and
             (.http_create_us | length == 5) and
             (.concurrent_create_us | length == 5) and
+            (.http_write_1mib_us | length == 20) and
+            (.http_read_1mib_us | length == 20) and
             .http_create_p95_us <= 80000 and
             .concurrent_create_p95_us <= 80000
           ' "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" >/dev/null
@@ -225,19 +227,21 @@ jobs:
             --file-iterations 20 \
             >"${FERROBOX_DOCKER_BENCHMARK_OUTPUT}"
           jq --exit-status --slurp '
-            .[0].schema_version == 3 and
-            .[1].schema_version == 6 and
+            .[0].schema_version == 4 and
+            .[1].schema_version == 7 and
             (.[1].docker_create_start_us | length == 5) and
             (.[1].docker_exec_true_us | length == 100) and
             (.[1].docker_exec_python_us | length == 30) and
             (.[1].docker_exec_file_roundtrip_us | length == 20) and
+            (.[1].docker_archive_write_1mib_us | length == 20) and
+            (.[1].docker_archive_read_1mib_us | length == 20) and
             .[0].http_create_p95_us < .[1].docker_create_start_p95_us
           ' \
             "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" \
             "${FERROBOX_DOCKER_BENCHMARK_OUTPUT}" >/dev/null
           jq --exit-status --slurp '
             .[0].schema_version == 8 and
-            .[1].schema_version == 6 and
+            .[1].schema_version == 7 and
             .[0].exec_true_p95_us < .[1].docker_exec_true_p95_us and
             .[0].exec_python_p95_us < .[1].docker_exec_python_p95_us
           ' \
@@ -286,20 +290,22 @@ jobs:
             --file-iterations 20 \
             >"${FERROBOX_GVISOR_BENCHMARK_OUTPUT}"
           jq --exit-status --slurp '
-            .[0].schema_version == 3 and
-            .[1].schema_version == 6 and
+            .[0].schema_version == 4 and
+            .[1].schema_version == 7 and
             .[1].runtime == "runsc" and
             (.[1].docker_create_start_us | length == 5) and
             (.[1].docker_exec_true_us | length == 100) and
             (.[1].docker_exec_python_us | length == 30) and
             (.[1].docker_exec_file_roundtrip_us | length == 20) and
+            (.[1].docker_archive_write_1mib_us | length == 20) and
+            (.[1].docker_archive_read_1mib_us | length == 20) and
             .[0].http_create_p95_us < .[1].docker_create_start_p95_us
           ' \
             "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" \
             "${FERROBOX_GVISOR_BENCHMARK_OUTPUT}" >/dev/null
           jq --exit-status --slurp '
             .[0].schema_version == 8 and
-            .[1].schema_version == 6 and
+            .[1].schema_version == 7 and
             .[0].exec_true_p95_us < .[1].docker_exec_true_p95_us and
             .[0].exec_python_p95_us < .[1].docker_exec_python_p95_us
           ' \
@@ -311,12 +317,27 @@ jobs:
         run: |
           jq --exit-status --slurp '
             .[0].schema_version == 8 and
-            .[1].schema_version == 6 and
-            .[2].schema_version == 6 and
+            .[1].schema_version == 7 and
+            .[2].schema_version == 7 and
             .[0].exec_file_roundtrip_p95_us < .[1].docker_exec_file_roundtrip_p95_us and
             .[0].exec_file_roundtrip_p95_us < .[2].docker_exec_file_roundtrip_p95_us
           ' \
             "${RUNNER_TEMP}/ferrobox-benchmark.json" \
+            "${RUNNER_TEMP}/docker-benchmark.json" \
+            "${RUNNER_TEMP}/gvisor-benchmark.json" >/dev/null
+
+      - name: Validate file-API performance leadership
+        run: |
+          jq --exit-status --slurp '
+            .[0].schema_version == 4 and
+            .[1].schema_version == 7 and
+            .[2].schema_version == 7 and
+            .[0].http_write_1mib_p95_us < .[1].docker_archive_write_1mib_p95_us and
+            .[0].http_write_1mib_p95_us < .[2].docker_archive_write_1mib_p95_us and
+            .[0].http_read_1mib_p95_us < .[1].docker_archive_read_1mib_p95_us and
+            .[0].http_read_1mib_p95_us < .[2].docker_archive_read_1mib_p95_us
+          ' \
+            "${RUNNER_TEMP}/ferrobox-http-benchmark.json" \
             "${RUNNER_TEMP}/docker-benchmark.json" \
             "${RUNNER_TEMP}/gvisor-benchmark.json" >/dev/null
 

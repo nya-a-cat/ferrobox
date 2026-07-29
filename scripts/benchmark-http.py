@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import argparse
+import base64
 import concurrent.futures
 import http.client
 import json
 import time
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 
 def percentile(sorted_samples: list[int], value: int) -> int:
@@ -39,7 +40,7 @@ def main() -> None:
         separators=(",", ":"),
     )
 
-    def create_and_delete(client: http.client.HTTPConnection) -> int:
+    def create_sandbox(client: http.client.HTTPConnection) -> tuple[dict, int]:
         started = time.perf_counter_ns()
         client.request(
             "POST",
@@ -52,7 +53,9 @@ def main() -> None:
         elapsed = (time.perf_counter_ns() - started) // 1000
         if response.status != 201:
             raise RuntimeError(f"create returned {response.status}: {body.decode()}")
-        created = json.loads(body)
+        return json.loads(body), elapsed
+
+    def delete_sandbox(client: http.client.HTTPConnection, created: dict) -> None:
         client.request(
             "DELETE",
             f"/v1/sandboxes/{created['sandbox_id']}",
@@ -64,6 +67,10 @@ def main() -> None:
             raise RuntimeError(
                 f"delete returned {deleted.status}: {deleted_body.decode()}"
             )
+
+    def create_and_delete(client: http.client.HTTPConnection) -> int:
+        created, elapsed = create_sandbox(client)
+        delete_sandbox(client, created)
         return elapsed
 
     samples = [create_and_delete(connection) for _ in range(arguments.iterations)]
@@ -83,12 +90,66 @@ def main() -> None:
         )
     concurrent_wall_us = (time.perf_counter_ns() - concurrent_started) // 1000
 
+    file_sandbox, _ = create_sandbox(connection)
+    file_headers = {
+        "authorization": f"Bearer {file_sandbox['token']}",
+        "content-type": "application/json",
+    }
+    file_data = b"x" * (1024 * 1024)
+    encoded_data = base64.b64encode(file_data).decode()
+    write_body = json.dumps(
+        {
+            "path": "/home/sandbox/ferrobox-api.bin",
+            "content_base64": encoded_data,
+            "overwrite": True,
+        },
+        separators=(",", ":"),
+    )
+    write_samples: list[int] = []
+    read_samples: list[int] = []
+    read_path = quote("/home/sandbox/ferrobox-api.bin", safe="")
+    for _ in range(20):
+        started = time.perf_counter_ns()
+        connection.request(
+            "PUT",
+            f"/v1/sandboxes/{file_sandbox['sandbox_id']}/files",
+            body=write_body,
+            headers=file_headers,
+        )
+        response = connection.getresponse()
+        body = response.read()
+        write_samples.append((time.perf_counter_ns() - started) // 1000)
+        if response.status != 200 or json.loads(body)["bytes_written"] != len(file_data):
+            raise RuntimeError(f"write returned {response.status}: {body.decode()}")
+
+        started = time.perf_counter_ns()
+        connection.request(
+            "GET",
+            f"/v1/sandboxes/{file_sandbox['sandbox_id']}/files?path={read_path}&max_bytes={len(file_data)}",
+            headers={"authorization": f"Bearer {file_sandbox['token']}"},
+        )
+        response = connection.getresponse()
+        body = response.read()
+        read_samples.append((time.perf_counter_ns() - started) // 1000)
+        if response.status != 200:
+            raise RuntimeError(f"read returned {response.status}: {body.decode()}")
+        result = json.loads(body)
+        if (
+            result["bytes"] != len(file_data)
+            or not result["eof"]
+            or base64.b64decode(result["content_base64"]) != file_data
+        ):
+            raise RuntimeError("read response did not match the uploaded file")
+    delete_sandbox(connection, file_sandbox)
+
     samples.sort()
     concurrent_samples.sort()
+    write_samples.sort()
+    read_samples.sort()
     print(
         json.dumps(
             {
-                "schema_version": 3,
+                "schema_version": 4,
                 "http_create_us": samples,
                 "http_create_p50_us": percentile(samples, 50),
                 "http_create_p95_us": percentile(samples, 95),
@@ -96,6 +157,12 @@ def main() -> None:
                 "concurrent_create_p50_us": percentile(concurrent_samples, 50),
                 "concurrent_create_p95_us": percentile(concurrent_samples, 95),
                 "concurrent_create_wall_us": concurrent_wall_us,
+                "http_write_1mib_us": write_samples,
+                "http_write_1mib_p50_us": percentile(write_samples, 50),
+                "http_write_1mib_p95_us": percentile(write_samples, 95),
+                "http_read_1mib_us": read_samples,
+                "http_read_1mib_p50_us": percentile(read_samples, 50),
+                "http_read_1mib_p95_us": percentile(read_samples, 95),
             },
             indent=2,
         )
