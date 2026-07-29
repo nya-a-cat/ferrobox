@@ -155,6 +155,23 @@ jobs:
           FERROBOX_BENCHMARK_FILE_ITERATIONS: "20"
         run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_SNAPSHOT_ROOT,FERROBOX_CHROOT_BASE,FERROBOX_RUNTIME_ROOT,FERROBOX_NODE_BINARY,FERROBOX_BENCHMARK_OUTPUT,FERROBOX_BENCHMARK_CREATE_ITERATIONS,FERROBOX_BENCHMARK_ITERATIONS,FERROBOX_BENCHMARK_PYTHON_ITERATIONS,FERROBOX_BENCHMARK_FILE_ITERATIONS bash scripts/benchmark-kvm.sh
 
+      - name: Benchmark fresh-boot Firecracker ready pool
+        env:
+          FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
+          FERROBOX_JAILER: /opt/ferrobox/bin/jailer
+          FERROBOX_KERNEL: /mnt/ferrobox/images/vmlinux
+          FERROBOX_ROOTFS: /mnt/ferrobox/images/python.ext4
+          FERROBOX_CHROOT_BASE: /mnt/ferrobox/jailer-fresh
+          FERROBOX_RUNTIME_ROOT: /mnt/ferrobox/runtime-fresh
+          FERROBOX_NODE_BINARY: target/debug/ferrobox-node
+          FERROBOX_BENCHMARK_OUTPUT: ${{ runner.temp }}/ferrobox-fresh-pool-benchmark.json
+          FERROBOX_BENCHMARK_CREATE_ITERATIONS: "5"
+          FERROBOX_BENCHMARK_ITERATIONS: "100"
+          FERROBOX_BENCHMARK_PYTHON_ITERATIONS: "30"
+          FERROBOX_BENCHMARK_FILE_ITERATIONS: "20"
+          FERROBOX_BENCHMARK_PREPARE_CEILING_US: "4000000"
+        run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_CHROOT_BASE,FERROBOX_RUNTIME_ROOT,FERROBOX_NODE_BINARY,FERROBOX_BENCHMARK_OUTPUT,FERROBOX_BENCHMARK_CREATE_ITERATIONS,FERROBOX_BENCHMARK_ITERATIONS,FERROBOX_BENCHMARK_PYTHON_ITERATIONS,FERROBOX_BENCHMARK_FILE_ITERATIONS,FERROBOX_BENCHMARK_PREPARE_CEILING_US bash scripts/benchmark-kvm.sh
+
       - name: Benchmark HTTP ready-pool allocation
         env:
           FERROBOX_HTTP_BENCHMARK_OUTPUT: ${{ runner.temp }}/ferrobox-http-benchmark.json
@@ -486,6 +503,7 @@ jobs:
           path: |
             ${{ runner.temp }}/kernel.manifest
             ${{ runner.temp }}/ferrobox-benchmark.json
+            ${{ runner.temp }}/ferrobox-fresh-pool-benchmark.json
             ${{ runner.temp }}/ferrobox-http-benchmark.json
             ${{ runner.temp }}/docker-benchmark.json
             ${{ runner.temp }}/docker-image-digests.json

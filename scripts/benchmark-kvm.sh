@@ -12,6 +12,7 @@ iterations="${FERROBOX_BENCHMARK_ITERATIONS:-20}"
 python_iterations="${FERROBOX_BENCHMARK_PYTHON_ITERATIONS:-30}"
 file_iterations="${FERROBOX_BENCHMARK_FILE_ITERATIONS:-20}"
 create_iterations="${FERROBOX_BENCHMARK_CREATE_ITERATIONS:-5}"
+prepare_ceiling_us="${FERROBOX_BENCHMARK_PREPARE_CEILING_US:-1200000}"
 
 "${node_binary}" benchmark \
     --create-iterations "${create_iterations}" \
@@ -43,7 +44,7 @@ delete_us="$(jq -r '.delete_p95_us' "${output}")"
 
 # Initial regression ceilings. They are intentionally recorded separately from
 # competitor targets and will be tightened only from retained hosted-KVM data.
-(( prepare_us <= 1200000 ))
+(( prepare_us <= prepare_ceiling_us ))
 (( create_us <= 80000 ))
 (( exec_p95_us <= 50000 ))
 (( delete_us <= 2500000 ))
