@@ -387,6 +387,18 @@ jobs:
           sudo --preserve-env=FERROBOX_CLOUD_HYPERVISOR,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_MICROVM_PROBE,FERROBOX_CLOUD_HYPERVISOR_OUTPUT,FERROBOX_CLOUD_HYPERVISOR_RUNTIME_ROOT \
             bash scripts/benchmark-cloud-hypervisor.sh
 
+      - name: Upload core microVM diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: microvm-diagnostics
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/ferrobox-benchmark.json
+            ${{ runner.temp }}/ferrobox-fresh-pool-benchmark.json
+            ${{ runner.temp }}/cloud-hypervisor-benchmark.json
+            ${{ runner.temp }}/firecracker-direct-benchmark.json
+            ${{ runner.temp }}/firecracker-direct-capped-benchmark.json
+
       - name: Cache Kata Containers release bundle
         id: kata-cache
         uses: actions/cache/restore@v4
@@ -429,6 +441,7 @@ jobs:
           key: ${{ steps.kata-cache.outputs.cache-primary-key }}
 
       - name: Benchmark Kata Containers QEMU boundary
+        timeout-minutes: 12
         env:
           FERROBOX_CTR: /usr/bin/ctr
           FERROBOX_CONTAINERD: /usr/bin/containerd
