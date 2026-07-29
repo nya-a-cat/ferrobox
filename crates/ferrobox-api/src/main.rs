@@ -64,22 +64,24 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(ProcessRuntime::new(arguments.process_root).await?)
         }
         Backend::Firecracker => {
-            let runtime = Arc::new(FirecrackerRuntime::new(FirecrackerRuntimeConfig {
-                firecracker_binary: required(arguments.firecracker, "--firecracker")?,
-                jailer_binary: required(arguments.jailer, "--jailer")?,
-                kernel_image: required(arguments.kernel, "--kernel")?,
-                rootfs_template: required(arguments.rootfs, "--rootfs")?,
-                snapshot_root: arguments.snapshot_root,
-                chroot_base: arguments.chroot_base,
-                runtime_root: arguments.runtime_root,
-                jail_uid: arguments.jail_uid,
-                jail_gid: arguments.jail_gid,
-                guest_port: 5000,
-                api_timeout: Duration::from_secs(5),
-                boot_timeout: Duration::from_secs(30),
-                node_id: "local-kvm".to_owned(),
-            })
-            .await?);
+            let runtime = Arc::new(
+                FirecrackerRuntime::new(FirecrackerRuntimeConfig {
+                    firecracker_binary: required(arguments.firecracker, "--firecracker")?,
+                    jailer_binary: required(arguments.jailer, "--jailer")?,
+                    kernel_image: required(arguments.kernel, "--kernel")?,
+                    rootfs_template: required(arguments.rootfs, "--rootfs")?,
+                    snapshot_root: arguments.snapshot_root,
+                    chroot_base: arguments.chroot_base,
+                    runtime_root: arguments.runtime_root,
+                    jail_uid: arguments.jail_uid,
+                    jail_gid: arguments.jail_gid,
+                    guest_port: 5000,
+                    api_timeout: Duration::from_secs(5),
+                    boot_timeout: Duration::from_secs(30),
+                    node_id: "local-kvm".to_owned(),
+                })
+                .await?,
+            );
             if arguments.ready_pool_size > 0 {
                 let pool_spec = ferrobox_core::SandboxSpec {
                     template_id: "python".to_owned(),
