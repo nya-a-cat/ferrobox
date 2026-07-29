@@ -46,6 +46,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
+start_persistent() {
+    persistent_id="$1"
+    ctr run --runtime "${runtime}" --detach \
+        "${image}" "${persistent_id}" sleep 300
+}
+
+stop_persistent() {
+    ctr tasks kill --signal SIGKILL "${persistent_id}" 2>/dev/null || true
+    ctr tasks delete --force "${persistent_id}" 2>/dev/null || true
+    ctr containers delete "${persistent_id}" 2>/dev/null || true
+    persistent_id=
+}
+
 rm -rf -- "${containerd_root}" "${containerd_state}"
 mkdir -p "${containerd_root}" "${containerd_state}"
 KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-qemu.toml \
@@ -82,28 +95,34 @@ for iteration in $(seq 1 5); do
     cold_job_us+=("$(( (finished_ns - started_ns) / 1000 ))")
 done
 
-persistent_id="kata-warm"
-ctr run --runtime "${runtime}" --detach \
-    "${image}" "${persistent_id}" sleep 300
-
 exec_true_us=()
-for iteration in $(seq 1 100); do
-    started_ns="$(date +%s%N)"
-    ctr tasks exec --exec-id "true-${iteration}" \
+for batch in $(seq 1 5); do
+    start_persistent "kata-true-${batch}"
+    ctr tasks exec --exec-id "true-warmup-${batch}" \
         "${persistent_id}" /bin/true
-    finished_ns="$(date +%s%N)"
-    exec_true_us+=("$(( (finished_ns - started_ns) / 1000 ))")
+    for iteration in $(seq 1 20); do
+        started_ns="$(date +%s%N)"
+        ctr tasks exec --exec-id "true-${batch}-${iteration}" \
+            "${persistent_id}" /bin/true
+        finished_ns="$(date +%s%N)"
+        exec_true_us+=("$(( (finished_ns - started_ns) / 1000 ))")
+    done
+    stop_persistent
 done
 
-ctr tasks exec --exec-id python-warmup \
-    "${persistent_id}" python3 -c 'print(42)' >/dev/null
 exec_python_us=()
-for iteration in $(seq 1 30); do
-    started_ns="$(date +%s%N)"
-    ctr tasks exec --exec-id "python-${iteration}" \
+for batch in $(seq 1 2); do
+    start_persistent "kata-python-${batch}"
+    ctr tasks exec --exec-id "python-warmup-${batch}" \
         "${persistent_id}" python3 -c 'print(42)' >/dev/null
-    finished_ns="$(date +%s%N)"
-    exec_python_us+=("$(( (finished_ns - started_ns) / 1000 ))")
+    for iteration in $(seq 1 15); do
+        started_ns="$(date +%s%N)"
+        ctr tasks exec --exec-id "python-${batch}-${iteration}" \
+            "${persistent_id}" python3 -c 'print(42)' >/dev/null
+        finished_ns="$(date +%s%N)"
+        exec_python_us+=("$(( (finished_ns - started_ns) / 1000 ))")
+    done
+    stop_persistent
 done
 
 jq --null-input \
