@@ -64,8 +64,8 @@ async fn main() -> anyhow::Result<()> {
         }))
         .await?;
 
-    let mut exec_true_us = Vec::with_capacity(20);
-    for _ in 0..20 {
+    let mut exec_true_us = Vec::with_capacity(100);
+    for _ in 0..100 {
         exec_true_us.push(execute(&mut client, &token, vec!["/bin/true".to_owned()]).await?);
     }
 
@@ -79,8 +79,8 @@ async fn main() -> anyhow::Result<()> {
         ],
     )
     .await?;
-    let mut exec_python_us = Vec::with_capacity(10);
-    for _ in 0..10 {
+    let mut exec_python_us = Vec::with_capacity(30);
+    for _ in 0..30 {
         exec_python_us.push(
             execute(
                 &mut client,

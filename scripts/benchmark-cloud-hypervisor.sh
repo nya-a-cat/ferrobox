@@ -79,8 +79,8 @@ jq --exit-status '
     .schema_version == 1 and
     .runtime == "cloud-hypervisor" and
     (.ready_us | length == 5) and
-    (.exec_true_us | length == 20) and
-    (.exec_python_us | length == 10)
+    (.exec_true_us | length == 100) and
+    (.exec_python_us | length == 30)
 ' "${output}" >/dev/null
 
 cat "${output}"

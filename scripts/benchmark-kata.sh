@@ -84,7 +84,7 @@ ctr run --runtime "${runtime}" --detach \
     "${image}" "${persistent_id}" sleep 300
 
 exec_true_us=()
-for iteration in $(seq 1 20); do
+for iteration in $(seq 1 100); do
     started_ns="$(date +%s%N)"
     ctr tasks exec --exec-id "true-${iteration}" \
         "${persistent_id}" /bin/true
@@ -95,7 +95,7 @@ done
 ctr tasks exec --exec-id python-warmup \
     "${persistent_id}" python3 -c 'print(42)' >/dev/null
 exec_python_us=()
-for iteration in $(seq 1 10); do
+for iteration in $(seq 1 30); do
     started_ns="$(date +%s%N)"
     ctr tasks exec --exec-id "python-${iteration}" \
         "${persistent_id}" python3 -c 'print(42)' >/dev/null
@@ -121,11 +121,11 @@ jq --null-input \
         cold_job_p50_us: $cold[2],
         cold_job_p95_us: $cold[4],
         exec_true_us: $true,
-        exec_true_p50_us: $true[9],
-        exec_true_p95_us: $true[18],
+        exec_true_p50_us: $true[49],
+        exec_true_p95_us: $true[94],
         exec_python_us: $python,
-        exec_python_p50_us: $python[4],
-        exec_python_p95_us: $python[9]
+        exec_python_p50_us: $python[14],
+        exec_python_p95_us: $python[28]
     }
     ' >"${output}"
 
@@ -133,8 +133,8 @@ jq --exit-status '
     .schema_version == 1 and
     .runtime == "kata-qemu" and
     (.cold_job_us | length == 5) and
-    (.exec_true_us | length == 20) and
-    (.exec_python_us | length == 10)
+    (.exec_true_us | length == 100) and
+    (.exec_python_us | length == 30)
 ' "${output}" >/dev/null
 
 cat "${output}"

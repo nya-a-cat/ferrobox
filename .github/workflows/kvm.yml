@@ -397,6 +397,32 @@ jobs:
           sudo --preserve-env=FERROBOX_CTR,FERROBOX_CONTAINERD,FERROBOX_KATA_OUTPUT,FERROBOX_KATA_RUNTIME_ROOT,FERROBOX_KATA_IMAGE \
             bash scripts/benchmark-kata.sh
 
+      - name: Validate microVM performance leadership
+        run: |
+          jq --exit-status --slurp '
+            .[0].schema_version == 8 and
+            .[1].schema_version == 4 and
+            .[2].schema_version == 1 and
+            .[3].schema_version == 1 and
+            (.[2].exec_true_us | length == 100) and
+            (.[2].exec_python_us | length == 30) and
+            (.[3].exec_true_us | length == 100) and
+            (.[3].exec_python_us | length == 30) and
+            .[0].pool_prepare_p95_us < .[2].ready_p95_us and
+            .[1].http_create_p95_us < .[2].ready_p95_us and
+            .[0].exec_true_p50_us < .[2].exec_true_p50_us and
+            .[0].pool_prepare_p95_us + .[0].exec_true_p95_us < .[3].cold_job_p95_us and
+            .[1].http_create_p95_us + .[0].exec_true_p95_us < .[3].cold_job_p95_us and
+            .[0].exec_true_p50_us < .[3].exec_true_p50_us and
+            .[0].exec_true_p95_us < .[3].exec_true_p95_us and
+            .[0].exec_python_p50_us < .[3].exec_python_p50_us and
+            .[0].exec_python_p95_us < .[3].exec_python_p95_us
+          ' \
+            "${RUNNER_TEMP}/ferrobox-benchmark.json" \
+            "${RUNNER_TEMP}/ferrobox-http-benchmark.json" \
+            "${RUNNER_TEMP}/cloud-hypervisor-benchmark.json" \
+            "${RUNNER_TEMP}/kata-benchmark.json" >/dev/null
+
       - name: Validate file-workload performance leadership
         run: |
           jq --exit-status --slurp '
