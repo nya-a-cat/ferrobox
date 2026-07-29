@@ -269,10 +269,7 @@ impl FirecrackerRuntime {
                 ));
             }
             if let Ok(mut client) = connector.client().await
-                && client
-                    .health(Request::new(HealthRequest {}))
-                    .await
-                    .is_ok()
+                && client.health(Request::new(HealthRequest {})).await.is_ok()
             {
                 return Ok(client);
             }
