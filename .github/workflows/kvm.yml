@@ -346,7 +346,8 @@ jobs:
             bash scripts/benchmark-cloud-hypervisor.sh
 
       - name: Cache Kata Containers release bundle
-        uses: actions/cache@v4
+        id: kata-cache
+        uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/kata-static-3.31.0-amd64.tar.zst
           key: kata-static-3.31.0-amd64-68c2786a
@@ -377,6 +378,13 @@ jobs:
           printf '%s  %s\n' "${actual_sha256}" \
             kata-static-3.31.0-amd64.tar.zst \
             >"${RUNNER_TEMP}/kata-static.sha256"
+
+      - name: Save Kata Containers release bundle
+        if: steps.kata-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/kata-static-3.31.0-amd64.tar.zst
+          key: ${{ steps.kata-cache.outputs.cache-primary-key }}
 
       - name: Benchmark Kata Containers QEMU boundary
         env:
