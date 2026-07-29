@@ -174,9 +174,18 @@ impl NetworkManager {
 
 #[cfg(target_os = "linux")]
 async fn public_host_dns() -> String {
-    let contents = tokio::fs::read_to_string("/etc/resolv.conf")
-        .await
-        .unwrap_or_default();
+    for path in ["/run/systemd/resolve/resolv.conf", "/etc/resolv.conf"] {
+        if let Ok(contents) = tokio::fs::read_to_string(path).await
+            && let Some(address) = first_public_dns(&contents)
+        {
+            return address.to_string();
+        }
+    }
+    std::net::Ipv4Addr::new(1, 1, 1, 1).to_string()
+}
+
+#[cfg(target_os = "linux")]
+fn first_public_dns(contents: &str) -> Option<std::net::Ipv4Addr> {
     contents
         .lines()
         .filter_map(|line| line.split_whitespace().nth(1))
@@ -189,8 +198,6 @@ async fn public_host_dns() -> String {
                 && !address.is_unspecified()
                 && address.octets()[0] < 240
         })
-        .unwrap_or(std::net::Ipv4Addr::new(1, 1, 1, 1))
-        .to_string()
 }
 
 #[cfg(target_os = "linux")]
@@ -254,5 +261,27 @@ async fn run_nft(rules: &str) -> Result<(), RuntimeError> {
             RuntimeErrorKind::Unavailable,
             format!("nft failed: {}", String::from_utf8_lossy(&output.stderr)),
         ))
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::first_public_dns;
+
+    #[test]
+    fn skips_stub_and_private_resolvers() {
+        let input = "nameserver 127.0.0.53\nnameserver 10.0.0.2\nnameserver 168.63.129.16\n";
+        assert_eq!(
+            first_public_dns(input).map(|address| address.to_string()),
+            Some("168.63.129.16".to_owned())
+        );
+    }
+
+    #[test]
+    fn accepts_standard_public_resolver() {
+        assert_eq!(
+            first_public_dns("nameserver 1.1.1.1\n").map(|address| address.to_string()),
+            Some("1.1.1.1".to_owned())
+        );
     }
 }
