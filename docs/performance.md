@@ -3,8 +3,8 @@
 Ferrobox performance claims are based on retained GitHub-hosted KVM artifacts.
 The benchmark records microseconds as integers and retains all cold-create,
 hot-execution, and deletion samples so percentile calculations remain
-auditable. Current hosted-KVM runs use five lifecycle samples and twenty hot
-execution samples.
+auditable. Current hosted-KVM runs use five lifecycle samples and one hundred
+hot execution samples.
 
 Percentiles use the nearest-rank method. A five-sample P95 is therefore the
 maximum sample, which keeps small-sample gates conservative.
@@ -117,6 +117,28 @@ The run passed every functional and performance step through the gVisor gates.
 Its overall conclusion remained red because the later Internet-policy test
 again failed DNS resolution with `Temporary failure in name resolution`.
 
+Run [30424454694](https://github.com/nya-a-cat/ferrobox/actions/runs/30424454694)
+is the first 100-command matched control after caching guest cgroup
+availability:
+
+| Runtime | `/bin/true` P50 | `/bin/true` P95 | Sequential throughput |
+| --- | ---: | ---: | ---: |
+| Ferrobox | 3.847 ms | 14.002 ms | 164.169 ops/s |
+| Docker/runc | 36.392 ms | 40.178 ms | 27.183 ops/s |
+| gVisor/runsc | 22.998 ms | 24.884 ms | 43.006 ops/s |
+
+Ferrobox had 9.46 times lower P50 and 2.87 times lower P95 than Docker/runc,
+and 5.98 times lower P50 and 1.78 times lower P95 than gVisor/runsc. Its
+sequential command throughput was 6.04 times Docker/runc and 3.82 times
+gVisor/runsc. The complete 100-sample arrays are retained in each JSON
+artifact.
+
+The same run measured Ferrobox HTTP allocation at 1.272 ms P50 and 4.212 ms
+P95, Docker/runc create-and-start at 84.398 ms P50 and 133.117 ms P95, and
+gVisor/runsc create-and-start at 134.211 ms P50 and 149.404 ms P95. The
+five-client Ferrobox allocation burst had a 6.234 ms P95 and completed in
+23.857 ms.
+
 ## Measurement boundary
 
 Each `create_to_ready_us` sample starts before `FirecrackerRuntime::create` and
@@ -161,10 +183,14 @@ with the Python image pulled beforehand. CPU, memory, PID, and network-disabled
 limits match the Ferrobox benchmark shape where the Docker API supports them.
 Container inspection and deletion occur outside the timed interval.
 
-The Docker command control runs twenty `/bin/true` requests in one warm
+The Docker command control runs one hundred `/bin/true` requests in one warm
 container. Each timer covers exec creation, detached start, and Engine API
-inspection until exit. The workflow compares its P95 with Ferrobox's twenty
+inspection until exit. The workflow compares its P95 with Ferrobox's one hundred
 hot `/bin/true` guest RPC samples.
+
+Sequential throughput divides the command count by the complete timed loop.
+It includes the same request-to-exit work represented by the individual
+samples and does not claim parallel command capacity.
 
 The gVisor control reuses that Docker Engine harness with `HostConfig.Runtime`
 set to `runsc`. This isolates the runtime change while preserving the image,
