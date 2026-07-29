@@ -46,6 +46,8 @@ The same hosted-KVM job emits `ferrobox-benchmark.json` with:
 The benchmark runs after the functional KVM path and applies conservative
 regression ceilings. Competitor targets are tracked separately so an
 unverified marketing number cannot silently become a project success claim.
+Percentiles use the nearest-rank definition; with five samples, P95 is the
+largest retained sample.
 When `FERROBOX_SNAPSHOT_ROOT` is set, the functional path prepares a snapshot
 and the later benchmark measures restore-to-ready preparation and ready-pool
 allocation independently.

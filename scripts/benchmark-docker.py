@@ -18,7 +18,8 @@ class UnixConnection(http.client.HTTPConnection):
 
 
 def percentile(sorted_samples: list[int], value: int) -> int:
-    return sorted_samples[(len(sorted_samples) - 1) * value // 100]
+    rank = (len(sorted_samples) * value + 99) // 100
+    return sorted_samples[min(rank - 1, len(sorted_samples) - 1)]
 
 
 def request(
@@ -93,7 +94,7 @@ def main() -> None:
     print(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "docker_create_start_us": samples,
                 "docker_create_start_p50_us": percentile(samples, 50),
                 "docker_create_start_p95_us": percentile(samples, 95),

@@ -185,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
             delete_us.push(delete_started.elapsed().as_micros());
             delete_us.sort_unstable();
             let result = BenchmarkResult {
-                schema_version: 4,
+                schema_version: 5,
                 pool_prepare_p50_us: percentile(&pool_prepare_us, 50),
                 pool_prepare_p95_us: percentile(&pool_prepare_us, 95),
                 pool_prepare_us,
@@ -308,7 +308,8 @@ fn exec_request(argv: Vec<String>) -> ExecRequest {
 }
 
 fn percentile(sorted: &[u128], percentile: usize) -> u128 {
-    let index = (sorted.len() - 1) * percentile / 100;
+    let rank = (sorted.len() * percentile).div_ceil(100);
+    let index = rank.saturating_sub(1).min(sorted.len() - 1);
     sorted[index]
 }
 
@@ -320,5 +321,20 @@ fn ensure_exit_success(result: &ExecResult) -> anyhow::Result<()> {
             result.termination,
             String::from_utf8_lossy(&result.stderr)
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::percentile;
+
+    #[test]
+    fn nearest_rank_p95_is_conservative_for_five_samples() {
+        assert_eq!(percentile(&[1, 2, 3, 4, 5], 95), 5);
+    }
+
+    #[test]
+    fn nearest_rank_p95_selects_nineteenth_of_twenty() {
+        assert_eq!(percentile(&(1..=20).collect::<Vec<_>>(), 95), 19);
     }
 }

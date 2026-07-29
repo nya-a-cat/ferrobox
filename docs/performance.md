@@ -6,6 +6,9 @@ hot-execution, and deletion samples so percentile calculations remain
 auditable. Current hosted-KVM runs use five lifecycle samples and twenty hot
 execution samples.
 
+Percentiles use the nearest-rank method. A five-sample P95 is therefore the
+maximum sample, which keeps small-sample gates conservative.
+
 ## Baseline
 
 Run [30417577685](https://github.com/nya-a-cat/ferrobox/actions/runs/30417577685)

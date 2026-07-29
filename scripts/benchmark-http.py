@@ -8,7 +8,8 @@ from urllib.parse import urlsplit
 
 
 def percentile(sorted_samples: list[int], value: int) -> int:
-    return sorted_samples[(len(sorted_samples) - 1) * value // 100]
+    rank = (len(sorted_samples) * value + 99) // 100
+    return sorted_samples[min(rank - 1, len(sorted_samples) - 1)]
 
 
 def main() -> None:
@@ -87,7 +88,7 @@ def main() -> None:
     print(
         json.dumps(
             {
-                "schema_version": 2,
+                "schema_version": 3,
                 "http_create_us": samples,
                 "http_create_p50_us": percentile(samples, 50),
                 "http_create_p95_us": percentile(samples, 95),

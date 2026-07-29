@@ -195,7 +195,7 @@ jobs:
             --concurrency 5 \
             >"${FERROBOX_HTTP_BENCHMARK_OUTPUT}"
           jq --exit-status '
-            .schema_version == 2 and
+            .schema_version == 3 and
             (.http_create_us | length == 5) and
             (.concurrent_create_us | length == 5) and
             .http_create_p95_us <= 80000 and
@@ -220,8 +220,8 @@ jobs:
             --iterations 5 \
             >"${FERROBOX_DOCKER_BENCHMARK_OUTPUT}"
           jq --exit-status --slurp '
-            .[0].schema_version == 2 and
-            .[1].schema_version == 1 and
+            .[0].schema_version == 3 and
+            .[1].schema_version == 2 and
             (.[1].docker_create_start_us | length == 5) and
             .[0].http_create_p95_us < .[1].docker_create_start_p95_us
           ' \
