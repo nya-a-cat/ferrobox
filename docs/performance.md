@@ -66,20 +66,28 @@ Snapshot restore reduced create-to-ready P95 by 86.3%. This remains above the
 first competitive target, so the project does not claim a startup-latency lead
 from this result.
 
-Run [30421738775](https://github.com/nya-a-cat/ferrobox/actions/runs/30421738775)
-is the first retained same-host control-plane comparison:
+Run [30422952630](https://github.com/nya-a-cat/ferrobox/actions/runs/30422952630)
+is the retained nearest-rank same-host control-plane comparison:
 
 | Metric | P50 | P95 |
 | --- | ---: | ---: |
-| Ferrobox ready-pool internal allocation | 0.010 ms | 0.011 ms |
-| Ferrobox HTTP sandbox create | 1.052 ms | 2.913 ms |
-| Docker Engine container create + start | 83.169 ms | 83.590 ms |
+| Ferrobox ready-pool internal allocation | 0.012 ms | 0.017 ms |
+| Ferrobox HTTP sandbox create | 1.887 ms | 2.742 ms |
+| Ferrobox five-client HTTP burst | 4.871 ms | 6.534 ms |
+| Docker Engine container create + start | 159.892 ms | 672.967 ms |
 
-On this runner, Ferrobox HTTP create P95 was 28.7 times lower than Docker
-Engine create-and-start P95. The Docker image was resolved to
+The five-client Ferrobox burst completed in 15.627 ms. On this runner,
+Ferrobox HTTP create was 84.7 times lower at P50 and 245.4 times lower at P95
+than Docker Engine create-and-start. The raw samples are retained because the
+Docker control had substantial tail variance. The Docker image was resolved to
 `python@sha256:b18992999dbe963a45a8a4da40ac2b1975be1a776d939d098c647482bcad5cba`.
 The comparison covers allocation/startup latency for a warm service and cached
 template image. It does not equate container and microVM isolation strength.
+
+The same runtime artifact recorded snapshot/Python pool preparation at
+572.306 ms P50 and 640.017 ms P95. Five warmed Firecracker processes consumed
+326,852 KiB RSS in total, approximately 63.8 MiB per ready microVM. First
+Python execution after allocation was 69.791 ms.
 
 [E2B currently advertises 80 ms sandbox startup](https://www.e2b.dev/) on its
 product page. Ferrobox's same-host HTTP measurement is below that published
