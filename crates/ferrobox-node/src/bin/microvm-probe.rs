@@ -75,14 +75,8 @@ async fn main() -> anyhow::Result<()> {
     let mut exec_true_cloned_client_us = Vec::with_capacity(100);
     for _ in 0..100 {
         let mut cloned_client = client.clone();
-        exec_true_cloned_client_us.push(
-            execute(
-                &mut cloned_client,
-                &token,
-                vec!["/bin/true".to_owned()],
-            )
-            .await?,
-        );
+        exec_true_cloned_client_us
+            .push(execute(&mut cloned_client, &token, vec!["/bin/true".to_owned()]).await?);
     }
 
     execute(
