@@ -52,6 +52,17 @@ samples. The performance step passed its regression ceilings. The workflow
 conclusion is red because the later, separately measured Internet DNS test
 failed; this does not change the retained benchmark result.
 
+Run [30420163545](https://github.com/nya-a-cat/ferrobox/actions/runs/30420163545)
+is the first ready-state snapshot restore result:
+
+| Metric | Cold P95 | Snapshot P50 | Snapshot P95 |
+| --- | ---: | ---: | ---: |
+| create to guest ready | 2,535.104 ms | 347.688 ms | 348.172 ms |
+
+Snapshot restore reduced create-to-ready P95 by 86.3%. This remains above the
+first competitive target, so the project does not claim a startup-latency lead
+from this result.
+
 ## Measurement boundary
 
 Each `create_to_ready_us` sample starts before `FirecrackerRuntime::create` and

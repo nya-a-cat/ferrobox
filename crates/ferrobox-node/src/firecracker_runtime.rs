@@ -140,7 +140,7 @@ impl FirecrackerRuntime {
             if fs::metadata(path).await.is_ok() {
                 return Ok(());
             }
-            sleep(Duration::from_millis(25)).await;
+            sleep(Duration::from_millis(5)).await;
         }
         Err(RuntimeError::new(
             RuntimeErrorKind::Timeout,
@@ -273,7 +273,7 @@ impl FirecrackerRuntime {
             {
                 return Ok(client);
             }
-            sleep(Duration::from_millis(100)).await;
+            sleep(Duration::from_millis(5)).await;
         }
     }
 
@@ -330,7 +330,7 @@ impl FirecrackerRuntime {
                     }
                 }
             }
-            sleep(Duration::from_millis(100)).await;
+            sleep(Duration::from_millis(5)).await;
         }
     }
 
