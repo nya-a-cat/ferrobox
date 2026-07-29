@@ -60,6 +60,10 @@ and measures Docker Engine `create` plus `start` through its Unix-socket HTTP
 API. `docker-benchmark.json` retains five samples. The comparison gate requires
 Ferrobox HTTP create P95 to remain below Docker create-and-start P95.
 
+The HTTP artifact also retains a five-request concurrent burst with each
+request's latency and total wall time. Sequential and concurrent P95 must both
+remain below 80 ms.
+
 ## Completion rule
 
 Workflow presence is not evidence of success. Ferrobox remains incomplete until

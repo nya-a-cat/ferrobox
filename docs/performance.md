@@ -118,6 +118,8 @@ keeps latency gains paired with an auditable resident-memory cost.
 before an HTTP `POST /v1/sandboxes` and ends after the complete 201 response is
 read. It includes request parsing, pool allocation, state registration, token
 issuance, audit persistence, JSON serialization, and loopback transport.
+`concurrent_create_us` applies the same boundary to five simultaneous clients;
+`concurrent_create_wall_us` records the complete burst.
 
 The Docker control uses the same host and direct HTTP rather than CLI process
 startup. Its timer covers Docker Engine container create and start responses,

@@ -167,7 +167,7 @@ jobs:
             --kernel /mnt/ferrobox/images/vmlinux \
             --rootfs /mnt/ferrobox/images/python.ext4 \
             --snapshot-root /mnt/ferrobox/snapshots/python \
-            --ready-pool-size 5 \
+            --ready-pool-size 10 \
             --chroot-base /mnt/ferrobox/jailer \
             --runtime-root /mnt/ferrobox/runtime \
             >"${FERROBOX_API_LOG}" 2>&1 &
@@ -192,11 +192,14 @@ jobs:
           python3 scripts/benchmark-http.py \
             --url http://127.0.0.1:18080 \
             --iterations 5 \
+            --concurrency 5 \
             >"${FERROBOX_HTTP_BENCHMARK_OUTPUT}"
           jq --exit-status '
-            .schema_version == 1 and
+            .schema_version == 2 and
             (.http_create_us | length == 5) and
-            .http_create_p95_us <= 80000
+            (.concurrent_create_us | length == 5) and
+            .http_create_p95_us <= 80000 and
+            .concurrent_create_p95_us <= 80000
           ' "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" >/dev/null
           cat "${FERROBOX_HTTP_BENCHMARK_OUTPUT}"
 
@@ -217,7 +220,7 @@ jobs:
             --iterations 5 \
             >"${FERROBOX_DOCKER_BENCHMARK_OUTPUT}"
           jq --exit-status --slurp '
-            .[0].schema_version == 1 and
+            .[0].schema_version == 2 and
             .[1].schema_version == 1 and
             (.[1].docker_create_start_us | length == 5) and
             .[0].http_create_p95_us < .[1].docker_create_start_p95_us
