@@ -95,38 +95,39 @@ is recorded in [Scope and acceptance](docs/scope.md).
 ### Primary microVM comparison
 
 GitHub Actions run
-[`30427754169`](https://github.com/nya-a-cat/ferrobox/actions/runs/30427754169)
-booted Cloud Hypervisor v53.0 with the same kernel, 512 MiB rootfs, one vCPU,
-Rust guest service, and host-to-guest vsock probe used by Ferrobox:
+[`30432673085`](https://github.com/nya-a-cat/ferrobox/actions/runs/30432673085)
+used one nested-KVM host, one vCPU, 512 MiB memory, the same Python 3.11
+workload, and retained every sample:
 
-| Same-host microVM result | P50 | P95 |
+| Startup or allocation boundary | P50 | P95 |
 | --- | ---: | ---: |
-| Ferrobox ready-pool HTTP allocation | 4–6 ms across retained runs | 4–6 ms across retained runs |
-| Cloud Hypervisor cold launch to guest ready | 2,514.082 ms | 2,530.100 ms |
-| Cloud Hypervisor guest `/bin/true` | 3.111 ms | 7.298 ms |
-| Cloud Hypervisor guest Python 3.11 | 10.617 ms | 11.510 ms |
+| Ferrobox ready-pool HTTP allocation | 1.784 ms | 2.810 ms |
+| Ferrobox snapshot-pool preparation | 961.798 ms | 1,038.732 ms |
+| Direct Firecracker cold launch to guest ready | 1,684.991 ms | 2,501.760 ms |
+| Cloud Hypervisor cold launch to guest ready | 2,518.585 ms | 2,540.687 ms |
+| Kata QEMU complete cold `/bin/true` job | 1,481.160 ms | 1,579.662 ms |
 
-The startup rows represent two useful service boundaries. Ferrobox measures an
-HTTP allocation from a bounded pool of already-restored Firecracker microVMs.
-Cloud Hypervisor measures a complete process launch, Linux boot, vsock
-connection, and guest health check. Ferrobox cold Firecracker boot is about
-2.5 seconds on the same hosted runner, while its retained snapshot restore
-result is 348.172 ms P95. The ready pool moves that restore work ahead of the
-user request.
+| Warm execution boundary | `/bin/true` P50 / P95 | Python P50 / P95 |
+| --- | ---: | ---: |
+| Direct Firecracker guest protocol | 1.908 / 5.037 ms | 11.134 / 11.676 ms |
+| Cloud Hypervisor guest protocol | 1.889 / 6.167 ms | 10.604 / 11.185 ms |
+| Ferrobox snapshot pool, full runtime | 3.119 / 17.495 ms | 15.877 / 39.557 ms |
+| Ferrobox fresh-boot pool, full runtime | 2.861 / 5.528 ms | 11.791 / 22.026 ms |
+| Kata QEMU through containerd and shim-v2 | 31.118 / 33.237 ms | 56.028 / 61.262 ms |
 
-The command rows show that the underlying microVM algorithm is competitive:
-Cloud Hypervisor and Firecracker both deliver low-millisecond guest process
-control over the shared Ferrobox guest protocol. Ferrobox's differentiator is
-the ready-state snapshot and allocation path around Firecracker. Cloud
-Hypervisor remains faster in the retained Python hot-exec sample, so Ferrobox
-does not claim universal execution leadership.
+The full Ferrobox snapshot runtime has 9.98 times lower `/bin/true` P50 and
+3.53 times lower Python P50 than Kata QEMU in this run. The fresh-boot pool
+reduces Ferrobox's execution tail further, with a preparation and memory cost:
+five guests used 500,240 KiB RSS versus 338,644 KiB for the snapshot pool.
 
-Kata Containers is the next primary comparator. Its standard deployment adds
-a container-runtime and shim path around a chosen VMM, so a fair benchmark
-must report both the full Kata request boundary and the selected VMM. E2B is a
-remote Firecracker service; its public 80 ms startup figure is included as a
-product boundary, without a same-host speedup claim. Exact comparator status
-and raw measurement boundaries are recorded in
+Direct Firecracker and Cloud Hypervisor are close at the shared guest-protocol
+boundary. The remaining Ferrobox gap is concentrated in snapshot-backed memory
+and runtime bookkeeping. The mandatory microVM gate stays red while the full
+snapshot runtime trails the direct Cloud Hypervisor minimal-command median.
+
+E2B remains a remote Firecracker product comparison. Its public startup figure
+uses a different network and deployment boundary, so no same-host speedup ratio
+is claimed. Exact samples and limitations are recorded in
 [Performance evidence](docs/performance.md).
 
 ### Container and userspace-kernel controls

@@ -26,6 +26,54 @@ and E2B:
 Docker/runc and gVisor/runsc remain secondary controls. They show the cost and
 security-boundary trade-off against common container execution paths.
 
+## Matched microVM matrix
+
+Run [30432673085](https://github.com/nya-a-cat/ferrobox/actions/runs/30432673085)
+is the first same-run matrix containing the full Ferrobox runtime, a
+fresh-boot Ferrobox pool, direct Firecracker, Cloud Hypervisor v53.0, and Kata
+Containers 3.31.0 with its default QEMU configuration.
+
+| Startup or allocation boundary | P50 | P95 | Samples |
+| --- | ---: | ---: | ---: |
+| Ferrobox ready-pool HTTP allocation | 1.784 ms | 2.810 ms | 5 |
+| Ferrobox snapshot-pool preparation | 961.798 ms | 1,038.732 ms | 5 |
+| Ferrobox fresh-pool preparation | 2,926.331 ms | 2,985.318 ms | 5 |
+| Direct Firecracker cold launch to guest ready | 1,684.991 ms | 2,501.760 ms | 5 |
+| Cloud Hypervisor cold launch to guest ready | 2,518.585 ms | 2,540.687 ms | 5 |
+| Kata QEMU complete cold `/bin/true` job | 1,481.160 ms | 1,579.662 ms | 5 |
+
+| Warm runtime | `/bin/true` P50 | `/bin/true` P95 | Python P50 | Python P95 |
+| --- | ---: | ---: | ---: | ---: |
+| Direct Firecracker guest protocol | 1.908 ms | 5.037 ms | 11.134 ms | 11.676 ms |
+| Cloud Hypervisor guest protocol | 1.889 ms | 6.167 ms | 10.604 ms | 11.185 ms |
+| Ferrobox snapshot pool, full runtime | 3.119 ms | 17.495 ms | 15.877 ms | 39.557 ms |
+| Ferrobox fresh-boot pool, full runtime | 2.861 ms | 5.528 ms | 11.791 ms | 22.026 ms |
+| Kata QEMU through containerd and shim-v2 | 31.118 ms | 33.237 ms | 56.028 ms | 61.262 ms |
+
+Every direct-VMM row uses the same kernel, reflink rootfs, static Ferrobox
+guest, vsock connector, 100 `/bin/true` samples, and 30 Python samples. Kata
+uses the same Python image as the Docker control. Its hot samples are collected
+from bounded prewarmed QEMU microVM batches through `ctr`, containerd, shim-v2,
+and kata-agent. VM start and cleanup stay outside the hot timers.
+
+The full snapshot-pooled Ferrobox runtime beat Kata QEMU at both percentiles
+for both workloads. Its `/bin/true` P50 was 9.98 times lower and Python P50 was
+3.53 times lower. The fresh-boot pool improved `/bin/true` P95 from 17.495 ms
+to 5.528 ms and Python P50 from 15.877 ms to 11.791 ms. Five fresh guests used
+500,240 KiB RSS; five snapshot-restored guests used 338,644 KiB.
+
+The raw VMM data rules out a weak Firecracker execution algorithm as the main
+cause. Direct Firecracker and Cloud Hypervisor are within 0.019 ms at
+`/bin/true` P50 in this run, and their P95 ordering favors Firecracker.
+Ferrobox's remaining gap appears above that boundary: snapshot-backed memory
+produces a larger tail, and full runtime bookkeeping adds roughly one
+millisecond to the minimal-command median relative to direct Firecracker.
+
+The mandatory microVM leadership step remains red because the snapshot-pooled
+full runtime does not yet beat direct Cloud Hypervisor at `/bin/true` P50.
+The later HTTP file-API leadership gate also remains red. These gates are kept
+as optimization targets.
+
 ## Cloud Hypervisor
 
 Run [30427754169](https://github.com/nya-a-cat/ferrobox/actions/runs/30427754169)
