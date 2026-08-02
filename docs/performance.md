@@ -111,6 +111,14 @@ and the full runtime continue to retain their Cloud Hypervisor and Kata QEMU
 boundary checks. The HTTP file-API leadership gate remains an optimization
 target.
 
+[Run 30761222885](https://github.com/nya-a-cat/ferrobox/actions/runs/30761222885)
+is the first formal ABBA gate result. Artifact `8837570647` retains every raw
+cohort and the pooled schema-1 result. It measured Firecracker versus Cloud
+Hypervisor `/bin/true` P50/P95 at 1.822/1.957 versus 1.837/2.007 ms, and Python
+P50/P95 at 10.593/11.163 versus 10.669/11.213 ms. The full-runtime budgets and
+the microVM leadership gate passed; final enforcement reported the HTTP file
+API as the only remaining failed performance dimension.
+
 ## Cloud Hypervisor
 
 Run [30427754169](https://github.com/nya-a-cat/ferrobox/actions/runs/30427754169)
@@ -434,8 +442,20 @@ The 25-instance restore-to-ready samples measured P50/P95/P99 of
 runner noise and page-cache changes. PSS, USS, and controller totals provide
 the stable process-level series. Initial 25-instance regression ceilings are
 64 MiB host delta, 40 MiB PSS, 40 MiB USS, and 48 MiB cgroup current per
-sandbox. These ceilings protect the observed density range while additional
-independent runs establish variance.
+sandbox.
+
+Three independent schema-2 runs at commit `8d97c39` or later passed those
+ceilings and returned the cgroup count to zero:
+
+| Run and artifact | Host delta | PSS | USS | cgroup current | Restore P50/P95/P99 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| [30760119705](https://github.com/nya-a-cat/ferrobox/actions/runs/30760119705), `8837241226` | 10,797.60 KiB | 22,686.28 KiB | 21,052.96 KiB | 25,709.92 KiB | 185,151/213,588/218,107 us |
+| [30760452371](https://github.com/nya-a-cat/ferrobox/actions/runs/30760452371), `8837336923` | 17,560.64 KiB | 23,393.04 KiB | 21,768.96 KiB | 29,498.88 KiB | 180,434/210,939/215,385 us |
+| [30761222885](https://github.com/nya-a-cat/ferrobox/actions/runs/30761222885), `8837581831` | 11,324.00 KiB | 23,224.68 KiB | 21,633.44 KiB | 29,312.64 KiB | 203,077/228,413/280,805 us |
+
+The process and controller series stayed within a narrow band across runners.
+The host delta and restore P99 show the larger shared-runner variance and stay
+separate from cross-project claims.
 
 ## Targets
 

@@ -75,6 +75,10 @@ P95 at or below 15 ms, and Python P50/P95 within 10%. Snapshot preparation,
 HTTP allocation, and full-runtime hot execution retain their Kata and Cloud
 Hypervisor boundary checks.
 
+Run 30761222885 passed the formal ABBA aggregation and microVM gate at commit
+`52d3ef6`. Artifact `8837570647` contains all four source cohorts and the
+pooled result; final enforcement left only the HTTP file-API gate red.
+
 Measurement steps validate artifact schemas and sample counts without applying
 leadership claims. All performance gates run after every comparator has
 finished, continue long enough to expose every failed dimension, and are then
@@ -151,8 +155,9 @@ delta, and zero cgroup leaves after deletion.
 Schema 2 also retains nearest-rank create-to-ready P50/P95/P99, sequential
 total time, and throughput. At the 25-instance tier, the first regression gate
 limits host delta to 64 MiB, PSS and USS to 40 MiB each, and cgroup current to
-48 MiB per sandbox. Run 30759783600 established the baseline and returned all
-25 cgroups to zero; its evidence is artifact `8837137618`.
+48 MiB per sandbox. Runs 30760119705, 30760452371, and 30761222885 independently
+passed schema 2 at 25 live sandboxes and returned all cgroups to zero. Their
+evidence artifacts are `8837241226`, `8837336923`, and `8837581831`.
 
 ## Completion rule
 
