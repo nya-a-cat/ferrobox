@@ -116,6 +116,11 @@ Status meanings:
 | Supply-chain inventory | Action SHA pins, pinned binaries/images, checksums, manifests, SBOM, and update policy | Verified | In-toto provenance covers every executable, guest asset, image, and SBOM used by release E2E |
 | Release integrity | Digest-bound releases, keyless signatures, provenance attestations, and consumer verification | Partial | GitHub verifies signed source/binary artifacts and OCI digests against fixed workflow and repository identities |
 
+The CLI and first-party `ferrobox-sandbox` Agent Skill now have a shared
+GitHub-hosted create/exec/file/delete conformance path. The row remains Partial
+until the MCP surface passes the same scenario with an approved credential
+custody contract.
+
 The four verified state-branching rows are backed by
 [Live Snapshot KVM E2E run 30758919945](https://github.com/nya-a-cat/ferrobox/actions/runs/30758919945)
 at commit `87d5456`. Its `live-snapshot-evidence` artifact records schema 1 and

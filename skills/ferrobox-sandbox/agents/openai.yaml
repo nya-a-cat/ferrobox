@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ferrobox Sandbox"
+  short_description: "Run isolated code and files with Ferrobox"
+  default_prompt: "Use $ferrobox-sandbox to create an isolated sandbox, execute the requested workload, transfer files, and clean it up safely."

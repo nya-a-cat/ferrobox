@@ -84,6 +84,7 @@ protocol details.
 | Network | Disabled by default; restricted public egress mode |
 | Startup | Firecracker snapshot restore and configurable ready pool |
 | Observability | Structured lifecycle and workload audit events |
+| Agent surface | Rust CLI and first-party `ferrobox-sandbox` Agent Skill |
 | Testing | Process/API E2E and hosted nested-KVM E2E workflows |
 
 Public port routing, domain policy, persistent volumes, multi-node scheduling,
@@ -271,6 +272,7 @@ Workflow files:
 - [Verification policy](docs/testing.md)
 - [Network isolation and DNS relay](docs/networking.md)
 - [Snapshot, restore, clone, and rollback contract](docs/snapshots.md)
+- [Agent Skill and CLI contract](docs/agent-skill.md)
 - [Performance evidence](docs/performance.md)
 - [SOTA parity program](docs/sota-roadmap.md)
 - [Supply-chain pins](docs/supply-chain.md)

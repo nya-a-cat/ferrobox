@@ -14,11 +14,20 @@ resource usage low and results reproducible.
 - locked workspace build;
 - static `x86_64-unknown-linux-musl` guest build;
 - process-backend HTTP end-to-end verification;
+- first-party Agent Skill contract validation;
+- Rust CLI create/exec/file/delete end-to-end verification;
 - Firecracker/Jailer checksum and version verification.
 - full-commit GitHub Action pin verification across every workflow.
 
 The process E2E checks `print(42)`, argv literal handling, file round-trip,
 path traversal rejection, deletion, and token redaction from audit records.
+
+The CLI/Agent Skill E2E repeats the user-facing flow through the compiled
+`ferrobox` binary. It captures the one-time token, proves literal argv handling,
+round-trips a host file, deletes the exact sandbox, checks post-delete rejection,
+and confirms that the audit log omits the bearer token. The static skill gate
+also validates its frontmatter, UI metadata, security invariants, command set,
+and remote-installer policy.
 
 ## KVM CI
 
