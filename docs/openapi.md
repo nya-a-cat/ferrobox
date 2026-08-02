@@ -39,6 +39,13 @@ Standard CI uses three independent checks:
    lossless output, file roundtrip, delete, stale-handle rejection, and audit
    credential-redaction checks.
 
+Each CI run generates all seven client trees twice in separate runner-temporary
+directories and requires a recursive byte comparison. The C# project GUID is
+fixed. The Python runtime test operates on a temporary copy and returns only
+its locked dependency graph to the retained source tree. This keeps Python
+bytecode and installation metadata outside the evidence. Hidden generator
+metadata is included in the artifact after a path-name review.
+
 The Python dependency graph is locked on the GitHub runner with an
 `exclude-newer` cutoff and retained with the generated source. The process
 backend supplies deterministic API behavior and carries no workload-isolation
@@ -56,6 +63,39 @@ Python setup uses `astral-sh/setup-uv` v9.0.0 at full commit
 `c771a70e6277c0a99b617c7a806ffedaca235ff9` and fixes uv to 0.12.1 with Python
 3.12. All validation, generation, locking, installation, and execution occur on
 GitHub-hosted runners.
+
+## Verified evidence
+
+[Standard CI run 30766020434](https://github.com/nya-a-cat/ferrobox/actions/runs/30766020434)
+and the independent
+[workflow-dispatch run 30766116507](https://github.com/nya-a-cat/ferrobox/actions/runs/30766116507)
+passed at commit `9cb5c54`. In each run, the first and replay generations were
+byte-identical. The retained structural records also match across runs:
+
+| Generator | Files | Stable tree SHA-256 |
+| --- | ---: | --- |
+| C# | 72 | `dd84a44c5b1a080d958b2461ad7338d2e6b2da410c3dcf61e451d87cb7f98a53` |
+| Go | 49 | `1d4832bacd07fc0ca00a5a278f3770a0073ff1692024cd159760185ceeb92907` |
+| Java | 72 | `25bf0fee4c4bec4e89ea7be66d25008d2b5bf092c99e8a000f497ca3ad30a5ff` |
+| Kotlin | 62 | `911b4df0f16d77fcfccf37b6c9d75cb1739e76473da18abdc1d90b5284fb95a4` |
+| Python | 60 | `3910c5a4346e9d5083a019d397196ed147bdb16820b69e411313e3a81bd1df3f` |
+| Rust | 47 | `826a032a51a52506b1e0e31a174e982a9d5ae1669c55d9aaff8cc62f6304df52` |
+| TypeScript Fetch | 42 | `2931b95440e21b9710a27addf7c1eeb6812e029550550878c5d2ecdbc43d8ae6` |
+
+Both records contain specification SHA-256
+`1dd72ea740209b89b26168452556794b96c805e5f231a3bbe273259e8adf66d8`,
+18 operations, 30 schemas, and credential-scope counts of 2 public, 11
+sandbox-owned, and 5 snapshot-owned operations. Both Python runtime records
+contain the same seven check names and no bearer credential value.
+
+Artifacts `8838973235` and `8839002111` retain the complete trees. Their
+archive digests are respectively
+`sha256:1d20ad923601d834b139a928272b6f07040967eb112faab75f3598d4eb22112d`
+and
+`sha256:b0d610a231d5899bfe61487aa3ce1b4aafd9ef05d06bd7b6ea7816cc66087e23`.
+The archives expire on 2026-10-31. Archive-level digests include per-run
+runtime evidence and packaging metadata; the language-tree hashes above are
+the reproducibility boundary.
 
 ## Current parity boundary
 

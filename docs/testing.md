@@ -49,6 +49,16 @@ seven-check runtime document, the generator manifest, the generated Python
 `uv.lock`, and all seven generated source trees. See
 [`openapi.md`](openapi.md) for the credential and supply-chain boundary.
 
+[Standard CI run 30766020434](https://github.com/nya-a-cat/ferrobox/actions/runs/30766020434)
+and independent
+[run 30766116507](https://github.com/nya-a-cat/ferrobox/actions/runs/30766116507)
+passed this gate at commit `9cb5c54`. Each run performed two byte-identical
+generations before the Python runtime test. Artifacts `8838973235` and
+`8839002111` retain complete hidden and visible generator output; their seven
+language file counts and tree hashes match across the two runs. The Python
+tree contains 60 retained source/metadata/lock files and no runtime bytecode or
+installation cache.
+
 ## KVM CI
 
 `.github/workflows/kvm.yml` requires `/dev/kvm`, builds the static guest and a

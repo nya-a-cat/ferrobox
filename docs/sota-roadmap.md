@@ -128,9 +128,15 @@ Snapshot KVM workflow enforces its separate conformance path.
 The implemented eighteen-operation HTTP surface now has one checked-in OpenAPI
 3.1 contract. Standard CI validates it with a digest-pinned official generator,
 emits seven language source trees, compares it with the Axum route set, and
-drives a generated Python client through the existing API. The OpenAPI and SDK
-rows remain Partial while stable language packages and the missing diagnostics,
-ingress, and richer egress endpoints are still outstanding.
+drives a generated Python client through the existing API. Runs
+[30766020434](https://github.com/nya-a-cat/ferrobox/actions/runs/30766020434)
+and
+[30766116507](https://github.com/nya-a-cat/ferrobox/actions/runs/30766116507)
+at commit `9cb5c54` independently produced equal file counts and tree hashes for
+all seven clients; each run also passed an internal byte-for-byte regeneration
+gate. The OpenAPI and SDK rows remain Partial. Stable language packages, six
+additional language runtime checks, diagnostics, ingress, and richer egress
+endpoints are outstanding.
 
 The four verified state-branching rows and the complete CLI snapshot surface
 are backed by

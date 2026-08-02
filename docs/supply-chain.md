@@ -123,6 +123,16 @@ The same workflow pins `astral-sh/setup-uv` v9.0.0 to full commit
 resolved with a fixed upload-date cutoff, locked before execution, and retained
 inside the OpenAPI evidence artifact.
 
+Standard CI runs
+[30766020434](https://github.com/nya-a-cat/ferrobox/actions/runs/30766020434)
+and
+[30766116507](https://github.com/nya-a-cat/ferrobox/actions/runs/30766116507)
+verified these pins at commit `9cb5c54`. The generator ran twice per job with
+byte-identical output, and the seven retained tree hashes matched across the
+two independent jobs. Artifacts `8838973235` and `8839002111` include hidden
+generator control files after a path-name review and omit Python runtime cache
+material.
+
 ## E2E provenance schema v1
 
 `scripts/generate-e2e-provenance.sh` emits
