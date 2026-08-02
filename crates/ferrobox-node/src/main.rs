@@ -403,6 +403,7 @@ async fn main() -> anyhow::Result<()> {
                                     "\nexcept Exception:",
                                     "\n print('resolv.conf=' + resolver, file=sys.stderr, flush=True)",
                                     "\n print('route=' + route, file=sys.stderr, flush=True)",
+                                    "\n print('addresses=' + repr(socket.getaddrinfo('example.com', 443)), file=sys.stderr, flush=True)",
                                     "\n raise",
                                     "\nassert response.status == 200; ",
                                     "query=bytes.fromhex('123401000001000000000000076578616d706c6503636f6d0000010001'); ",

@@ -9,7 +9,8 @@ Each Internet-enabled sandbox owns one network namespace, TAP, bridge, veth
 pair, `/24` subnet, and project-scoped nftables table. The guest receives
 `10.200.X.2`, uses `10.200.X.1` as its gateway, and receives the same gateway
 address as its only DNS server. Cleanup is keyed by sandbox ID and aborts DNS
-work before deleting the nftables table, veth, and namespace.
+work before deleting the nftables table, tagged host-forwarding rules, veth,
+and namespace.
 
 ## DNS boundary
 
@@ -33,7 +34,10 @@ The nftables input hook accepts guest traffic to the gateway only on UDP/TCP
 port 53 and rejects every other host destination. The forwarding hook rejects
 loopback, RFC1918, link-local and metadata, carrier-grade NAT, multicast,
 reserved, host-management, and other sandbox ranges. Remaining public IPv4
-traffic is allowed and source-NATed through the host.
+traffic is allowed and source-NATed through the host. Two rules carrying a
+`ferrobox:<sandbox>` comment admit that validated traffic through host FORWARD
+policies installed by container engines or cloud images. Exact-match deletion
+removes both rules with the sandbox.
 
 Resolver answers do not bypass the forwarding policy. A hostname resolving to
 a rejected address remains unreachable. FQDN allowlists, wildcard policy,
@@ -49,5 +53,6 @@ The hosted KVM job must prove all of the following in one run:
 - a wire-format query succeeds through TCP DNS;
 - the metadata endpoint remains unreachable;
 - deletion leaves no Firecracker process or Ferrobox network namespace;
+- deletion leaves no tagged Ferrobox host-forwarding rule;
 - failure evidence retains host resolver inputs, routes, interfaces, and the
   exact per-sandbox nftables table.

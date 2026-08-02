@@ -88,8 +88,9 @@ reports its outcome with every performance gate.
 The network gate requires the guest to receive its sandbox gateway as the only
 resolver, resolve and fetch public HTTPS through UDP DNS, complete an explicit
 wire-format TCP DNS query, reject the metadata endpoint, and clean up the VM
-and namespace. DNS therefore runs through the same host-originated relay path
-used on cloud-specific GitHub runners.
+and namespace. Cleanup also proves that no tagged host-forwarding rule remains.
+DNS runs through the same host-originated relay path used on cloud-specific
+GitHub runners.
 
 The HTTP artifact also retains a five-request concurrent burst with each
 request's latency and total wall time. Sequential and concurrent P95 must both

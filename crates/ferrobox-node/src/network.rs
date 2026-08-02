@@ -32,6 +32,7 @@ pub struct NetworkLease {
     pub dns_ipv4: String,
     host_veth: String,
     nft_table: String,
+    firewall_comment: String,
     #[cfg(target_os = "linux")]
     dns_relay: Option<DnsRelay>,
 }
@@ -69,6 +70,7 @@ impl NetworkManager {
         let host_veth = format!("fbh{short}");
         let peer_veth = format!("fbn{short}");
         let nft_table = format!("ferrobox_{short}");
+        let firewall_comment = format!("ferrobox:{short}");
         let gateway_ipv4 = Ipv4Addr::new(10, 200, octet, 1);
         let guest_ipv4 = Ipv4Addr::new(10, 200, octet, 2);
         let gateway = gateway_ipv4.to_string();
@@ -84,6 +86,7 @@ impl NetworkManager {
             dns_ipv4: gateway.clone(),
             host_veth: host_veth.clone(),
             nft_table: nft_table.clone(),
+            firewall_comment,
             dns_relay: None,
         };
 
@@ -166,6 +169,12 @@ impl NetworkManager {
             let _ = self.delete(&lease).await;
             return Err(error);
         }
+        for rule in iptables_forward_rules(true, &lease) {
+            if let Err(error) = run(&rule).await {
+                let _ = self.delete(&lease).await;
+                return Err(error);
+            }
+        }
         let relay_address = SocketAddr::from((gateway_ipv4, DNS_PORT));
         let upstreams = host_dns_upstreams().await;
         match DnsRelay::start(relay_address, guest_ipv4, upstreams).await {
@@ -183,6 +192,9 @@ impl NetworkManager {
         {
             if let Some(relay) = &lease.dns_relay {
                 relay.abort();
+            }
+            for rule in iptables_forward_rules(false, lease) {
+                let _ = run(&rule).await;
             }
             let _ = run(&[
                 "nft".into(),
@@ -209,6 +221,47 @@ impl NetworkManager {
         }
         Ok(())
     }
+}
+
+#[cfg(target_os = "linux")]
+fn iptables_forward_rules(insert: bool, lease: &NetworkLease) -> [Vec<String>; 2] {
+    let mut prefix = vec![
+        "iptables".into(),
+        "--wait".into(),
+        "5".into(),
+        (if insert { "-I" } else { "-D" }).into(),
+        "FORWARD".into(),
+    ];
+    if insert {
+        prefix.push("1".into());
+    }
+    let mut guest_to_host = prefix.clone();
+    guest_to_host.extend([
+        "-i".into(),
+        lease.host_veth.clone(),
+        "-m".into(),
+        "comment".into(),
+        "--comment".into(),
+        lease.firewall_comment.clone(),
+        "-j".into(),
+        "ACCEPT".into(),
+    ]);
+    let mut host_to_guest = prefix;
+    host_to_guest.extend([
+        "-o".into(),
+        lease.host_veth.clone(),
+        "-m".into(),
+        "conntrack".into(),
+        "--ctstate".into(),
+        "ESTABLISHED,RELATED".into(),
+        "-m".into(),
+        "comment".into(),
+        "--comment".into(),
+        lease.firewall_comment.clone(),
+        "-j".into(),
+        "ACCEPT".into(),
+    ]);
+    [guest_to_host, host_to_guest]
 }
 
 #[cfg(target_os = "linux")]

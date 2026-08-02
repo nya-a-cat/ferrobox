@@ -6,7 +6,8 @@ Ferrobox production mode requires an x86_64 Linux host with:
 
 - read/write access to `/dev/kvm`;
 - cgroup v2 with `cpu`, `memory`, `io`, and `pids` controllers;
-- `/dev/net/tun`, `ip`, and `nft`;
+- `/dev/net/tun`, `ip`, `nft`, and `iptables` with the comment and conntrack
+  extensions;
 - Firecracker and Jailer `1.16.1` from the pinned archive;
 - a root-owned guest kernel and Python rootfs manifest;
 - a dedicated unprivileged Firecracker UID and GID.

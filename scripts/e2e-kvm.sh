@@ -71,6 +71,8 @@ collect_network_diagnostics() {
                 nft list table "${family}" "${table}" || true
             fi
         done < <(nft list tables | awk '{print $2, $3}')
+        echo "host_forward_policy"
+        iptables --wait 5 -S FORWARD || true
         echo "network_namespaces"
         ip netns list
         while read -r namespace _; do
@@ -103,6 +105,10 @@ after_pids="$(pgrep -x firecracker || true)"
 if ip netns list | grep --quiet '^fb-'; then
     echo "Ferrobox network namespace leaked after E2E" >&2
     exit 3
+fi
+if iptables --wait 5 -S FORWARD | grep --quiet -- '--comment ferrobox:'; then
+    echo "Ferrobox forwarding rule leaked after E2E" >&2
+    exit 4
 fi
 
 printf 'Firecracker KVM E2E passed: %s\n' "${output}"

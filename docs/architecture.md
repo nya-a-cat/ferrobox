@@ -113,8 +113,10 @@ Internet mode gives the guest its per-sandbox gateway as the only resolver. A
 bounded node-side UDP/TCP relay originates requests through the host resolver
 path, supports host-local and cloud-specific resolvers, and never exposes those
 resolver addresses to the guest. The nftables input hook admits only DNS on the
-gateway and rejects all other guest-to-host traffic. The full contract is in
-[Network isolation and DNS relay](networking.md).
+gateway and rejects all other guest-to-host traffic. Tagged, exact-match
+FORWARD rules interoperate with host policies installed by container engines
+and are removed during sandbox cleanup. The full contract is in [Network
+isolation and DNS relay](networking.md).
 
 Host networking changes are ephemeral. The implementation never edits a
 persistent distribution firewall configuration.
