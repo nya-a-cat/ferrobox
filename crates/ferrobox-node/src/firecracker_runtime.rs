@@ -1554,7 +1554,8 @@ impl SandboxRuntime for FirecrackerRuntime {
                     #[cfg(feature = "fault-injection")]
                     if injected_failure_after == Some(handles.len()) {
                         for handle in &handles {
-                            let _ = <Self as SandboxRuntime>::delete(self, &handle.sandbox_id).await;
+                            let _ =
+                                <Self as SandboxRuntime>::delete(self, &handle.sandbox_id).await;
                         }
                         return Err(RuntimeError::internal("injected partial clone failure"));
                     }
