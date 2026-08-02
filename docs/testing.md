@@ -68,9 +68,12 @@ flattened rootfs, injects the static guest and init, creates an ext4 image, runs
 read-only `e2fsck`, and boots the result through the real HTTP/Firecracker path.
 
 The rootfs stage performs two independent builds from the digest-qualified
-registry reference. It fixes the e2fsprogs time, filesystem UUID, directory hash
-seed, locale, and lazy-initialization settings, then requires equal ext4 bytes
-and equal schema-2 deterministic fields. The retained
+registry reference. It builds the signed, checksum-pinned e2fsprogs 1.47.4
+source with libarchive, verifies tar-input reproducibility in a focused smoke
+gate, and materializes the injected rootfs as a sorted, fixed-time GNU tar with
+numeric ownership. It fixes the filesystem UUID, directory hash seed, locale,
+and lazy-initialization settings, then requires equal ext4 bytes and equal
+schema-3 deterministic fields. The retained
 `oci-rootfs-reproducibility.json` records both SHA-256 values, `cmp` status, and
 the complete ext4 identity used by the KVM test.
 
@@ -94,6 +97,17 @@ and
 All three retained the same source, manifest, flattened-rootfs, guest, init,
 Python-version, member-count, link-rewrite, and ten-check values. Their ext4
 byte hashes differ; all three report `e2fsck_read_only: true`.
+
+[Run 30771042568](https://github.com/nya-a-cat/ferrobox/actions/runs/30771042568)
+then exercised the first strict two-build gate with Ubuntu 24.04's e2fsprogs
+1.47.0. Both OCI materializations completed with equal configured fields, while
+the ext4 hashes were
+`38d7be2ac9b07822200da21145aa039d15355f433930c8948ae5dc921b47cdff`
+and
+`75e4df23361612612d973156277ecaeffc614e2fb7ac26193184af1e80b43fa0`.
+The workflow stopped before KVM at the byte-equality gate. Artifact `8840543144`
+retains both schema-2 records and the first differing-byte report. The pinned
+1.47.4 tar-input gate remains pending its first hosted result.
 
 [Standard CI run 30769681624](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681624)
 passed formatting, tests, Clippy, builds, process/CLI/OpenAPI conformance, and

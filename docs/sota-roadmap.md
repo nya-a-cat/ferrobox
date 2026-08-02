@@ -153,10 +153,14 @@ post-resume execution, credential redaction, and resource cleanup.
 
 The three original generated ext4 files have distinct SHA-256 values because
 their filesystem metadata was generated per run. Every image passed read-only
-`e2fsck` and the same microVM contract. The current builder fixes every known
-e2fsprogs time, UUID, directory-seed, locale, and lazy-initialization input, and
-the OCI workflow now requires two full builds to be byte-identical before KVM
-boot. This reproducibility gate remains pending until a hosted run passes.
+`e2fsck` and the same microVM contract. Strict run
+[30771042568](https://github.com/nya-a-cat/ferrobox/actions/runs/30771042568)
+confirmed that GitHub Ubuntu 24.04's e2fsprogs 1.47.0 still emitted different
+bytes after all exposed directory-input parameters were fixed. The current
+workflow builds signed, checksum-pinned e2fsprogs 1.47.4 with libarchive,
+normalizes the injected tree into a sorted fixed-time tar, imports that tar
+directly, and requires two complete builds to be byte-identical before KVM boot.
+This revised reproducibility gate remains pending until a hosted run passes.
 Private-registry authentication and a public image-selection API remain open.
 
 The four verified state-branching rows and the complete CLI snapshot surface

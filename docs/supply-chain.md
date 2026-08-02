@@ -132,18 +132,32 @@ flattened tar SHA-256
 and extraction counts. Those runs exposed per-run ext4 metadata as the
 remaining byte-reproducibility gap.
 
-The ext4 builder now derives its filesystem UUID and directory hash seed from
-the flattened-rootfs, guest, init, size, and source-date identities. It uses the
-OCI config `created` timestamp as a positive epoch, records a fixed 2000-01-01
-fallback for configs without that field, sets both the e2fsprogs 1.47.0 fake
-time and standard source-date environment, fixes `LC_ALL=C`, and disables lazy
-inode-table and journal initialization. The workflow performs two complete OCI
-pull, extraction, injection, and ext4 builds, requires byte-for-byte equality,
-and retains both schema-2 build records plus a separate reproducibility record.
-Read-only `e2fsck` and the real KVM lifecycle remain mandatory after this gate.
-The relevant upstream controls are documented in
-[mke2fs(8)](https://man7.org/linux/man-pages/man8/mke2fs.8.html) and the
-[e2fsprogs 1.47.1 source-date release note](https://github.com/tytso/e2fsprogs/blob/v1.47.1/doc/RelNotes/v1.47.1.txt).
+`scripts/build-e2fsprogs.sh` builds e2fsprogs 1.47.4 from the official kernel.org
+release archive at tag target
+`7ee1d505ef3b37831215f490411f346fe57e9053`. The archive size is 7,337,236 bytes
+and its SHA-256 is
+`fd5bf388cbdbe006a3d3b318d983b2948382440acc85a87f1e7d108653e8db0b`.
+The script verifies the clear-signed published checksum with exact signer
+fingerprint `B8868C80BA62A1FFFAF5FDA9632D3A06589DA6B1`, safely extracts the source,
+forces direct libarchive support, and records compiler, library, binary,
+configuration, signature, extraction, and build evidence. A focused smoke gate
+imports the same fixed tar twice, requires equal ext4 bytes, checks the image
+read-only, and reads the imported fixture through the newly built `debugfs`.
+
+The rootfs builder turns the fully injected tree into a GNU tar with lexical
+name ordering, numeric UID/GID fields, and the selected source-date timestamp.
+It derives the filesystem UUID and directory hash seed from that tar identity,
+sets `SOURCE_DATE_EPOCH` and `E2FSPROGS_FAKE_TIME`, fixes `LC_ALL=C`, and disables
+lazy inode-table and journal initialization. `mke2fs -d` consumes the tar
+directly. The workflow performs two complete OCI pull, extraction, injection,
+tar, and ext4 builds; it requires byte equality and equal schema-3 deterministic
+records. Read-only `e2fsck` and the real KVM lifecycle remain mandatory after
+this gate. The controls follow the
+[Reproducible Builds system-image guidance](https://reproducible-builds.org/docs/system-images/),
+the upstream
+[mke2fs tar-input contract](https://github.com/tytso/e2fsprogs/blob/v1.47.4/misc/mke2fs.8.in),
+and the
+[e2fsprogs 1.47.4 release directory](https://mirrors.edge.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v1.47.4/).
 
 ## SBOM generator
 

@@ -12,6 +12,7 @@ on:
       - crates/ferrobox-guest/**
       - crates/ferrobox-node/**
       - crates/ferrobox-protocol/**
+      - scripts/build-e2fsprogs.sh
       - scripts/build-oci-rootfs.sh
       - scripts/e2e-oci-kvm.sh
       - patches/go-containerregistry-v0.21.8-root-directory.patch
@@ -55,10 +56,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes \
             btrfs-progs \
-            e2fsprogs \
+            build-essential \
+            gnupg \
             jq \
+            libarchive-dev \
             musl-tools \
             patch \
+            pkg-config \
+            xz-utils \
             protobuf-compiler
 
       - name: Verify hardened tar extraction
@@ -120,9 +125,28 @@ jobs:
       - name: Build verified patched crane
         run: bash scripts/build-crane.sh "${RUNNER_TEMP}/crane"
 
-      - name: Build digest-verified reproducible OCI rootfs
+      - name: Build verified reproducible e2fsprogs
         run: |
-          sudo --preserve-env=FERROBOX_OCI_IMAGE,FERROBOX_OCI_PLATFORM \
+          bash scripts/build-e2fsprogs.sh "${RUNNER_TEMP}/e2fsprogs"
+          grep --fixed-strings --line-regexp \
+            'upstream_version=1.47.4' \
+            "${RUNNER_TEMP}/e2fsprogs/SOURCE.manifest"
+          grep --fixed-strings --line-regexp \
+            'published_signature_verified=true' \
+            "${RUNNER_TEMP}/e2fsprogs/SOURCE.manifest"
+          grep --fixed-strings --line-regexp \
+            'tar_input_byte_reproducible_twice=true' \
+            "${RUNNER_TEMP}/e2fsprogs/SOURCE.manifest"
+
+      - name: Build digest-verified reproducible OCI rootfs
+        env:
+          FERROBOX_DUMPE2FS: ${{ runner.temp }}/e2fsprogs/bin/dumpe2fs
+          FERROBOX_E2FSCK: ${{ runner.temp }}/e2fsprogs/bin/e2fsck
+          FERROBOX_E2FSPROGS_MANIFEST: ${{ runner.temp }}/e2fsprogs/SOURCE.manifest
+          FERROBOX_MKE2FS_CONFIG: ${{ runner.temp }}/e2fsprogs/etc/mke2fs.conf
+          FERROBOX_MKFS_EXT4: ${{ runner.temp }}/e2fsprogs/bin/mke2fs
+        run: |
+          sudo --preserve-env=FERROBOX_OCI_IMAGE,FERROBOX_OCI_PLATFORM,FERROBOX_DUMPE2FS,FERROBOX_E2FSCK,FERROBOX_E2FSPROGS_MANIFEST,FERROBOX_MKE2FS_CONFIG,FERROBOX_MKFS_EXT4 \
             bash scripts/build-oci-rootfs.sh \
               "${RUNNER_TEMP}/crane/crane" \
               "${FERROBOX_OCI_IMAGE}" \
@@ -130,7 +154,7 @@ jobs:
               target/x86_64-unknown-linux-musl/release/ferrobox-guest \
               "${RUNNER_TEMP}/oci-python.ext4" \
               "${RUNNER_TEMP}/oci-rootfs-evidence"
-          sudo --preserve-env=FERROBOX_OCI_IMAGE,FERROBOX_OCI_PLATFORM \
+          sudo --preserve-env=FERROBOX_OCI_IMAGE,FERROBOX_OCI_PLATFORM,FERROBOX_DUMPE2FS,FERROBOX_E2FSCK,FERROBOX_E2FSPROGS_MANIFEST,FERROBOX_MKE2FS_CONFIG,FERROBOX_MKFS_EXT4 \
             bash scripts/build-oci-rootfs.sh \
               "${RUNNER_TEMP}/crane/crane" \
               "${FERROBOX_OCI_IMAGE}" \
@@ -143,7 +167,7 @@ jobs:
             "${RUNNER_TEMP}/oci-python-rebuild.ext4"
           jq --exit-status \
             --arg image "${FERROBOX_OCI_IMAGE}" '
-              .schema_version == 2 and
+              .schema_version == 3 and
               .image_reference == $image and
               .platform == "linux/amd64" and
               .source.digest == ($image | split("@") | last) and
@@ -157,6 +181,11 @@ jobs:
               .flattened_rootfs.size > 0 and
               .flattened_rootfs.extraction.member_count > 0 and
               .flattened_rootfs.extraction.absolute_symbolic_links_rewritten > 0 and
+              .materialized_rootfs.size > 0 and
+              .materialized_rootfs.archive_format == "gnu-tar" and
+              .materialized_rootfs.sorted_by_name == true and
+              .materialized_rootfs.numeric_owner == true and
+              .materialized_rootfs.mtime_epoch > 0 and
               .ferrobox_injection.command_uid == 1000 and
               .ferrobox_injection.command_gid == 1000 and
               .ext4.size >= 1073741824 and
@@ -167,7 +196,12 @@ jobs:
               (.ext4.directory_hash_seed | test("^[0-9a-f-]{36}$")) and
               .ext4.lazy_itable_init == false and
               .ext4.lazy_journal_init == false and
-              (.ext4.mkfs_version | contains("mke2fs"))
+              (.ext4.mkfs_version | contains("mke2fs 1.47.4")) and
+              (.ext4.toolchain.mke2fs_sha256 | test("^[0-9a-f]{64}$")) and
+              (.ext4.toolchain.e2fsck_sha256 | test("^[0-9a-f]{64}$")) and
+              (.ext4.toolchain.dumpe2fs_sha256 | test("^[0-9a-f]{64}$")) and
+              (.ext4.toolchain.mke2fs_config_sha256 | test("^[0-9a-f]{64}$")) and
+              (.ext4.toolchain.source_manifest_sha256 | test("^[0-9a-f]{64}$"))
             ' "${RUNNER_TEMP}/oci-rootfs-evidence/oci-rootfs-evidence.json" \
             >/dev/null
           first_sha256="$(sha256sum "${RUNNER_TEMP}/oci-python.ext4" | awk '{print $1}')"
@@ -193,9 +227,10 @@ jobs:
                 cmp_detail: $cmp_detail,
                 byte_identical: ($cmp_status == 0 and $first_sha256 == $second_sha256),
                 deterministic_fields_equal: (
-                  $first[0].schema_version == 2 and
-                  $second[0].schema_version == 2 and
+                  $first[0].schema_version == 3 and
+                  $second[0].schema_version == 3 and
                   $first[0].flattened_rootfs.sha256 == $second[0].flattened_rootfs.sha256 and
+                  $first[0].materialized_rootfs == $second[0].materialized_rootfs and
                   $first[0].ferrobox_injection == $second[0].ferrobox_injection and
                   $first[0].ext4 == $second[0].ext4
                 ),
@@ -277,6 +312,16 @@ jobs:
             ${{ runner.temp }}/crane/PATCH-APPLY.log
             ${{ runner.temp }}/crane/SOURCE-EXTRACTION.json
             ${{ runner.temp }}/crane/SOURCE.manifest
+            ${{ runner.temp }}/e2fsprogs/BUILD.log
+            ${{ runner.temp }}/e2fsprogs/CONFIGURE.log
+            ${{ runner.temp }}/e2fsprogs/GPG-IMPORT.log
+            ${{ runner.temp }}/e2fsprogs/GPG-STATUS.log
+            ${{ runner.temp }}/e2fsprogs/GPG-VERIFY.log
+            ${{ runner.temp }}/e2fsprogs/LDD.log
+            ${{ runner.temp }}/e2fsprogs/MKE2FS-VERSION.txt
+            ${{ runner.temp }}/e2fsprogs/SMOKE-E2FSCK.log
+            ${{ runner.temp }}/e2fsprogs/SOURCE-EXTRACTION.json
+            ${{ runner.temp }}/e2fsprogs/SOURCE.manifest
             ${{ runner.temp }}/oci-kernel.manifest
             ${{ runner.temp }}/oci-rootfs-evidence
             ${{ runner.temp }}/oci-rootfs-rebuild-evidence

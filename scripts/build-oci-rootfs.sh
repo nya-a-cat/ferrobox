@@ -14,13 +14,48 @@ output_image="${5:?usage: build-oci-rootfs.sh CRANE IMAGE PLATFORM GUEST OUTPUT_
 evidence_dir="${6:?usage: build-oci-rootfs.sh CRANE IMAGE PLATFORM GUEST OUTPUT_EXT4 EVIDENCE_DIR}"
 expected_platform_digest="${FERROBOX_OCI_EXPECTED_MANIFEST_DIGEST:-}"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+mkfs_ext4="${FERROBOX_MKFS_EXT4:-}"
+e2fsck="${FERROBOX_E2FSCK:-}"
+dumpe2fs="${FERROBOX_DUMPE2FS:-}"
+mke2fs_config="${FERROBOX_MKE2FS_CONFIG:-}"
+e2fsprogs_manifest="${FERROBOX_E2FSPROGS_MANIFEST:-}"
+
+if [[ -z "${mkfs_ext4}" ]]; then
+    mkfs_ext4="$(command -v mkfs.ext4)"
+fi
+if [[ -z "${e2fsck}" ]]; then
+    e2fsck="$(command -v e2fsck)"
+fi
+if [[ -z "${dumpe2fs}" ]]; then
+    dumpe2fs="$(command -v dumpe2fs)"
+fi
 
 crane="$(realpath "${crane}")"
 guest_binary="$(realpath "${guest_binary}")"
 output_image="$(realpath -m "${output_image}")"
 evidence_dir="$(realpath -m "${evidence_dir}")"
+mkfs_ext4="$(realpath "${mkfs_ext4}")"
+e2fsck="$(realpath "${e2fsck}")"
+dumpe2fs="$(realpath "${dumpe2fs}")"
 [[ -x "${crane}" ]] || { echo "crane is missing or not executable" >&2; exit 3; }
 [[ -x "${guest_binary}" ]] || { echo "guest binary is missing or not executable" >&2; exit 3; }
+[[ -x "${mkfs_ext4}" ]] || { echo "mke2fs is missing or not executable" >&2; exit 3; }
+[[ -x "${e2fsck}" ]] || { echo "e2fsck is missing or not executable" >&2; exit 3; }
+[[ -x "${dumpe2fs}" ]] || { echo "dumpe2fs is missing or not executable" >&2; exit 3; }
+if [[ -n "${mke2fs_config}" ]]; then
+    [[ -f "${mke2fs_config}" && ! -L "${mke2fs_config}" ]] || {
+        echo "mke2fs config must be a regular, non-symlink file" >&2
+        exit 3
+    }
+    mke2fs_config="$(realpath "${mke2fs_config}")"
+fi
+if [[ -n "${e2fsprogs_manifest}" ]]; then
+    [[ -f "${e2fsprogs_manifest}" && ! -L "${e2fsprogs_manifest}" ]] || {
+        echo "e2fsprogs manifest must be a regular, non-symlink file" >&2
+        exit 3
+    }
+    e2fsprogs_manifest="$(realpath "${e2fsprogs_manifest}")"
+fi
 [[ "${platform}" == "linux/amd64" ]] || { echo "only linux/amd64 is supported" >&2; exit 3; }
 [[ "${image_reference}" != *://* && "${image_reference}" != *[[:space:]]* ]] || {
     echo "image reference must be a registry reference without a URL scheme" >&2
@@ -45,9 +80,14 @@ if [[ -e "${output_image}" || -e "${evidence_dir}" ]]; then
     exit 3
 fi
 
-for executable in jq python3 sha256sum stat mkfs.ext4 e2fsck dumpe2fs realpath; do
+for executable in env jq python3 realpath sha256sum stat tar truncate; do
     command -v "${executable}" >/dev/null
 done
+tar_version="$(tar --version | head -n 1)"
+[[ "${tar_version}" == "tar (GNU tar)"* ]] || {
+    echo "GNU tar is required for deterministic rootfs ordering" >&2
+    exit 3
+}
 
 staging="$(mktemp -d)"
 partial_image="${output_image}.partial-$$"
@@ -290,13 +330,26 @@ fi
     exit 5
 }
 
-reproducibility_material="${rootfs_tar_sha256}:${guest_sha256}:${init_sha256}:${image_bytes}:${source_date_epoch}"
+materialized_rootfs_tar="${staging}/materialized-rootfs.tar"
+LC_ALL=C tar \
+    --create \
+    --file="${materialized_rootfs_tar}" \
+    --format=gnu \
+    --mtime="@${source_date_epoch}" \
+    --numeric-owner \
+    --sort=name \
+    --directory="${rootfs}" \
+    .
+materialized_rootfs_sha256="$(sha256sum "${materialized_rootfs_tar}" | awk '{print $1}')"
+materialized_rootfs_size="$(stat --format '%s' "${materialized_rootfs_tar}")"
+
+reproducibility_material="${materialized_rootfs_sha256}:${image_bytes}:${source_date_epoch}"
 mapfile -t reproducible_uuids < <(python3 - "${reproducibility_material}" <<'PY'
 import sys
 import uuid
 
 material = sys.argv[1]
-base = "https://github.com/nya-a-cat/ferrobox/oci-rootfs/v1/"
+base = "https://github.com/nya-a-cat/ferrobox/oci-rootfs/v2/"
 print(uuid.uuid5(uuid.NAMESPACE_URL, base + material))
 print(uuid.uuid5(uuid.NAMESPACE_URL, base + material + "/directory-hash"))
 PY
@@ -309,24 +362,40 @@ directory_hash_seed="${reproducible_uuids[1]}"
 
 install -d -m 0755 "$(dirname -- "${output_image}")" "$(dirname -- "${evidence_dir}")"
 truncate --size "${image_bytes}" "${partial_image}"
+mkfs_environment=(
+    "LC_ALL=C"
+    "SOURCE_DATE_EPOCH=${source_date_epoch}"
+    "E2FSPROGS_FAKE_TIME=${source_date_epoch}"
+)
+if [[ -n "${mke2fs_config}" ]]; then
+    mkfs_environment+=("MKE2FS_CONFIG=${mke2fs_config}")
+fi
 {
-    mkfs.ext4 -V
+    env "${mkfs_environment[@]}" "${mkfs_ext4}" -V
 } >"${staging}/evidence/mkfs-version.txt" 2>&1
-LC_ALL=C \
-SOURCE_DATE_EPOCH="${source_date_epoch}" \
-E2FSPROGS_FAKE_TIME="${source_date_epoch}" \
-mkfs.ext4 -q -F \
+env "${mkfs_environment[@]}" "${mkfs_ext4}" -q -F -t ext4 \
     -L ferrobox-oci \
     -U "${filesystem_uuid}" \
     -E "hash_seed=${directory_hash_seed},lazy_itable_init=0,lazy_journal_init=0" \
-    -d "${rootfs}" \
+    -d "${materialized_rootfs_tar}" \
     "${partial_image}"
-e2fsck -fn "${partial_image}" >"${staging}/evidence/e2fsck.txt"
-dumpe2fs -h "${partial_image}" >"${staging}/evidence/dumpe2fs.txt" 2>&1
+"${e2fsck}" -fn "${partial_image}" >"${staging}/evidence/e2fsck.txt"
+"${dumpe2fs}" -h "${partial_image}" >"${staging}/evidence/dumpe2fs.txt" 2>&1
 
 rootfs_sha256="$(sha256sum "${partial_image}" | awk '{print $1}')"
 crane_version="$("${crane}" version)"
 mkfs_version="$(cat "${staging}/evidence/mkfs-version.txt")"
+mkfs_sha256="$(sha256sum "${mkfs_ext4}" | awk '{print $1}')"
+e2fsck_sha256="$(sha256sum "${e2fsck}" | awk '{print $1}')"
+dumpe2fs_sha256="$(sha256sum "${dumpe2fs}" | awk '{print $1}')"
+mke2fs_config_sha256=""
+e2fsprogs_manifest_sha256=""
+if [[ -n "${mke2fs_config}" ]]; then
+    mke2fs_config_sha256="$(sha256sum "${mke2fs_config}" | awk '{print $1}')"
+fi
+if [[ -n "${e2fsprogs_manifest}" ]]; then
+    e2fsprogs_manifest_sha256="$(sha256sum "${e2fsprogs_manifest}" | awk '{print $1}')"
+fi
 jq -n \
     --arg image_reference "${image_reference}" \
     --arg platform "${platform}" \
@@ -344,6 +413,9 @@ jq -n \
     --arg image_created "${image_created}" \
     --arg rootfs_tar_sha256 "${rootfs_tar_sha256}" \
     --argjson rootfs_tar_size "${rootfs_tar_size}" \
+    --arg materialized_rootfs_sha256 "${materialized_rootfs_sha256}" \
+    --argjson materialized_rootfs_size "${materialized_rootfs_size}" \
+    --arg tar_version "${tar_version}" \
     --arg guest_sha256 "${guest_sha256}" \
     --arg init_sha256 "${init_sha256}" \
     --arg rootfs_sha256 "${rootfs_sha256}" \
@@ -353,11 +425,16 @@ jq -n \
     --arg filesystem_uuid "${filesystem_uuid}" \
     --arg directory_hash_seed "${directory_hash_seed}" \
     --arg mkfs_version "${mkfs_version}" \
+    --arg mkfs_sha256 "${mkfs_sha256}" \
+    --arg e2fsck_sha256 "${e2fsck_sha256}" \
+    --arg dumpe2fs_sha256 "${dumpe2fs_sha256}" \
+    --arg mke2fs_config_sha256 "${mke2fs_config_sha256}" \
+    --arg e2fsprogs_manifest_sha256 "${e2fsprogs_manifest_sha256}" \
     --slurpfile config "${staging}/evidence/image-config.json" \
     --slurpfile layers "${staging}/evidence/layers.json" \
     --slurpfile extraction "${staging}/evidence/extraction.json" \
     '{
-        schema_version: 2,
+        schema_version: 3,
         image_reference: $image_reference,
         platform: $platform,
         source: {
@@ -391,6 +468,15 @@ jq -n \
             size: $rootfs_tar_size,
             extraction: $extraction[0]
         },
+        materialized_rootfs: {
+            sha256: $materialized_rootfs_sha256,
+            size: $materialized_rootfs_size,
+            archive_format: "gnu-tar",
+            sorted_by_name: true,
+            numeric_owner: true,
+            mtime_epoch: ($source_date_epoch | tonumber),
+            tar_version: $tar_version
+        },
         ferrobox_injection: {
             command_uid: 1000,
             command_gid: 1000,
@@ -408,7 +494,18 @@ jq -n \
             directory_hash_seed: $directory_hash_seed,
             lazy_itable_init: false,
             lazy_journal_init: false,
-            mkfs_version: $mkfs_version
+            mkfs_version: $mkfs_version,
+            toolchain: {
+                mke2fs_sha256: $mkfs_sha256,
+                e2fsck_sha256: $e2fsck_sha256,
+                dumpe2fs_sha256: $dumpe2fs_sha256,
+                mke2fs_config_sha256: (
+                    if $mke2fs_config_sha256 == "" then null else $mke2fs_config_sha256 end
+                ),
+                source_manifest_sha256: (
+                    if $e2fsprogs_manifest_sha256 == "" then null else $e2fsprogs_manifest_sha256 end
+                )
+            }
         }
     }' >"${staging}/evidence/oci-rootfs-evidence.json"
 
