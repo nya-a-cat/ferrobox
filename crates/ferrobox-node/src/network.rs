@@ -240,9 +240,7 @@ fn ipv4_nameservers(contents: &str) -> Vec<Ipv4Addr> {
         .filter_map(|line| line.split_whitespace().nth(1))
         .filter_map(|value| value.parse::<std::net::Ipv4Addr>().ok())
         .filter(|address| {
-            !address.is_unspecified()
-                && !address.is_multicast()
-                && *address != Ipv4Addr::BROADCAST
+            !address.is_unspecified() && !address.is_multicast() && *address != Ipv4Addr::BROADCAST
         })
         .collect()
 }
