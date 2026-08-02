@@ -26,6 +26,15 @@ for required in \
     'ferrobox list' \
     'ferrobox pause' \
     'ferrobox resume' \
+    'ferrobox snapshot create' \
+    'ferrobox snapshot list' \
+    'ferrobox snapshot inspect' \
+    'ferrobox snapshot verify' \
+    'ferrobox snapshot restore' \
+    'ferrobox snapshot clone' \
+    'ferrobox snapshot rollback' \
+    'ferrobox snapshot delete' \
+    'FERROBOX_SNAPSHOT_TOKEN' \
     'ferrobox delete' \
     'unset FERROBOX_TOKEN FERROBOX_SANDBOX_ID'; do
     grep --fixed-strings --quiet "${required}" "${skill}"

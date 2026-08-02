@@ -5,6 +5,25 @@ running-state semantics with Microsandbox's named, independently managed,
 integrity-verifiable snapshot artifacts. The comparison baseline is pinned in
 [`sota-roadmap.md`](sota-roadmap.md).
 
+## CLI surface
+
+The Rust CLI exposes every snapshot endpoint through one command group:
+
+```text
+ferrobox snapshot create <sandbox-id> [--name <name>]
+ferrobox snapshot list <sandbox-id> [--limit <1-100>] [--cursor <snapshot-id>]
+ferrobox snapshot inspect <snapshot-id>
+ferrobox snapshot verify <snapshot-id>
+ferrobox snapshot restore <snapshot-id> [--ttl <seconds>]
+ferrobox snapshot clone <snapshot-id> --count <1-32> [--ttl <seconds>]
+ferrobox snapshot rollback <sandbox-id> <snapshot-id>
+ferrobox snapshot delete <snapshot-id>
+```
+
+Source operations read `FERROBOX_TOKEN`. Snapshot-owned operations read
+`FERROBOX_SNAPSHOT_TOKEN`. Restore and clone responses contain new sandbox
+tokens that callers capture and clean up independently.
+
 ## Consistency point
 
 A full snapshot contains Firecracker memory and device state plus the writable

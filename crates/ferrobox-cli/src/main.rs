@@ -83,9 +83,70 @@ enum Command {
         #[arg(long, env = "FERROBOX_TOKEN")]
         token: String,
     },
+    Snapshot {
+        #[command(subcommand)]
+        command: SnapshotCommand,
+    },
     Delete {
         sandbox_id: String,
         #[arg(long, env = "FERROBOX_TOKEN")]
+        token: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum SnapshotCommand {
+    Create {
+        sandbox_id: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long, env = "FERROBOX_TOKEN")]
+        token: String,
+    },
+    List {
+        sandbox_id: String,
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
+        #[arg(long)]
+        cursor: Option<String>,
+        #[arg(long, env = "FERROBOX_TOKEN")]
+        token: String,
+    },
+    Inspect {
+        snapshot_id: String,
+        #[arg(long, env = "FERROBOX_SNAPSHOT_TOKEN")]
+        token: String,
+    },
+    Verify {
+        snapshot_id: String,
+        #[arg(long, env = "FERROBOX_SNAPSHOT_TOKEN")]
+        token: String,
+    },
+    Restore {
+        snapshot_id: String,
+        #[arg(long, default_value_t = 300)]
+        ttl: u64,
+        #[arg(long, env = "FERROBOX_SNAPSHOT_TOKEN")]
+        token: String,
+    },
+    Clone {
+        snapshot_id: String,
+        #[arg(long)]
+        count: u8,
+        #[arg(long, default_value_t = 300)]
+        ttl: u64,
+        #[arg(long, env = "FERROBOX_SNAPSHOT_TOKEN")]
+        token: String,
+    },
+    Rollback {
+        sandbox_id: String,
+        snapshot_id: String,
+        #[arg(long, env = "FERROBOX_TOKEN")]
+        token: String,
+    },
+    Delete {
+        snapshot_id: String,
+        #[arg(long, env = "FERROBOX_SNAPSHOT_TOKEN")]
         token: String,
     },
 }
@@ -244,6 +305,9 @@ async fn main() -> anyhow::Result<()> {
             ensure_success(response).await?;
             println!("resumed {sandbox_id}");
         }
+        Command::Snapshot { command } => {
+            handle_snapshot(&client, base, command).await?;
+        }
         Command::Delete { sandbox_id, token } => {
             let response = authorized(
                 &client,
@@ -255,6 +319,138 @@ async fn main() -> anyhow::Result<()> {
             .await?;
             ensure_success(response).await?;
             println!("deleted {sandbox_id}");
+        }
+    }
+    Ok(())
+}
+
+async fn handle_snapshot(
+    client: &Client,
+    base: &str,
+    command: SnapshotCommand,
+) -> anyhow::Result<()> {
+    match command {
+        SnapshotCommand::Create {
+            sandbox_id,
+            name,
+            token,
+        } => {
+            let response = authorized(
+                client,
+                Method::POST,
+                format!("{base}/v1/sandboxes/{sandbox_id}/snapshots"),
+                &token,
+            )
+            .json(&json!({ "name": name }))
+            .send()
+            .await?;
+            print_json(ensure_success(response).await?).await?;
+        }
+        SnapshotCommand::List {
+            sandbox_id,
+            limit,
+            cursor,
+            token,
+        } => {
+            let mut query = vec![("limit", limit.to_string())];
+            if let Some(cursor) = cursor {
+                query.push(("cursor", cursor));
+            }
+            let response = authorized(
+                client,
+                Method::GET,
+                format!("{base}/v1/sandboxes/{sandbox_id}/snapshots"),
+                &token,
+            )
+            .query(&query)
+            .send()
+            .await?;
+            print_json(ensure_success(response).await?).await?;
+        }
+        SnapshotCommand::Inspect { snapshot_id, token } => {
+            let response = authorized(
+                client,
+                Method::GET,
+                format!("{base}/v1/snapshots/{snapshot_id}"),
+                &token,
+            )
+            .send()
+            .await?;
+            print_json(ensure_success(response).await?).await?;
+        }
+        SnapshotCommand::Verify { snapshot_id, token } => {
+            let response = authorized(
+                client,
+                Method::POST,
+                format!("{base}/v1/snapshots/{snapshot_id}/verify"),
+                &token,
+            )
+            .send()
+            .await?;
+            print_json(ensure_success(response).await?).await?;
+        }
+        SnapshotCommand::Restore {
+            snapshot_id,
+            ttl,
+            token,
+        } => {
+            let response = authorized(
+                client,
+                Method::POST,
+                format!("{base}/v1/snapshots/{snapshot_id}/restore"),
+                &token,
+            )
+            .json(&json!({ "timeout_seconds": ttl }))
+            .send()
+            .await?;
+            print_json(ensure_success(response).await?).await?;
+        }
+        SnapshotCommand::Clone {
+            snapshot_id,
+            count,
+            ttl,
+            token,
+        } => {
+            let response = authorized(
+                client,
+                Method::POST,
+                format!("{base}/v1/snapshots/{snapshot_id}/clones"),
+                &token,
+            )
+            .json(&json!({
+                "count": count,
+                "timeout_seconds": ttl
+            }))
+            .send()
+            .await?;
+            print_json(ensure_success(response).await?).await?;
+        }
+        SnapshotCommand::Rollback {
+            sandbox_id,
+            snapshot_id,
+            token,
+        } => {
+            let response = authorized(
+                client,
+                Method::POST,
+                format!("{base}/v1/sandboxes/{sandbox_id}/rollback/{snapshot_id}"),
+                &token,
+            )
+            .send()
+            .await?;
+            print_json(ensure_success(response).await?).await?;
+        }
+        SnapshotCommand::Delete { snapshot_id, token } => {
+            let response = authorized(
+                client,
+                Method::DELETE,
+                format!("{base}/v1/snapshots/{snapshot_id}"),
+                &token,
+            )
+            .send()
+            .await?;
+            ensure_success(response).await?;
+            println!("deleted snapshot {snapshot_id}");
         }
     }
     Ok(())

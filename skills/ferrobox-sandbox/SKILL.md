@@ -95,6 +95,43 @@ ferrobox inspect "${FERROBOX_SANDBOX_ID}"
 
 Do not retry workload execution while the state is paused, pausing, resuming, failed, or deleting.
 
+## Snapshot, restore, clone, and rollback
+
+Create a live checkpoint and retain its separate credential without printing it:
+
+```bash
+set +x
+snapshot_json="$(ferrobox snapshot create "${FERROBOX_SANDBOX_ID}" --name before-change)"
+export FERROBOX_SNAPSHOT_ID="$(jq -er '.snapshot_id' <<<"${snapshot_json}")"
+export FERROBOX_SNAPSHOT_TOKEN="$(jq -er '.token' <<<"${snapshot_json}")"
+unset snapshot_json
+```
+
+Inspect the source-owned index and verify snapshot integrity:
+
+```bash
+ferrobox snapshot list "${FERROBOX_SANDBOX_ID}" --limit 50
+ferrobox snapshot inspect "${FERROBOX_SNAPSHOT_ID}"
+ferrobox snapshot verify "${FERROBOX_SNAPSHOT_ID}"
+```
+
+Choose the state-branching operation that matches the task:
+
+```bash
+ferrobox snapshot rollback "${FERROBOX_SANDBOX_ID}" "${FERROBOX_SNAPSHOT_ID}"
+ferrobox snapshot restore "${FERROBOX_SNAPSHOT_ID}" --ttl 300
+ferrobox snapshot clone "${FERROBOX_SNAPSHOT_ID}" --count 2 --ttl 300
+```
+
+Rollback keeps the source sandbox identity and token. Restore returns one new sandbox ID and token. Clone returns a token for every new sandbox. Capture every returned create response without printing it and delete every new sandbox after use.
+
+Delete the snapshot with its snapshot-scoped token:
+
+```bash
+ferrobox snapshot delete "${FERROBOX_SNAPSHOT_ID}"
+unset FERROBOX_SNAPSHOT_TOKEN FERROBOX_SNAPSHOT_ID
+```
+
 ## Cleanup
 
 Delete the exact sandbox created for the task, then remove credentials from the environment:

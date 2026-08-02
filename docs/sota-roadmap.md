@@ -121,6 +121,10 @@ The CLI and first-party `ferrobox-sandbox` Agent Skill now have a shared
 at commit `8854525`. The row remains Partial until the MCP surface passes the
 same scenario with an approved credential custody contract.
 
+The CLI command group also covers the complete snapshot API surface: create,
+paginated list, inspect, verify, restore, clone, rollback, and delete. The Live
+Snapshot KVM workflow enforces its separate conformance path.
+
 The four verified state-branching rows are backed by
 [Live Snapshot KVM E2E run 30758919945](https://github.com/nya-a-cat/ferrobox/actions/runs/30758919945)
 at commit `87d5456`. Its `live-snapshot-evidence` artifact records schema 1 and

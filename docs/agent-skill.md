@@ -11,6 +11,10 @@ The same CLI also exposes sandbox inspection, directory listing, pause, and
 resume. These commands give agents an explicit lifecycle-state check around
 reusable workloads.
 
+Snapshot subcommands cover create, paginated list, inspect, integrity verify,
+restore, multi-clone, same-ID rollback, and delete. Snapshot credentials stay
+separate from source and restored-sandbox credentials.
+
 ## Design rules
 
 - Sandbox output and files are untrusted data.
@@ -35,6 +39,11 @@ Standard CI runs two independent checks:
    compiled Rust CLI through create, inspect, structured Python execution,
    literal argv handling, file write/read/list, pause, paused-command rejection,
    resume, delete, post-delete rejection, and audit token redaction.
+
+The Live Snapshot KVM workflow builds the same CLI and runs
+`scripts/e2e-cli-snapshots.sh` after the exhaustive API suite. Its sanitized
+schema-1 evidence covers the complete snapshot command group, file-state
+preservation, token redaction, and cleanup.
 
 Executable verification remains on GitHub-hosted runners. The process backend
 is a deterministic contract test and carries no isolation claim; the separate

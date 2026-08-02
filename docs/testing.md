@@ -170,6 +170,12 @@ if the leaf remains busy. Transport failures include the Firecracker HTTP
 method and API path, and each VM reuses one Unix HTTP client across the full
 configuration sequence.
 
+The workflow also builds the Rust CLI and runs a second snapshot closed loop
+after the exhaustive API suite. That CLI path covers create/list/inspect/verify,
+same-ID rollback, independent restore, two clones, preserved file state,
+credential redaction, and final snapshot artifact cleanup. Its uploaded
+`snapshot-cli-e2e.json` contains only IDs, counts, and check names.
+
 The current hosted proof is
 [Live Snapshot KVM E2E run 30758919945](https://github.com/nya-a-cat/ferrobox/actions/runs/30758919945)
 for commit `87d5456`. It completed all sixteen checks and uploaded artifact

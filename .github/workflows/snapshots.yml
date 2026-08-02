@@ -51,6 +51,7 @@ jobs:
         run: |
           cargo generate-lockfile
           cargo build -p ferrobox-api --features fault-injection --locked
+          cargo build -p ferrobox-cli --locked
           cargo build -p ferrobox-guest \
             --release \
             --target x86_64-unknown-linux-musl \
@@ -135,6 +136,7 @@ jobs:
           FERROBOX_TEST_CLONE_FAILURE_FILE: /mnt/ferrobox-snapshot/runtime/clone-failure
           FERROBOX_SNAPSHOT_MANIFEST_EVIDENCE: ${{ runner.temp }}/snapshot-manifest.json
           FERROBOX_SNAPSHOT_EVIDENCE: ${{ runner.temp }}/snapshot-e2e.json
+          FERROBOX_SNAPSHOT_CLI_EVIDENCE: ${{ runner.temp }}/snapshot-cli-e2e.json
           FERROBOX_SNAPSHOT_API_LOG: ${{ runner.temp }}/snapshot-api.log
         run: |
           set -euo pipefail
@@ -177,6 +179,7 @@ jobs:
             exit 1
           fi
           cat "${FERROBOX_SNAPSHOT_EVIDENCE}"
+          bash scripts/e2e-cli-snapshots.sh
 
       - name: Upload snapshot evidence
         if: always()
@@ -188,6 +191,7 @@ jobs:
             ${{ runner.temp }}/snapshot-kernel.manifest
             ${{ runner.temp }}/snapshot-manifest.json
             ${{ runner.temp }}/snapshot-e2e.json
+            ${{ runner.temp }}/snapshot-cli-e2e.json
             ${{ runner.temp }}/snapshot-api.log
             /mnt/ferrobox-snapshot/runtime/audit/events.jsonl
             /opt/ferrobox/images/python.ext4.manifest.json
