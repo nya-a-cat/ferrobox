@@ -15,6 +15,7 @@ resource usage low and results reproducible.
 - static `x86_64-unknown-linux-musl` guest build;
 - process-backend HTTP end-to-end verification;
 - Firecracker/Jailer checksum and version verification.
+- full-commit GitHub Action pin verification across every workflow.
 
 The process E2E checks `print(42)`, argv literal handling, file round-trip,
 path traversal rejection, deletion, and token redaction from audit records.
@@ -32,6 +33,15 @@ Jailer -> Firecracker -> guest READY -> python3 prints 42 -> delete -> leak chec
 Each run uploads the kernel key/hash and rootfs build manifest as provenance
 evidence. The workflow rejects any kernel whose SHA-256 differs from the pinned
 supply-chain record.
+
+The supply-chain gate also fetches a pinned Syft release and produces SPDX 2.3
+SBOMs for the Rust source dependency graph, mounted Python rootfs, and exact
+Docker comparator image. It emits an in-toto Statement v1 inventory covering
+the built Ferrobox binaries, installed VMMs, gVisor sidecars, Kata-selected
+assets, host comparator runtimes, guest kernel/rootfs, workload image digest,
+and all SBOM hashes. The statement is accepted only after every serialized
+local-file digest is independently recomputed. Its outcome is reported beside
+the deferred performance gates and enforced at the final convergence step.
 
 The same hosted-KVM job emits `ferrobox-benchmark.json` with:
 

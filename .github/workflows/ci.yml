@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-08-03
         with:
           components: clippy,rustfmt
           targets: x86_64-unknown-linux-musl
@@ -31,7 +31,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes musl-tools protobuf-compiler
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: Verify GitHub Action commit pins
+        run: bash scripts/check-action-pins.sh
 
       - name: Generate dependency lock
         run: cargo generate-lockfile
@@ -55,7 +58,7 @@ jobs:
         run: bash scripts/e2e-process.sh
 
       - name: Upload generated lockfile
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: Cargo.lock
           path: Cargo.lock
@@ -65,7 +68,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Inspect KVM
         id: kvm

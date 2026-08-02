@@ -11,20 +11,22 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: "1"
+  FERROBOX_DOCKER_IMAGE: python:3.11-slim-bookworm
+  FERROBOX_DOCKER_IMAGE_DIGEST: sha256:b18992999dbe963a45a8a4da40ac2b1975be1a776d939d098c647482bcad5cba
 
 jobs:
   kvm:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-08-03
         with:
           targets: x86_64-unknown-linux-musl
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Install image build tools
         run: |
@@ -76,6 +78,8 @@ jobs:
           expected_kernel_sha256='e20e46d0c36c55c0d1014eb20576171b3f3d922260d9f792017aeff53af3d4f2'
           kernel="${RUNNER_TEMP}/vmlinux"
           curl --fail --location --silent --show-error \
+            --proto '=https' \
+            --tlsv1.2 \
             --output "${kernel}" \
             "https://s3.amazonaws.com/spec.ccfc.min/${kernel_key}"
           kernel_sha256="$(sha256sum "${kernel}" | awk '{print $1}')"
@@ -302,14 +306,16 @@ jobs:
         env:
           FERROBOX_HTTP_BENCHMARK_OUTPUT: ${{ runner.temp }}/ferrobox-http-benchmark.json
           FERROBOX_DOCKER_BENCHMARK_OUTPUT: ${{ runner.temp }}/docker-benchmark.json
-          FERROBOX_DOCKER_IMAGE: python:3.11-slim-bookworm
         run: |
           set -euo pipefail
           docker pull "${FERROBOX_DOCKER_IMAGE}"
           docker image inspect \
             --format '{{json .RepoDigests}}' \
-            "${FERROBOX_DOCKER_IMAGE}" \
-            >"${RUNNER_TEMP}/docker-image-digests.json"
+            "${FERROBOX_DOCKER_IMAGE}" |
+            tee "${RUNNER_TEMP}/docker-image-digests.json"
+          jq --exit-status --arg expected "python@${FERROBOX_DOCKER_IMAGE_DIGEST}" \
+            'index($expected) != null' \
+            "${RUNNER_TEMP}/docker-image-digests.json" >/dev/null
           python3 scripts/benchmark-docker.py \
             --image "${FERROBOX_DOCKER_IMAGE}" \
             --iterations 5 \
@@ -336,21 +342,40 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gvisor_url='https://storage.googleapis.com/gvisor/releases/release/latest/x86_64'
+          gvisor_url='https://storage.googleapis.com/gvisor/releases/release/20260721/x86_64'
+          expected_sha512='1e951f8d9dd2198e16ad66066fac0db42943ac8e8ca35c7173a20f0fbc859b8185c33c478ae0dc3c4e76b8c06d99ed118286caf43ad207c96578b42af62cae72'
           curl --fail --location --silent --show-error \
+            --proto '=https' \
+            --tlsv1.2 \
             --output "${RUNNER_TEMP}/gvisor.tar.bz2" \
             "${gvisor_url}/gvisor.tar.bz2"
           curl --fail --location --silent --show-error \
+            --proto '=https' \
+            --tlsv1.2 \
             --output "${RUNNER_TEMP}/gvisor.tar.bz2.sha512" \
             "${gvisor_url}/gvisor.tar.bz2.sha512"
           (
             cd "${RUNNER_TEMP}"
             sha512sum --check gvisor.tar.bz2.sha512
           )
-          sudo tar -xjf "${RUNNER_TEMP}/gvisor.tar.bz2" -C /usr/local/bin
+          actual_sha512="$(sha512sum "${RUNNER_TEMP}/gvisor.tar.bz2" | awk '{print $1}')"
+          [[ "${actual_sha512}" == "${expected_sha512}" ]]
+          while IFS= read -r member; do
+            case "${member}" in
+              /*|../*|*/../*|*/..)
+                echo "Unsafe gVisor archive member: ${member}" >&2
+                exit 1
+                ;;
+            esac
+          done < <(tar -tjf "${RUNNER_TEMP}/gvisor.tar.bz2")
+          sudo tar --extract --bzip2 --no-same-owner \
+            --file "${RUNNER_TEMP}/gvisor.tar.bz2" \
+            --directory /usr/local/bin
           sudo /usr/local/bin/runsc install
           sudo systemctl restart docker
           /usr/local/bin/runsc --version | tee "${RUNNER_TEMP}/gvisor-version.txt"
+          grep --fixed-strings 'release-20260721.0' \
+            "${RUNNER_TEMP}/gvisor-version.txt" >/dev/null
           sha512sum "${RUNNER_TEMP}/gvisor.tar.bz2" \
             >"${RUNNER_TEMP}/gvisor-tarball.sha512"
           docker info --format '{{json .Runtimes}}' |
@@ -361,7 +386,6 @@ jobs:
           FERROBOX_HTTP_BENCHMARK_OUTPUT: ${{ runner.temp }}/ferrobox-http-benchmark.json
           FERROBOX_RUNTIME_BENCHMARK_OUTPUT: ${{ runner.temp }}/ferrobox-benchmark.json
           FERROBOX_GVISOR_BENCHMARK_OUTPUT: ${{ runner.temp }}/gvisor-benchmark.json
-          FERROBOX_DOCKER_IMAGE: python:3.11-slim-bookworm
         run: |
           set -euo pipefail
           python3 scripts/benchmark-docker.py \
@@ -394,6 +418,8 @@ jobs:
           cloud_hypervisor_url='https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v53.0/cloud-hypervisor-static'
           expected_sha256='448af3d4e59b22c2987f7df94c213ad40fb53a10d437e42b5ee6c4fce7c29ecc'
           curl --fail --location --silent --show-error \
+            --proto '=https' \
+            --tlsv1.2 \
             --output "${RUNNER_TEMP}/cloud-hypervisor" \
             "${cloud_hypervisor_url}"
           actual_sha256="$(sha256sum "${RUNNER_TEMP}/cloud-hypervisor" | awk '{print $1}')"
@@ -498,7 +524,7 @@ jobs:
           cat "${RUNNER_TEMP}/microvm-abba-benchmark.json"
 
       - name: Upload core microVM diagnostics
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: microvm-diagnostics
           if-no-files-found: error
@@ -514,7 +540,7 @@ jobs:
 
       - name: Cache Kata Containers release bundle
         id: kata-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/kata-static-3.31.0-amd64.tar.zst
           key: kata-static-3.31.0-amd64-68c2786a
@@ -528,12 +554,27 @@ jobs:
           expected_sha256='68c2786a0b97023f62f3eca02dc868b78a794e5469d4ddd6cc9e0bd4a7212b0b'
           if [[ ! -f "${kata_archive}" ]]; then
             curl --fail --location --silent --show-error \
+              --proto '=https' \
+              --tlsv1.2 \
               --output "${kata_archive}" \
               "${kata_url}"
           fi
           actual_sha256="$(sha256sum "${kata_archive}" | awk '{print $1}')"
           [[ "${actual_sha256}" == "${expected_sha256}" ]]
+          while IFS= read -r member; do
+            case "${member}" in
+              ./|./opt|./opt/|./opt/kata|./opt/kata/*|opt|opt/|opt/kata|opt/kata/*) ;;
+              *)
+                echo "Unexpected Kata archive member: ${member}" >&2
+                exit 1
+                ;;
+            esac
+          done < <(
+            tar --list --use-compress-program=unzstd \
+              --file "${kata_archive}"
+          )
           sudo tar --extract --use-compress-program=unzstd \
+            --no-same-owner \
             --file "${kata_archive}" \
             --directory /
           sudo ln --symbolic --force \
@@ -548,7 +589,7 @@ jobs:
 
       - name: Save Kata Containers release bundle
         if: steps.kata-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/kata-static-3.31.0-amd64.tar.zst
           key: ${{ steps.kata-cache.outputs.cache-primary-key }}
@@ -567,9 +608,31 @@ jobs:
         run: |
           docker save \
             --output "${FERROBOX_KATA_IMAGE_ARCHIVE}" \
-            python:3.11-slim-bookworm
+            "${FERROBOX_DOCKER_IMAGE}"
           sudo --preserve-env=FERROBOX_CTR,FERROBOX_CONTAINERD,FERROBOX_KATA_OUTPUT,FERROBOX_KATA_RUNTIME_ROOT,FERROBOX_KATA_IMAGE,FERROBOX_KATA_IMAGE_ARCHIVE \
             bash scripts/benchmark-kata.sh
+
+      - name: Fetch verified SBOM generator
+        run: |
+          set -euo pipefail
+          bash scripts/fetch-syft.sh "${RUNNER_TEMP}/syft" |
+            tee "${RUNNER_TEMP}/syft-version.txt"
+
+      - name: Generate and verify E2E provenance and SBOMs
+        id: supply-chain-gate
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          sudo --preserve-env=GITHUB_SHA \
+            bash scripts/generate-e2e-sboms.sh \
+              "${RUNNER_TEMP}/syft/syft" \
+              /opt/ferrobox/images/python.ext4 \
+              "${FERROBOX_DOCKER_IMAGE}" \
+              "${RUNNER_TEMP}/sbom"
+          FERROBOX_SYFT="${RUNNER_TEMP}/syft/syft" \
+            bash scripts/generate-e2e-provenance.sh \
+              "${RUNNER_TEMP}/ferrobox-e2e-provenance.intoto.json" \
+              "${RUNNER_TEMP}/sbom"
 
       - name: Validate microVM performance leadership
         id: microvm-performance-gate
@@ -675,24 +738,27 @@ jobs:
           FERROBOX_NETWORK_DIAGNOSTICS: ${{ runner.temp }}/network-diagnostics.txt
         run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_NODE_BINARY,FERROBOX_INTERNET,FERROBOX_NETWORK_DIAGNOSTICS bash scripts/e2e-kvm.sh
 
-      - name: Enforce performance gates
+      - name: Enforce evidence and performance gates
         if: always()
         env:
           KATA_BENCHMARK: ${{ steps.kata-benchmark.outcome }}
+          SUPPLY_CHAIN_GATE: ${{ steps.supply-chain-gate.outcome }}
           INTERNET_POLICY_GATE: ${{ steps.internet-policy-gate.outcome }}
           MICROVM_GATE: ${{ steps.microvm-performance-gate.outcome }}
           CONTAINER_GATE: ${{ steps.container-performance-gate.outcome }}
           FILE_WORKLOAD_GATE: ${{ steps.file-workload-performance-gate.outcome }}
           FILE_API_GATE: ${{ steps.file-api-performance-gate.outcome }}
         run: |
-          printf 'kata=%s internet=%s microvm=%s container=%s file_workload=%s file_api=%s\n' \
+          printf 'kata=%s supply_chain=%s internet=%s microvm=%s container=%s file_workload=%s file_api=%s\n' \
             "${KATA_BENCHMARK}" \
+            "${SUPPLY_CHAIN_GATE}" \
             "${INTERNET_POLICY_GATE}" \
             "${MICROVM_GATE}" \
             "${CONTAINER_GATE}" \
             "${FILE_WORKLOAD_GATE}" \
             "${FILE_API_GATE}"
           [[ "${KATA_BENCHMARK}" == success ]]
+          [[ "${SUPPLY_CHAIN_GATE}" == success ]]
           [[ "${INTERNET_POLICY_GATE}" == success ]]
           [[ "${MICROVM_GATE}" == success ]]
           [[ "${CONTAINER_GATE}" == success ]]
@@ -701,7 +767,7 @@ jobs:
 
       - name: Upload provenance and failure evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: kvm-evidence
           if-no-files-found: warn
@@ -714,6 +780,13 @@ jobs:
             ${{ runner.temp }}/ferrobox-http-benchmark.json
             ${{ runner.temp }}/docker-benchmark.json
             ${{ runner.temp }}/docker-image-digests.json
+            ${{ runner.temp }}/ferrobox-e2e-provenance.intoto.json
+            ${{ runner.temp }}/sbom/ferrobox-source.spdx.json
+            ${{ runner.temp }}/sbom/ferrobox-rootfs.spdx.json
+            ${{ runner.temp }}/sbom/python-image.spdx.json
+            ${{ runner.temp }}/syft-version.txt
+            ${{ runner.temp }}/syft/SOURCE.sha256
+            ${{ runner.temp }}/syft/SOURCE.url
             ${{ runner.temp }}/gvisor-benchmark.json
             ${{ runner.temp }}/gvisor-version.txt
             ${{ runner.temp }}/gvisor-tarball.sha512
