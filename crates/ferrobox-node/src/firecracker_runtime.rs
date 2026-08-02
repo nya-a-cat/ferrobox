@@ -40,6 +40,8 @@ use crate::{
 };
 
 const FIRECRACKER_VERSION: &str = "1.16.1";
+const CGROUP_V2_ROOT: &str = "/sys/fs/cgroup";
+const JAILER_CGROUP_PARENT: &str = "ferrobox";
 
 #[derive(Clone, Debug)]
 pub struct FirecrackerRuntimeConfig {
@@ -91,6 +93,7 @@ impl FirecrackerRuntimeConfig {
 }
 
 struct FirecrackerSandbox {
+    jailer_id: SandboxId,
     state: SandboxState,
     spec: SandboxSpec,
     child: Child,
@@ -325,6 +328,34 @@ impl FirecrackerRuntime {
         Ok(())
     }
 
+    async fn cleanup_cgroup(&self, jailer_id: &SandboxId) -> Result<(), RuntimeError> {
+        let parent = Path::new(CGROUP_V2_ROOT).join(JAILER_CGROUP_PARENT);
+        let cgroup = parent.join(jailer_id.to_string());
+        if !cgroup.starts_with(&parent) || cgroup == parent {
+            return Err(RuntimeError::internal("refusing unsafe cgroup cleanup"));
+        }
+
+        let mut last_error = None;
+        for _ in 0..50 {
+            match fs::remove_dir(&cgroup).await {
+                Ok(()) => return Ok(()),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+                Err(error) => last_error = Some(error),
+            }
+            sleep(Duration::from_millis(20)).await;
+        }
+        Err(RuntimeError::internal(format!(
+            "remove cgroup {}: {}",
+            cgroup.display(),
+            last_error.expect("a failed cgroup removal records an error")
+        )))
+    }
+
+    async fn kill_and_wait(child: &mut Child) {
+        let _ = child.kill().await;
+        let _ = child.wait().await;
+    }
+
     async fn terminate_record(&self, record: &mut FirecrackerSandbox) -> Result<(), RuntimeError> {
         record.state = SandboxState::Deleting;
         let _ = record
@@ -339,8 +370,7 @@ impl FirecrackerRuntime {
         match timeout(Duration::from_secs(2), record.child.wait()).await {
             Ok(Ok(_)) => {}
             Ok(Err(_)) | Err(_) => {
-                let _ = record.child.kill().await;
-                let _ = record.child.wait().await;
+                Self::kill_and_wait(&mut record.child).await;
             }
         }
 
@@ -350,13 +380,15 @@ impl FirecrackerRuntime {
             Ok(())
         };
         let jail_result = self.cleanup_chroot(&record.chroot_root).await;
-        if network_result.is_ok() && jail_result.is_ok() {
+        let cgroup_result = self.cleanup_cgroup(&record.jailer_id).await;
+        if network_result.is_ok() && jail_result.is_ok() && cgroup_result.is_ok() {
             record.state = SandboxState::Deleted;
         } else {
             record.state = SandboxState::Failed;
         }
         network_result?;
-        jail_result
+        jail_result?;
+        cgroup_result
     }
 
     async fn wait_for_socket(path: &Path, limit: Duration) -> Result<(), RuntimeError> {
@@ -967,16 +999,24 @@ impl FirecrackerRuntime {
         restore: Option<RestoreAssets>,
         capture_template: bool,
     ) -> Result<SandboxHandle, RuntimeError> {
+        let jailer_id = id.clone();
         let chroot_root = self.jail_root(&id)?;
         let result = self.launch_inner(spec, id, restore, capture_template).await;
-        if result.is_err()
-            && let Err(cleanup_error) = self.cleanup_chroot(&chroot_root).await
-        {
-            tracing::warn!(
-                error = %cleanup_error,
-                path = %chroot_root.display(),
-                "failed to clean a sandbox jail after launch failure"
-            );
+        if result.is_err() {
+            if let Err(cleanup_error) = self.cleanup_chroot(&chroot_root).await {
+                tracing::warn!(
+                    error = %cleanup_error,
+                    path = %chroot_root.display(),
+                    "failed to clean a sandbox jail after launch failure"
+                );
+            }
+            if let Err(cleanup_error) = self.cleanup_cgroup(&jailer_id).await {
+                tracing::warn!(
+                    error = %cleanup_error,
+                    jailer_id = %jailer_id,
+                    "failed to clean a sandbox cgroup after launch failure"
+                );
+            }
         }
         result
     }
@@ -1074,7 +1114,7 @@ impl FirecrackerRuntime {
             .arg("--cgroup-version")
             .arg("2")
             .arg("--parent-cgroup")
-            .arg("ferrobox")
+            .arg(JAILER_CGROUP_PARENT)
             .arg("--cgroup")
             .arg(memory_limit)
             .arg("--cgroup")
@@ -1102,7 +1142,7 @@ impl FirecrackerRuntime {
 
         let api_socket = run_path.join("firecracker.socket");
         if let Err(error) = Self::wait_for_socket(&api_socket, self.config.api_timeout).await {
-            let _ = child.kill().await;
+            Self::kill_and_wait(&mut child).await;
             if let Some(lease) = &network {
                 let _ = self.network.delete(lease).await;
             }
@@ -1116,7 +1156,7 @@ impl FirecrackerRuntime {
                 .await
         };
         if let Err(error) = start_result {
-            let _ = child.kill().await;
+            Self::kill_and_wait(&mut child).await;
             if let Some(lease) = &network {
                 let _ = self.network.delete(lease).await;
             }
@@ -1129,7 +1169,7 @@ impl FirecrackerRuntime {
         );
         if capture_template {
             if let Err(error) = self.wait_for_guest(&connector).await {
-                let _ = child.kill().await;
+                Self::kill_and_wait(&mut child).await;
                 if let Some(lease) = &network {
                     let _ = self.network.delete(lease).await;
                 }
@@ -1139,7 +1179,7 @@ impl FirecrackerRuntime {
                 .capture_snapshot(&api, &rootfs_path, &jail_snapshot_path)
                 .await
             {
-                let _ = child.kill().await;
+                Self::kill_and_wait(&mut child).await;
                 if let Some(lease) = &network {
                     let _ = self.network.delete(lease).await;
                 }
@@ -1166,7 +1206,7 @@ impl FirecrackerRuntime {
         let guest_client = match initialized {
             Ok(client) => client,
             Err(error) => {
-                let _ = child.kill().await;
+                Self::kill_and_wait(&mut child).await;
                 if let Some(lease) = &network {
                     let _ = self.network.delete(lease).await;
                 }
@@ -1176,6 +1216,7 @@ impl FirecrackerRuntime {
         self.sandboxes.write().await.insert(
             id.clone(),
             Arc::new(Mutex::new(FirecrackerSandbox {
+                jailer_id: id.clone(),
                 state: SandboxState::Running,
                 spec,
                 child,
@@ -1755,13 +1796,23 @@ fn guest_error(error: tonic::Status) -> RuntimeError {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_vm_rss_kib;
+    use std::path::Path;
+
+    use super::{CGROUP_V2_ROOT, JAILER_CGROUP_PARENT, parse_vm_rss_kib};
 
     #[test]
     fn parses_linux_process_rss() {
         assert_eq!(
             parse_vm_rss_kib("Name:\tfirecracker\nVmRSS:\t  12345 kB\n"),
             Some(12345)
+        );
+    }
+
+    #[test]
+    fn jailer_cgroup_root_matches_the_runtime_argument() {
+        assert_eq!(
+            Path::new(CGROUP_V2_ROOT).join(JAILER_CGROUP_PARENT),
+            Path::new("/sys/fs/cgroup/ferrobox")
         );
     }
 }

@@ -371,7 +371,11 @@ def run() -> None:
     finally:
         FAILURE_FILE.unlink(missing_ok=True)
     time.sleep(1)
-    assert resource_sample() == before_failure
+    after_failure = resource_sample()
+    assert after_failure == before_failure, {
+        "before": before_failure,
+        "after": after_failure,
+    }
     assert api(
         "POST", f"/v1/snapshots/{primary_id}/verify", token=primary_token
     )["valid"] is True
@@ -402,7 +406,11 @@ def run() -> None:
         payload={"timeout_seconds": TTL_SECONDS},
         expected=503,
     )
-    assert resource_sample() == before_corruption
+    after_corruption = resource_sample()
+    assert after_corruption == before_corruption, {
+        "before": before_corruption,
+        "after": after_corruption,
+    }
     checks.append("corruption-fails-closed")
     delete_snapshot(primary_id)
 
@@ -421,7 +429,11 @@ def run() -> None:
         "snapshot_delete",
     ):
         assert f'"operation":"{operation}"' in audit
-    assert resource_sample() == initial_resources
+    final_resources = resource_sample()
+    assert final_resources == initial_resources, {
+        "before": initial_resources,
+        "after": final_resources,
+    }
     checks.extend(["artifact-cleanup", "audit-redaction"])
     print(json.dumps({"schema_version": 1, "checks": checks}, indent=2))
 

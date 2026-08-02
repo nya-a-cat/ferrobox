@@ -18,6 +18,8 @@ untrusted.
   seccomp enabled.
 - The VM rootfs is never a host bind mount.
 - Host cgroup v2 limits CPU, memory, I/O, and process count.
+- Sandbox deletion, failed launch, failed clone batch, and rollback retirement
+  remove only the cgroup leaf owned by the recorded physical Jailer ID.
 - Guest commands run as UID/GID 1000 with a guest-side process limit.
 - The default network mode has no data network interface.
 - Internet mode rejects loopback, link-local, RFC1918, carrier-grade NAT,

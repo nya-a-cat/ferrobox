@@ -105,7 +105,9 @@ sanitized schema-1 manifest.
 Partial-batch cleanup uses the opt-in `fault-injection` Cargo feature. A test
 API reads `FERROBOX_TEST_CLONE_FAILURE_FILE`; a valid integer requests failure
 after that many clones have launched. Production builds leave the feature
-disabled and contain no active injection branch.
+disabled and contain no active injection branch. Resource mismatch failures
+print the before/after Firecracker PID, jail root, cgroup leaf, and network
+namespace sets so hosted evidence identifies the leaked resource class.
 
 The HTTP artifact also retains a five-request concurrent burst with each
 request's latency and total wall time. Sequential and concurrent P95 must both
