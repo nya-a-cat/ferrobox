@@ -165,8 +165,13 @@ Run
 passed that byte gate with equal SHA-256
 `f3580f2126bbbc3aa5b869be3bfabeba7746d3274956b58b1a54c5ca60ae0f2f`,
 then exposed the extraction root's `0700` mode during UID 1000 execution. The
-builder now fixes and records the archive root as `root:root 0755`. The complete
-reproducibility plus KVM gate remains pending until a hosted run passes.
+builder now fixes and records the archive root as `root:root 0755`. Run
+[30771989462](https://github.com/nya-a-cat/ferrobox/actions/runs/30771989462)
+verified two byte-identical ext4 builds with SHA-256
+`3ed9c8fc9e746916bee5cf72681b30f0f61d70b142e039e016164dec4a2c8c14`,
+read-only `e2fsck`, the ten-check real KVM lifecycle, and final resource cleanup.
+Artifact `8840831703` has archive digest
+`sha256:04e63c6419489d2c7bcfd34ea4b6211fcdb9648ea3fadbd06230ef9bc0794615`.
 Private-registry authentication and a public image-selection API remain open.
 
 The four verified state-branching rows and the complete CLI snapshot surface

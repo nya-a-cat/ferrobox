@@ -106,8 +106,8 @@ the ext4 hashes were
 and
 `75e4df23361612612d973156277ecaeffc614e2fb7ac26193184af1e80b43fa0`.
 The workflow stopped before KVM at the byte-equality gate. Artifact `8840543144`
-retains both schema-2 records and the first differing-byte report. The pinned
-1.47.4 tar-input gate remains pending its first hosted result.
+retains both schema-2 records and the first differing-byte report. This is the
+directory-import baseline for the pinned 1.47.4 tar-input path.
 
 [Run 30771721838](https://github.com/nya-a-cat/ferrobox/actions/runs/30771721838)
 passed signed-source verification, the focused tar smoke gate, and the complete
@@ -115,8 +115,18 @@ OCI byte-equality gate at commit `92a61a7`. Both ext4 files have SHA-256
 `f3580f2126bbbc3aa5b869be3bfabeba7746d3274956b58b1a54c5ca60ae0f2f`.
 The real KVM flow then reported `guest spawn: Permission denied (os error 13)`
 for the UID 1000 Python command. Tar input had preserved the extraction staging
-root's mode. The revised gate fixes and records `root:root 0755`; its hosted
-lifecycle result remains pending.
+root's mode. The revised gate fixes and records `root:root 0755`.
+
+[Run 30771989462](https://github.com/nya-a-cat/ferrobox/actions/runs/30771989462)
+passed the complete contract at commit `6c4d140`. Its two ext4 images are
+byte-identical with SHA-256
+`3ed9c8fc9e746916bee5cf72681b30f0f61d70b142e039e016164dec4a2c8c14`;
+the retained record has empty `cmp_detail`, equal schema-3 deterministic fields,
+and `e2fsck_read_only: true`. The real KVM path passed all ten checks, including
+UID 1000 Python 3.11.15, argv execution, file operations, pause/reject/resume,
+stale-handle rejection, redaction, and process/network cleanup. Artifact
+`8840831703` has archive digest
+`sha256:04e63c6419489d2c7bcfd34ea4b6211fcdb9648ea3fadbd06230ef9bc0794615`.
 
 [Standard CI run 30769681624](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681624)
 passed formatting, tests, Clippy, builds, process/CLI/OpenAPI conformance, and

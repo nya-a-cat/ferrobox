@@ -160,6 +160,15 @@ the upstream
 and the
 [e2fsprogs 1.47.4 release directory](https://mirrors.edge.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v1.47.4/).
 
+GitHub OCI run
+[30771989462](https://github.com/nya-a-cat/ferrobox/actions/runs/30771989462)
+verified this complete chain at commit `6c4d140`. The two independent ext4
+builds both produced SHA-256
+`3ed9c8fc9e746916bee5cf72681b30f0f61d70b142e039e016164dec4a2c8c14`
+and then passed the real ten-check KVM lifecycle. Artifact `8840831703` has
+archive digest
+`sha256:04e63c6419489d2c7bcfd34ea4b6211fcdb9648ea3fadbd06230ef9bc0794615`.
+
 ## SBOM generator
 
 `scripts/fetch-syft.sh` installs the official Linux x86_64
