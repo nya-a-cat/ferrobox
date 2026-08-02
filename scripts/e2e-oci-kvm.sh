@@ -87,12 +87,44 @@ for _ in $(seq 1 200); do
 done
 curl --fail --silent "${api_url}/healthz" >/dev/null
 
-create_response="$(
-    curl --fail-with-body --silent \
+create_response_path="${work_dir}/create-response.json"
+create_status="$(
+    curl --silent --show-error \
+        --output "${create_response_path}" \
+        --write-out '%{http_code}' \
         --header 'content-type: application/json' \
         --data '{"template":"oci-python","cpu_count":1,"memory_mb":512,"timeout_seconds":120,"network":{"internet_access":false}}' \
         "${api_url}/v1/sandboxes"
 )"
+if [[ "${create_status}" != "201" ]]; then
+    failure_output="$(dirname -- "${output}")/oci-kvm-create-failure.json"
+    if ! jq -c \
+        --arg http_status "${create_status}" '
+            {
+                http_status: $http_status,
+                error: {
+                    code: (.error.code // "invalid_response"),
+                    message: (.error.message // "invalid response body")
+                }
+            }
+        ' "${create_response_path}" >"${failure_output}"; then
+        jq -n \
+            --arg http_status "${create_status}" '
+                {
+                    http_status: $http_status,
+                    error: {
+                        code: "invalid_response",
+                        message: "response body was not valid JSON"
+                    }
+                }
+            ' >"${failure_output}"
+    fi
+    echo "::group::Sanitized OCI sandbox create failure"
+    cat "${failure_output}"
+    echo "::endgroup::"
+    exit 7
+fi
+create_response="$(<"${create_response_path}")"
 sandbox_id="$(jq -er '.sandbox_id' <<<"${create_response}")"
 token="$(jq -er '.token' <<<"${create_response}")"
 [[ "$(jq -r '.state' <<<"${create_response}")" == "running" ]]
