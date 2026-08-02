@@ -14,7 +14,8 @@ on:
       - crates/ferrobox-protocol/**
       - scripts/build-oci-rootfs.sh
       - scripts/e2e-oci-kvm.sh
-      - scripts/fetch-crane.sh
+      - patches/go-containerregistry-v0.21.8-root-directory.patch
+      - scripts/build-crane.sh
       - scripts/fetch-firecracker.sh
       - scripts/safe-extract-tar.py
       - scripts/test-safe-extract-tar.py
@@ -41,6 +42,12 @@ jobs:
         with:
           targets: x86_64-unknown-linux-musl
 
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.5"
+          cache: false
+
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Install image build tools
@@ -51,6 +58,7 @@ jobs:
             e2fsprogs \
             jq \
             musl-tools \
+            patch \
             protobuf-compiler
 
       - name: Verify hardened tar extraction
@@ -109,8 +117,8 @@ jobs:
             printf 'kernel_sha256=%s\n' "${actual_kernel_sha256}"
           } >"${RUNNER_TEMP}/oci-kernel.manifest"
 
-      - name: Fetch verified crane
-        run: bash scripts/fetch-crane.sh "${RUNNER_TEMP}/crane"
+      - name: Build verified patched crane
+        run: bash scripts/build-crane.sh "${RUNNER_TEMP}/crane"
 
       - name: Build digest-verified OCI rootfs
         run: |
@@ -204,6 +212,12 @@ jobs:
           if-no-files-found: warn
           path: |
             ${{ runner.temp }}/safe-extract-evidence.json
+            ${{ runner.temp }}/crane/BUILD.log
+            ${{ runner.temp }}/crane/BUILDINFO.txt
+            ${{ runner.temp }}/crane/MUTATE-TEST.log
+            ${{ runner.temp }}/crane/PATCH.diff
+            ${{ runner.temp }}/crane/PATCH-APPLY.log
+            ${{ runner.temp }}/crane/SOURCE-EXTRACTION.json
             ${{ runner.temp }}/crane/SOURCE.manifest
             ${{ runner.temp }}/oci-kernel.manifest
             ${{ runner.temp }}/oci-rootfs-evidence
