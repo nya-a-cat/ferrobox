@@ -64,13 +64,15 @@ harness. Each artifact retains five create-and-start samples, one hundred
 twenty archive write/read samples. Direct Firecracker, CPU-capped Firecracker,
 Cloud Hypervisor, and Kata QEMU controls run later on the same hosted KVM job.
 
-The microVM leadership gate compares CPU-capped direct Firecracker with Cloud
-Hypervisor through the identical guest probe and cloned-client sequence for
-100 `/bin/true` and 30 Python samples. Both P50 and P95 must be lower for
-Firecracker. The full Ferrobox runtime then has separate overhead limits:
-minimal-command P50 within 25% of direct Firecracker, minimal-command P95 at
-or below 15 ms, and Python P50/P95 within 10%. Snapshot preparation, HTTP
-allocation, and full-runtime hot execution retain their Kata and Cloud
+The microVM leadership gate runs CPU-capped direct Firecracker, Cloud
+Hypervisor, Cloud Hypervisor, and CPU-capped direct Firecracker in ABBA order.
+All four cohorts use the identical guest probe and cloned-client sequence.
+Their raw series are pooled into 200 `/bin/true` and 60 Python samples per VMM,
+then nearest-rank P50/P95 are recomputed; both percentiles must be lower for
+Firecracker. The full Ferrobox runtime has separate overhead limits:
+minimal-command P50 within 25% of pooled direct Firecracker, minimal-command
+P95 at or below 15 ms, and Python P50/P95 within 10%. Snapshot preparation,
+HTTP allocation, and full-runtime hot execution retain their Kata and Cloud
 Hypervisor boundary checks.
 
 Measurement steps validate artifact schemas and sample counts without applying

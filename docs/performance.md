@@ -99,12 +99,17 @@ same-commit diagnostic runs established the paired result:
 | [30760452371](https://github.com/nya-a-cat/ferrobox/actions/runs/30760452371) | 1.820/1.922 ms | 1.844/2.010 ms | 11.001/11.410 ms | 11.081/11.418 ms |
 
 Every paired P50 and P95 is lower for Firecracker. The full Ferrobox runtime
-keeps separate control-plane budgets: minimal-command P50 may add at most 25%
-over CPU-capped direct Firecracker, minimal-command P95 is capped at 15 ms,
+keeps separate control-plane budgets. The narrow Python tail margins also
+require a counterbalanced formal comparison. Each gate run executes CPU-capped
+Firecracker, Cloud Hypervisor, Cloud Hypervisor, and CPU-capped Firecracker in
+ABBA order. It pools 200 cloned-client `/bin/true` samples and 60 Python samples
+per VMM, then recomputes nearest-rank P50/P95 from the raw series. Firecracker
+must be lower at every percentile. Minimal-command P50 may add at most 25% over
+the pooled direct Firecracker result, minimal-command P95 is capped at 15 ms,
 and Python P50/P95 may add at most 10%. Snapshot preparation, HTTP allocation,
-and the full runtime continue to beat their corresponding Cloud Hypervisor and
-Kata QEMU boundaries in the same gate. The HTTP file-API leadership gate
-remains an optimization target.
+and the full runtime continue to retain their Cloud Hypervisor and Kata QEMU
+boundary checks. The HTTP file-API leadership gate remains an optimization
+target.
 
 ## Cloud Hypervisor
 

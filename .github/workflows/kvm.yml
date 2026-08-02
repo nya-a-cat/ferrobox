@@ -418,30 +418,84 @@ jobs:
           sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_MICROVM_PROBE,FERROBOX_FIRECRACKER_DIRECT_OUTPUT,FERROBOX_FIRECRACKER_DIRECT_RUNTIME_ROOT \
             bash scripts/benchmark-firecracker-direct.sh
 
-      - name: Benchmark CPU-capped direct Firecracker boundary
+      - name: Benchmark CPU-capped direct Firecracker boundary A
         env:
           FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
           FERROBOX_KERNEL: /mnt/ferrobox/images/vmlinux
           FERROBOX_ROOTFS: /mnt/ferrobox/images/python.ext4
           FERROBOX_MICROVM_PROBE: target/debug/microvm-probe
-          FERROBOX_FIRECRACKER_DIRECT_OUTPUT: ${{ runner.temp }}/firecracker-direct-capped-benchmark.json
-          FERROBOX_FIRECRACKER_DIRECT_RUNTIME_ROOT: /mnt/ferrobox/runtime/firecracker-direct-capped
+          FERROBOX_FIRECRACKER_DIRECT_OUTPUT: ${{ runner.temp }}/firecracker-direct-capped-a.json
+          FERROBOX_FIRECRACKER_DIRECT_RUNTIME_ROOT: /mnt/ferrobox/runtime/firecracker-direct-capped-a
           FERROBOX_FIRECRACKER_DIRECT_CPU_MAX: "100000 100000"
         run: |
           sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_MICROVM_PROBE,FERROBOX_FIRECRACKER_DIRECT_OUTPUT,FERROBOX_FIRECRACKER_DIRECT_RUNTIME_ROOT,FERROBOX_FIRECRACKER_DIRECT_CPU_MAX \
             bash scripts/benchmark-firecracker-direct.sh
 
-      - name: Benchmark Cloud Hypervisor guest boundary
+      - name: Benchmark Cloud Hypervisor guest boundary A
         env:
           FERROBOX_CLOUD_HYPERVISOR: /opt/ferrobox/bin/cloud-hypervisor
           FERROBOX_KERNEL: /mnt/ferrobox/images/vmlinux
           FERROBOX_ROOTFS: /mnt/ferrobox/images/python.ext4
           FERROBOX_MICROVM_PROBE: target/debug/microvm-probe
-          FERROBOX_CLOUD_HYPERVISOR_OUTPUT: ${{ runner.temp }}/cloud-hypervisor-benchmark.json
-          FERROBOX_CLOUD_HYPERVISOR_RUNTIME_ROOT: /mnt/ferrobox/runtime/cloud-hypervisor
+          FERROBOX_CLOUD_HYPERVISOR_OUTPUT: ${{ runner.temp }}/cloud-hypervisor-a.json
+          FERROBOX_CLOUD_HYPERVISOR_RUNTIME_ROOT: /mnt/ferrobox/runtime/cloud-hypervisor-a
         run: |
           sudo --preserve-env=FERROBOX_CLOUD_HYPERVISOR,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_MICROVM_PROBE,FERROBOX_CLOUD_HYPERVISOR_OUTPUT,FERROBOX_CLOUD_HYPERVISOR_RUNTIME_ROOT \
             bash scripts/benchmark-cloud-hypervisor.sh
+
+      - name: Benchmark Cloud Hypervisor guest boundary B
+        env:
+          FERROBOX_CLOUD_HYPERVISOR: /opt/ferrobox/bin/cloud-hypervisor
+          FERROBOX_KERNEL: /mnt/ferrobox/images/vmlinux
+          FERROBOX_ROOTFS: /mnt/ferrobox/images/python.ext4
+          FERROBOX_MICROVM_PROBE: target/debug/microvm-probe
+          FERROBOX_CLOUD_HYPERVISOR_OUTPUT: ${{ runner.temp }}/cloud-hypervisor-b.json
+          FERROBOX_CLOUD_HYPERVISOR_RUNTIME_ROOT: /mnt/ferrobox/runtime/cloud-hypervisor-b
+        run: |
+          sudo --preserve-env=FERROBOX_CLOUD_HYPERVISOR,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_MICROVM_PROBE,FERROBOX_CLOUD_HYPERVISOR_OUTPUT,FERROBOX_CLOUD_HYPERVISOR_RUNTIME_ROOT \
+            bash scripts/benchmark-cloud-hypervisor.sh
+
+      - name: Benchmark CPU-capped direct Firecracker boundary B
+        env:
+          FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
+          FERROBOX_KERNEL: /mnt/ferrobox/images/vmlinux
+          FERROBOX_ROOTFS: /mnt/ferrobox/images/python.ext4
+          FERROBOX_MICROVM_PROBE: target/debug/microvm-probe
+          FERROBOX_FIRECRACKER_DIRECT_OUTPUT: ${{ runner.temp }}/firecracker-direct-capped-b.json
+          FERROBOX_FIRECRACKER_DIRECT_RUNTIME_ROOT: /mnt/ferrobox/runtime/firecracker-direct-capped-b
+          FERROBOX_FIRECRACKER_DIRECT_CPU_MAX: "100000 100000"
+        run: |
+          sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_MICROVM_PROBE,FERROBOX_FIRECRACKER_DIRECT_OUTPUT,FERROBOX_FIRECRACKER_DIRECT_RUNTIME_ROOT,FERROBOX_FIRECRACKER_DIRECT_CPU_MAX \
+            bash scripts/benchmark-firecracker-direct.sh
+
+      - name: Aggregate counterbalanced microVM samples
+        run: |
+          jq --slurp --from-file scripts/aggregate-microvm-abba.jq \
+            "${RUNNER_TEMP}/firecracker-direct-capped-a.json" \
+            "${RUNNER_TEMP}/cloud-hypervisor-a.json" \
+            "${RUNNER_TEMP}/cloud-hypervisor-b.json" \
+            "${RUNNER_TEMP}/firecracker-direct-capped-b.json" \
+            >"${RUNNER_TEMP}/microvm-abba-benchmark.json"
+          jq --exit-status '
+            .schema_version == 1 and
+            .sequence == [
+              "firecracker-cpu-capped-a",
+              "cloud-hypervisor-a",
+              "cloud-hypervisor-b",
+              "firecracker-cpu-capped-b"
+            ] and
+            .source_schema_versions == [2, 2, 2, 2] and
+            .firecracker.runtime == "firecracker-direct" and
+            .firecracker.host_cpu_max == "100000 100000" and
+            (.firecracker.ready_us | length) == 10 and
+            (.firecracker.exec_true_us | length) == 200 and
+            (.firecracker.exec_python_us | length) == 60 and
+            .cloud_hypervisor.runtime == "cloud-hypervisor" and
+            (.cloud_hypervisor.ready_us | length) == 10 and
+            (.cloud_hypervisor.exec_true_us | length) == 200 and
+            (.cloud_hypervisor.exec_python_us | length) == 60
+          ' "${RUNNER_TEMP}/microvm-abba-benchmark.json" >/dev/null
+          cat "${RUNNER_TEMP}/microvm-abba-benchmark.json"
 
       - name: Upload core microVM diagnostics
         uses: actions/upload-artifact@v4
@@ -451,9 +505,12 @@ jobs:
           path: |
             ${{ runner.temp }}/ferrobox-benchmark.json
             ${{ runner.temp }}/ferrobox-fresh-pool-benchmark.json
-            ${{ runner.temp }}/cloud-hypervisor-benchmark.json
+            ${{ runner.temp }}/cloud-hypervisor-a.json
+            ${{ runner.temp }}/cloud-hypervisor-b.json
             ${{ runner.temp }}/firecracker-direct-benchmark.json
-            ${{ runner.temp }}/firecracker-direct-capped-benchmark.json
+            ${{ runner.temp }}/firecracker-direct-capped-a.json
+            ${{ runner.temp }}/firecracker-direct-capped-b.json
+            ${{ runner.temp }}/microvm-abba-benchmark.json
 
       - name: Cache Kata Containers release bundle
         id: kata-cache
@@ -521,39 +578,33 @@ jobs:
           jq --exit-status --slurp '
             .[0].schema_version == 11 and
             .[1].schema_version == 4 and
-            .[2].schema_version == 2 and
-            .[2].runtime == "firecracker-direct" and
-            .[2].host_cpu_max == "100000 100000" and
-            .[3].schema_version == 2 and
-            .[3].runtime == "cloud-hypervisor" and
-            .[4].schema_version == 1 and
-            (.[2].exec_true_us | length == 100) and
-            (.[2].exec_true_cloned_client_us | length == 100) and
-            (.[2].exec_python_us | length == 30) and
-            (.[3].exec_true_us | length == 100) and
-            (.[3].exec_true_cloned_client_us | length == 100) and
-            (.[3].exec_python_us | length == 30) and
-            .[0].pool_prepare_p95_us < .[3].ready_p95_us and
-            .[1].http_create_p95_us < .[3].ready_p95_us and
-            .[2].exec_true_cloned_client_p50_us < .[3].exec_true_cloned_client_p50_us and
-            .[2].exec_true_cloned_client_p95_us < .[3].exec_true_cloned_client_p95_us and
-            .[2].exec_python_p50_us < .[3].exec_python_p50_us and
-            .[2].exec_python_p95_us < .[3].exec_python_p95_us and
-            (.[0].exec_true_p50_us * 100) <= (.[2].exec_true_cloned_client_p50_us * 125) and
+            .[2].schema_version == 1 and
+            .[2].source_schema_versions == [2, 2, 2, 2] and
+            .[3].schema_version == 1 and
+            (.[2].firecracker.exec_true_us | length == 200) and
+            (.[2].firecracker.exec_python_us | length == 60) and
+            (.[2].cloud_hypervisor.exec_true_us | length == 200) and
+            (.[2].cloud_hypervisor.exec_python_us | length == 60) and
+            .[0].pool_prepare_p95_us < .[2].cloud_hypervisor.ready_p95_us and
+            .[1].http_create_p95_us < .[2].cloud_hypervisor.ready_p95_us and
+            .[2].firecracker.exec_true_p50_us < .[2].cloud_hypervisor.exec_true_p50_us and
+            .[2].firecracker.exec_true_p95_us < .[2].cloud_hypervisor.exec_true_p95_us and
+            .[2].firecracker.exec_python_p50_us < .[2].cloud_hypervisor.exec_python_p50_us and
+            .[2].firecracker.exec_python_p95_us < .[2].cloud_hypervisor.exec_python_p95_us and
+            (.[0].exec_true_p50_us * 100) <= (.[2].firecracker.exec_true_p50_us * 125) and
             .[0].exec_true_p95_us <= 15000 and
-            (.[0].exec_python_p50_us * 100) <= (.[2].exec_python_p50_us * 110) and
-            (.[0].exec_python_p95_us * 100) <= (.[2].exec_python_p95_us * 110) and
-            .[0].pool_prepare_p95_us + .[0].exec_true_p95_us < .[4].cold_job_p95_us and
-            .[1].http_create_p95_us + .[0].exec_true_p95_us < .[4].cold_job_p95_us and
-            .[0].exec_true_p50_us < .[4].exec_true_p50_us and
-            .[0].exec_true_p95_us < .[4].exec_true_p95_us and
-            .[0].exec_python_p50_us < .[4].exec_python_p50_us and
-            .[0].exec_python_p95_us < .[4].exec_python_p95_us
+            (.[0].exec_python_p50_us * 100) <= (.[2].firecracker.exec_python_p50_us * 110) and
+            (.[0].exec_python_p95_us * 100) <= (.[2].firecracker.exec_python_p95_us * 110) and
+            .[0].pool_prepare_p95_us + .[0].exec_true_p95_us < .[3].cold_job_p95_us and
+            .[1].http_create_p95_us + .[0].exec_true_p95_us < .[3].cold_job_p95_us and
+            .[0].exec_true_p50_us < .[3].exec_true_p50_us and
+            .[0].exec_true_p95_us < .[3].exec_true_p95_us and
+            .[0].exec_python_p50_us < .[3].exec_python_p50_us and
+            .[0].exec_python_p95_us < .[3].exec_python_p95_us
           ' \
             "${RUNNER_TEMP}/ferrobox-benchmark.json" \
             "${RUNNER_TEMP}/ferrobox-http-benchmark.json" \
-            "${RUNNER_TEMP}/firecracker-direct-capped-benchmark.json" \
-            "${RUNNER_TEMP}/cloud-hypervisor-benchmark.json" \
+            "${RUNNER_TEMP}/microvm-abba-benchmark.json" \
             "${RUNNER_TEMP}/kata-benchmark.json" >/dev/null
 
       - name: Validate container performance leadership
@@ -666,11 +717,14 @@ jobs:
             ${{ runner.temp }}/gvisor-benchmark.json
             ${{ runner.temp }}/gvisor-version.txt
             ${{ runner.temp }}/gvisor-tarball.sha512
-            ${{ runner.temp }}/cloud-hypervisor-benchmark.json
+            ${{ runner.temp }}/cloud-hypervisor-a.json
+            ${{ runner.temp }}/cloud-hypervisor-b.json
             ${{ runner.temp }}/cloud-hypervisor-version.txt
             ${{ runner.temp }}/cloud-hypervisor.sha256
             ${{ runner.temp }}/firecracker-direct-benchmark.json
-            ${{ runner.temp }}/firecracker-direct-capped-benchmark.json
+            ${{ runner.temp }}/firecracker-direct-capped-a.json
+            ${{ runner.temp }}/firecracker-direct-capped-b.json
+            ${{ runner.temp }}/microvm-abba-benchmark.json
             ${{ runner.temp }}/kata-benchmark.json
             ${{ runner.temp }}/kata-version.txt
             ${{ runner.temp }}/kata-static.sha256
