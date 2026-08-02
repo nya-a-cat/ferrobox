@@ -222,7 +222,7 @@ jobs:
             ${{ runner.temp }}/crane/SOURCE.manifest
             ${{ runner.temp }}/oci-kernel.manifest
             ${{ runner.temp }}/oci-rootfs-evidence
-            ${{ runner.temp }}/oci-kvm-create-failure.json
+            ${{ runner.temp }}/oci-kvm-api-failure.json
             ${{ runner.temp }}/oci-kvm-e2e.json
 
       - name: Unmount OCI runtime storage
