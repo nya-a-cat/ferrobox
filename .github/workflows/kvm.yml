@@ -247,23 +247,15 @@ jobs:
           jq --exit-status --slurp '
             .[0].schema_version == 4 and
             .[1].schema_version == 7 and
+            .[1].runtime == "runc" and
             (.[1].docker_create_start_us | length == 5) and
             (.[1].docker_exec_true_us | length == 100) and
             (.[1].docker_exec_python_us | length == 30) and
             (.[1].docker_exec_file_roundtrip_us | length == 20) and
             (.[1].docker_archive_write_1mib_us | length == 20) and
-            (.[1].docker_archive_read_1mib_us | length == 20) and
-            .[0].http_create_p95_us < .[1].docker_create_start_p95_us
+            (.[1].docker_archive_read_1mib_us | length == 20)
           ' \
             "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" \
-            "${FERROBOX_DOCKER_BENCHMARK_OUTPUT}" >/dev/null
-          jq --exit-status --slurp '
-            .[0].schema_version == 11 and
-            .[1].schema_version == 7 and
-            .[0].exec_true_p95_us < .[1].docker_exec_true_p95_us and
-            .[0].exec_python_p95_us < .[1].docker_exec_python_p95_us
-          ' \
-            "${RUNNER_TEMP}/ferrobox-benchmark.json" \
             "${FERROBOX_DOCKER_BENCHMARK_OUTPUT}" >/dev/null
           cat "${FERROBOX_DOCKER_BENCHMARK_OUTPUT}"
 
@@ -316,18 +308,9 @@ jobs:
             (.[1].docker_exec_python_us | length == 30) and
             (.[1].docker_exec_file_roundtrip_us | length == 20) and
             (.[1].docker_archive_write_1mib_us | length == 20) and
-            (.[1].docker_archive_read_1mib_us | length == 20) and
-            .[0].http_create_p95_us < .[1].docker_create_start_p95_us
+            (.[1].docker_archive_read_1mib_us | length == 20)
           ' \
             "${FERROBOX_HTTP_BENCHMARK_OUTPUT}" \
-            "${FERROBOX_GVISOR_BENCHMARK_OUTPUT}" >/dev/null
-          jq --exit-status --slurp '
-            .[0].schema_version == 11 and
-            .[1].schema_version == 7 and
-            .[0].exec_true_p95_us < .[1].docker_exec_true_p95_us and
-            .[0].exec_python_p95_us < .[1].docker_exec_python_p95_us
-          ' \
-            "${FERROBOX_RUNTIME_BENCHMARK_OUTPUT}" \
             "${FERROBOX_GVISOR_BENCHMARK_OUTPUT}" >/dev/null
           cat "${FERROBOX_GVISOR_BENCHMARK_OUTPUT}"
 
@@ -457,6 +440,8 @@ jobs:
             bash scripts/benchmark-kata.sh
 
       - name: Validate microVM performance leadership
+        id: microvm-performance-gate
+        continue-on-error: true
         run: |
           jq --exit-status --slurp '
             .[0].schema_version == 11 and
@@ -483,7 +468,32 @@ jobs:
             "${RUNNER_TEMP}/cloud-hypervisor-benchmark.json" \
             "${RUNNER_TEMP}/kata-benchmark.json" >/dev/null
 
+      - name: Validate container performance leadership
+        id: container-performance-gate
+        continue-on-error: true
+        run: |
+          jq --exit-status --slurp '
+            .[0].schema_version == 11 and
+            .[1].schema_version == 4 and
+            .[2].schema_version == 7 and
+            .[3].schema_version == 7 and
+            .[2].runtime == "runc" and
+            .[3].runtime == "runsc" and
+            .[1].http_create_p95_us < .[2].docker_create_start_p95_us and
+            .[1].http_create_p95_us < .[3].docker_create_start_p95_us and
+            .[0].exec_true_p95_us < .[2].docker_exec_true_p95_us and
+            .[0].exec_true_p95_us < .[3].docker_exec_true_p95_us and
+            .[0].exec_python_p95_us < .[2].docker_exec_python_p95_us and
+            .[0].exec_python_p95_us < .[3].docker_exec_python_p95_us
+          ' \
+            "${RUNNER_TEMP}/ferrobox-benchmark.json" \
+            "${RUNNER_TEMP}/ferrobox-http-benchmark.json" \
+            "${RUNNER_TEMP}/docker-benchmark.json" \
+            "${RUNNER_TEMP}/gvisor-benchmark.json" >/dev/null
+
       - name: Validate file-workload performance leadership
+        id: file-workload-performance-gate
+        continue-on-error: true
         run: |
           jq --exit-status --slurp '
             .[0].schema_version == 11 and
@@ -497,6 +507,8 @@ jobs:
             "${RUNNER_TEMP}/gvisor-benchmark.json" >/dev/null
 
       - name: Validate file-API performance leadership
+        id: file-api-performance-gate
+        continue-on-error: true
         run: |
           jq --exit-status --slurp '
             .[0].schema_version == 4 and
@@ -520,6 +532,24 @@ jobs:
           FERROBOX_NODE_BINARY: target/debug/ferrobox-node
           FERROBOX_INTERNET: "1"
         run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_NODE_BINARY,FERROBOX_INTERNET bash scripts/e2e-kvm.sh
+
+      - name: Enforce performance gates
+        if: always()
+        env:
+          MICROVM_GATE: ${{ steps.microvm-performance-gate.outcome }}
+          CONTAINER_GATE: ${{ steps.container-performance-gate.outcome }}
+          FILE_WORKLOAD_GATE: ${{ steps.file-workload-performance-gate.outcome }}
+          FILE_API_GATE: ${{ steps.file-api-performance-gate.outcome }}
+        run: |
+          printf 'microvm=%s container=%s file_workload=%s file_api=%s\n' \
+            "${MICROVM_GATE}" \
+            "${CONTAINER_GATE}" \
+            "${FILE_WORKLOAD_GATE}" \
+            "${FILE_API_GATE}"
+          [[ "${MICROVM_GATE}" == success ]]
+          [[ "${CONTAINER_GATE}" == success ]]
+          [[ "${FILE_WORKLOAD_GATE}" == success ]]
+          [[ "${FILE_API_GATE}" == success ]]
 
       - name: Upload provenance and failure evidence
         if: always()

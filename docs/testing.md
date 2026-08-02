@@ -58,11 +58,17 @@ allocation, control-plane state registration, token issuance, audit writing,
 JSON serialization, and loopback response transfer.
 
 The same job pulls a cached Python image, records its resolved Docker digest,
-and measures Docker Engine `create` plus `start` through its Unix-socket HTTP
-API. `docker-benchmark.json` retains five samples. The comparison gate requires
-Ferrobox HTTP create P95 to remain below Docker create-and-start P95.
-It also retains twenty `/bin/true` executions using Docker exec create, detached
-start, and inspect-to-exit; Ferrobox hot execution P95 must remain lower.
+and measures Docker Engine and gVisor through the same Unix-socket HTTP
+harness. Each artifact retains five create-and-start samples, one hundred
+`/bin/true` samples, thirty Python samples, twenty file-workload samples, and
+twenty archive write/read samples. Direct Firecracker, CPU-capped Firecracker,
+Cloud Hypervisor, and Kata QEMU controls run later on the same hosted KVM job.
+
+Measurement steps validate artifact schemas and sample counts without applying
+leadership claims. All performance gates run after every comparator has
+finished, continue long enough to expose every failed dimension, and are then
+enforced together. A red gate therefore still uploads the complete available
+matrix instead of stopping at the first slower comparison.
 
 The HTTP artifact also retains a five-request concurrent burst with each
 request's latency and total wall time. Sequential and concurrent P95 must both
