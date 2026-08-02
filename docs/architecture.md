@@ -109,9 +109,12 @@ rules. Public egress is permitted after private, link-local metadata,
 control-plane, host-management, and other-sandbox ranges are rejected. Cleanup
 is keyed by sandbox ID and is idempotent.
 
-Internet mode selects the host's first public IPv4 resolver for the guest and
-falls back to `1.1.1.1`. Loopback, private, link-local, multicast, unspecified,
-and reserved resolvers are never propagated into a sandbox.
+Internet mode gives the guest its per-sandbox gateway as the only resolver. A
+bounded node-side UDP/TCP relay originates requests through the host resolver
+path, supports host-local and cloud-specific resolvers, and never exposes those
+resolver addresses to the guest. The nftables input hook admits only DNS on the
+gateway and rejects all other guest-to-host traffic. The full contract is in
+[Network isolation and DNS relay](networking.md).
 
 Host networking changes are ephemeral. The implementation never edits a
 persistent distribution firewall configuration.

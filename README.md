@@ -269,6 +269,7 @@ Workflow files:
 - [Standard CI](.github/workflows/ci.yml)
 - [Firecracker KVM E2E](.github/workflows/kvm.yml)
 - [Verification policy](docs/testing.md)
+- [Network isolation and DNS relay](docs/networking.md)
 - [Performance evidence](docs/performance.md)
 - [SOTA parity program](docs/sota-roadmap.md)
 - [Supply-chain pins](docs/supply-chain.md)

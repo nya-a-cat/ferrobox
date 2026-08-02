@@ -23,6 +23,8 @@ untrusted.
 - Internet mode rejects loopback, link-local, RFC1918, carrier-grade NAT,
   multicast, metadata, host-management, control-plane, and sandbox ranges
   before allowing public egress.
+- Internet mode exposes only a per-sandbox UDP/TCP DNS relay on the guest
+  gateway; every other guest-to-host packet is rejected.
 - Tokens are random, per-sandbox, short-lived, stored only as hashes by the API,
   and omitted from logs.
 - Command timeout or sandbox TTL expiry terminates the entire microVM.
@@ -56,6 +58,6 @@ token material.
 ## Explicit non-claims
 
 The MVP has no multi-tenant organization authorization, encrypted persistent
-volume, confidential-computing guarantee, domain-name policy, browser
-isolation, GPU isolation, or cross-node recovery guarantee. Those capabilities
-require separate threat models and acceptance tests.
+volume, confidential-computing guarantee, FQDN allowlist or answer-pinning
+policy, browser isolation, GPU isolation, or cross-node recovery guarantee.
+Those capabilities require separate threat models and acceptance tests.
