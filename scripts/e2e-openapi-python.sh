@@ -6,6 +6,7 @@ evidence_path="${FERROBOX_OPENAPI_PYTHON_EVIDENCE:?evidence path is required}"
 api_url="${FERROBOX_API_URL:-http://127.0.0.1:18083}"
 repo_root="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
 work_dir="$(mktemp -d)"
+client_under_test="${work_dir}/client"
 api_pid=""
 
 cleanup() {
@@ -27,9 +28,11 @@ trap cleanup EXIT
 
 test -x target/debug/ferrobox-api
 test -f "${client_root}/pyproject.toml"
+cp -a -- "${client_root}" "${client_under_test}"
 export UV_PROJECT_ENVIRONMENT="${work_dir}/venv"
 export UV_EXCLUDE_NEWER='2026-08-02T23:59:59Z'
-uv --directory "${client_root}" lock --python 3.12
+uv --directory "${client_under_test}" lock --python 3.12
+install -m 0644 "${client_under_test}/uv.lock" "${client_root}/uv.lock"
 
 target/debug/ferrobox-api \
     --backend process \
@@ -54,5 +57,6 @@ curl --fail --silent "${api_url}/healthz" >/dev/null
 FERROBOX_API_URL="${api_url}" \
 FERROBOX_AUDIT_LOG="${work_dir}/audit/events.jsonl" \
 FERROBOX_OPENAPI_PYTHON_EVIDENCE="${evidence_path}" \
-uv --directory "${client_root}" run --locked --python 3.12 \
+PYTHONDONTWRITEBYTECODE=1 \
+uv --directory "${client_under_test}" run --locked --python 3.12 \
     python "${repo_root}/scripts/e2e-openapi-python.py"

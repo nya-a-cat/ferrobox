@@ -76,7 +76,7 @@ jobs:
           bash scripts/fetch-openapi-generator.sh \
             "${RUNNER_TEMP}/openapi-generator"
 
-      - name: Validate OpenAPI and generate SDK sources
+      - name: Validate OpenAPI and generate deterministic SDK sources
         run: |
           generator="${RUNNER_TEMP}/openapi-generator/openapi-generator-cli-7.22.0.jar"
           java -jar "${generator}" validate \
@@ -85,6 +85,13 @@ jobs:
             "${generator}" \
             openapi/ferrobox-v1.json \
             "${RUNNER_TEMP}/generated-openapi-clients"
+          bash scripts/generate-openapi-clients.sh \
+            "${generator}" \
+            openapi/ferrobox-v1.json \
+            "${RUNNER_TEMP}/generated-openapi-clients-replay"
+          diff --recursive --brief \
+            "${RUNNER_TEMP}/generated-openapi-clients" \
+            "${RUNNER_TEMP}/generated-openapi-clients-replay"
 
       - name: Generated Python SDK end-to-end
         env:
