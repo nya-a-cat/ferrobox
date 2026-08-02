@@ -28,9 +28,8 @@ trap cleanup EXIT
 test -x target/debug/ferrobox-api
 test -f "${client_root}/pyproject.toml"
 export UV_PROJECT_ENVIRONMENT="${work_dir}/venv"
-uv --directory "${client_root}" lock \
-    --python 3.12 \
-    --exclude-newer '2026-08-02T23:59:59Z'
+export UV_EXCLUDE_NEWER='2026-08-02T23:59:59Z'
+uv --directory "${client_root}" lock --python 3.12
 
 target/debug/ferrobox-api \
     --backend process \
