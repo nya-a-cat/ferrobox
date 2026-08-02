@@ -515,33 +515,6 @@ impl guest_service_server::GuestService for GuestService {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::GuestService;
-
-    #[test]
-    fn lists_the_workspace_root_through_the_capability_directory() {
-        let workspace = tempfile::tempdir().expect("temporary workspace");
-        std::fs::write(workspace.path().join("oci.txt"), b"ferrobox-oci\n").expect("write fixture");
-        let directory = GuestService::open_workspace(workspace.path()).expect("open workspace");
-        let relative = GuestService::relative_path("/home/sandbox").expect("workspace path");
-
-        let names = directory
-            .read_dir(GuestService::directory_relative_path(&relative))
-            .expect("list workspace root")
-            .map(|entry| {
-                entry
-                    .expect("directory entry")
-                    .file_name()
-                    .to_string_lossy()
-                    .into_owned()
-            })
-            .collect::<Vec<_>>();
-
-        assert_eq!(names, vec!["oci.txt".to_owned()]);
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 async fn read_output<R>(
     stream: Option<R>,
@@ -698,5 +671,32 @@ fn map_file_error(error: std::io::Error) -> Status {
         std::io::ErrorKind::AlreadyExists => Status::already_exists("path exists"),
         std::io::ErrorKind::PermissionDenied => Status::permission_denied("path is forbidden"),
         _ => Status::internal(error.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GuestService;
+
+    #[test]
+    fn lists_the_workspace_root_through_the_capability_directory() {
+        let workspace = tempfile::tempdir().expect("temporary workspace");
+        std::fs::write(workspace.path().join("oci.txt"), b"ferrobox-oci\n").expect("write fixture");
+        let directory = GuestService::open_workspace(workspace.path()).expect("open workspace");
+        let relative = GuestService::relative_path("/home/sandbox").expect("workspace path");
+
+        let names = directory
+            .read_dir(GuestService::directory_relative_path(&relative))
+            .expect("list workspace root")
+            .map(|entry| {
+                entry
+                    .expect("directory entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["oci.txt".to_owned()]);
     }
 }
