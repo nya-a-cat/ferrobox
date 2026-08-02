@@ -93,6 +93,15 @@ traversal_status="$(
 )"
 [[ "${traversal_status}" == "400" ]]
 
+snapshot_status="$(
+    curl --silent --output /dev/null --write-out '%{http_code}' \
+        --header "authorization: Bearer ${token}" \
+        --header 'content-type: application/json' \
+        --data '{"name":"unsupported-on-process-backend"}' \
+        "${api_url}/v1/sandboxes/${sandbox_id}/snapshots"
+)"
+[[ "${snapshot_status}" == "501" ]]
+
 curl --fail --silent \
     --request DELETE \
     --header "authorization: Bearer ${token}" \
@@ -108,4 +117,3 @@ deleted_status="$(
 grep --fixed-strings --quiet '"operation":"delete"' "${runtime_root}/audit/events.jsonl"
 
 printf 'Process/API E2E passed for sandbox %s\n' "${sandbox_id}"
-

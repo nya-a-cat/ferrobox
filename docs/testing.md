@@ -92,6 +92,21 @@ and namespace. Cleanup also proves that no tagged host-forwarding rule remains.
 DNS runs through the same host-originated relay path used on cloud-specific
 GitHub runners.
 
+## Live snapshot KVM CI
+
+`.github/workflows/snapshots.yml` is an independent hosted-KVM workflow for
+full running state. It validates memory-resident process continuation, rootfs
+consistency, source divergence, paginated metadata, token separation, restore
+and clone isolation, same-ID rollback, source-independent lifetime,
+paused-source preservation, digest failure closure, audit redaction, and final
+VM, jail, cgroup, and snapshot cleanup. Each run uploads its result and a
+sanitized schema-1 manifest.
+
+Partial-batch cleanup uses the opt-in `fault-injection` Cargo feature. A test
+API reads `FERROBOX_TEST_CLONE_FAILURE_FILE`; a valid integer requests failure
+after that many clones have launched. Production builds leave the feature
+disabled and contain no active injection branch.
+
 The HTTP artifact also retains a five-request concurrent burst with each
 request's latency and total wall time. Sequential and concurrent P95 must both
 remain below 80 ms.

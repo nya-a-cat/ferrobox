@@ -68,3 +68,7 @@ read-only after publication, and the captured restore credential is mode
 `0400`. SHA-256 verification provides corruption detection. Encryption at rest,
 artifact signing, tenant-scoped durable metadata, and cross-node key management
 remain separate security gates.
+
+The partial-clone fault hook is compiled only with the explicit
+`fault-injection` feature used by the hosted snapshot workflow. Default and
+release builds do not enable that feature.

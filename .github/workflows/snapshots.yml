@@ -1,0 +1,193 @@
+name: Live Snapshot KVM E2E
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  snapshot-kvm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install image build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            debootstrap \
+            btrfs-progs \
+            e2fsprogs \
+            jq \
+            musl-tools \
+            protobuf-compiler \
+            zstd
+
+      - name: Require nested KVM
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          sudo chgrp "$(id -gn)" /dev/kvm
+          sudo chmod 660 /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+
+      - name: Build API with fault injection and static guest
+        run: |
+          cargo generate-lockfile
+          cargo build -p ferrobox-api --features fault-injection --locked
+          cargo build -p ferrobox-guest \
+            --release \
+            --target x86_64-unknown-linux-musl \
+            --locked
+
+      - name: Fetch verified Firecracker
+        run: |
+          bash scripts/fetch-firecracker.sh "${RUNNER_TEMP}/firecracker"
+          sudo install -d -o root -g root -m 0755 /opt/ferrobox/bin
+          sudo install -o root -g root -m 0755 \
+            "${RUNNER_TEMP}/firecracker/firecracker" \
+            /opt/ferrobox/bin/firecracker
+          sudo install -o root -g root -m 0755 \
+            "${RUNNER_TEMP}/firecracker/jailer" \
+            /opt/ferrobox/bin/jailer
+
+      - name: Fetch verified Firecracker CI kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          kernel_key='firecracker-ci/v1.15/x86_64/vmlinux-6.1.155'
+          expected_kernel_sha256='e20e46d0c36c55c0d1014eb20576171b3f3d922260d9f792017aeff53af3d4f2'
+          kernel="${RUNNER_TEMP}/vmlinux"
+          curl --fail --location --silent --show-error \
+            --output "${kernel}" \
+            "https://s3.amazonaws.com/spec.ccfc.min/${kernel_key}"
+          actual_kernel_sha256="$(sha256sum "${kernel}" | awk '{print $1}')"
+          [[ "${actual_kernel_sha256}" == "${expected_kernel_sha256}" ]]
+          {
+            printf 'kernel_key=%s\n' "${kernel_key}"
+            printf 'kernel_sha256=%s\n' "${actual_kernel_sha256}"
+          } >"${RUNNER_TEMP}/snapshot-kernel.manifest"
+          sudo install -d -o root -g root -m 0755 /opt/ferrobox/images
+          sudo install -o root -g root -m 0444 \
+            "${kernel}" \
+            /opt/ferrobox/images/vmlinux
+
+      - name: Build Python guest rootfs
+        run: |
+          sudo bash scripts/build-python-rootfs.sh \
+            target/x86_64-unknown-linux-musl/release/ferrobox-guest \
+            /opt/ferrobox/images/python.ext4
+          sudo chmod 0444 /opt/ferrobox/images/python.ext4
+
+      - name: Prepare copy-on-write runtime storage
+        run: |
+          sudo truncate -s 8G "${RUNNER_TEMP}/ferrobox-snapshot.btrfs"
+          sudo mkfs.btrfs --force --quiet "${RUNNER_TEMP}/ferrobox-snapshot.btrfs"
+          sudo install -d -o root -g root -m 0755 /mnt/ferrobox-snapshot
+          sudo mount -o loop \
+            "${RUNNER_TEMP}/ferrobox-snapshot.btrfs" \
+            /mnt/ferrobox-snapshot
+          sudo install -d -o root -g root -m 0755 \
+            /mnt/ferrobox-snapshot/images \
+            /mnt/ferrobox-snapshot/jailer \
+            /mnt/ferrobox-snapshot/runtime \
+            /mnt/ferrobox-snapshot/boot-snapshot
+          sudo cp --sparse=always \
+            /opt/ferrobox/images/vmlinux \
+            /mnt/ferrobox-snapshot/images/vmlinux
+          sudo cp --sparse=always \
+            /opt/ferrobox/images/python.ext4 \
+            /mnt/ferrobox-snapshot/images/python.ext4
+          sudo chmod 0444 \
+            /mnt/ferrobox-snapshot/images/vmlinux \
+            /mnt/ferrobox-snapshot/images/python.ext4
+          sudo cp --reflink=always \
+            /mnt/ferrobox-snapshot/images/python.ext4 \
+            /mnt/ferrobox-snapshot/images/reflink-check.ext4
+          sudo rm /mnt/ferrobox-snapshot/images/reflink-check.ext4
+          if [[ -w /sys/fs/cgroup/cgroup.subtree_control ]]; then
+            echo '+cpu +memory +pids' |
+              sudo tee /sys/fs/cgroup/cgroup.subtree_control >/dev/null || true
+          fi
+
+      - name: Verify live snapshot contract
+        env:
+          FERROBOX_API_URL: http://127.0.0.1:18081
+          FERROBOX_RUNTIME_ROOT: /mnt/ferrobox-snapshot/runtime
+          FERROBOX_CHROOT_BASE: /mnt/ferrobox-snapshot/jailer
+          FERROBOX_AUDIT_LOG: /mnt/ferrobox-snapshot/runtime/audit/events.jsonl
+          FERROBOX_TEST_CLONE_FAILURE_FILE: /mnt/ferrobox-snapshot/runtime/clone-failure
+          FERROBOX_SNAPSHOT_MANIFEST_EVIDENCE: ${{ runner.temp }}/snapshot-manifest.json
+          FERROBOX_SNAPSHOT_EVIDENCE: ${{ runner.temp }}/snapshot-e2e.json
+          FERROBOX_SNAPSHOT_API_LOG: ${{ runner.temp }}/snapshot-api.log
+        run: |
+          set -euo pipefail
+          sudo env \
+            FERROBOX_TEST_CLONE_FAILURE_FILE="${FERROBOX_TEST_CLONE_FAILURE_FILE}" \
+            RUST_LOG=info \
+            target/debug/ferrobox-api \
+              --backend firecracker \
+              --listen 127.0.0.1:18081 \
+              --audit-log "${FERROBOX_AUDIT_LOG}" \
+              --firecracker /opt/ferrobox/bin/firecracker \
+              --jailer /opt/ferrobox/bin/jailer \
+              --kernel /mnt/ferrobox-snapshot/images/vmlinux \
+              --rootfs /mnt/ferrobox-snapshot/images/python.ext4 \
+              --snapshot-root /mnt/ferrobox-snapshot/boot-snapshot/python \
+              --chroot-base "${FERROBOX_CHROOT_BASE}" \
+              --runtime-root "${FERROBOX_RUNTIME_ROOT}" \
+              >"${FERROBOX_SNAPSHOT_API_LOG}" 2>&1 &
+          api_pid=$!
+          cleanup() {
+            sudo kill "${api_pid}" 2>/dev/null || true
+            wait "${api_pid}" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for _ in $(seq 1 400); do
+            if curl --fail --silent "${FERROBOX_API_URL}/healthz" >/dev/null; then
+              break
+            fi
+            if ! sudo kill -0 "${api_pid}" 2>/dev/null; then
+              cat "${FERROBOX_SNAPSHOT_API_LOG}" >&2
+              exit 1
+            fi
+            sleep 0.05
+          done
+          curl --fail --silent "${FERROBOX_API_URL}/healthz" >/dev/null
+          if ! sudo --preserve-env=FERROBOX_API_URL,FERROBOX_RUNTIME_ROOT,FERROBOX_CHROOT_BASE,FERROBOX_AUDIT_LOG,FERROBOX_TEST_CLONE_FAILURE_FILE,FERROBOX_SNAPSHOT_MANIFEST_EVIDENCE \
+            python3 scripts/e2e-snapshots.py \
+            >"${FERROBOX_SNAPSHOT_EVIDENCE}"; then
+            cat "${FERROBOX_SNAPSHOT_API_LOG}" >&2
+            exit 1
+          fi
+          cat "${FERROBOX_SNAPSHOT_EVIDENCE}"
+
+      - name: Upload snapshot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-snapshot-evidence
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/snapshot-kernel.manifest
+            ${{ runner.temp }}/snapshot-manifest.json
+            ${{ runner.temp }}/snapshot-e2e.json
+            ${{ runner.temp }}/snapshot-api.log
+            /mnt/ferrobox-snapshot/runtime/audit/events.jsonl
+            /opt/ferrobox/images/python.ext4.manifest.json

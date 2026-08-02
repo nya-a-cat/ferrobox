@@ -1529,6 +1529,8 @@ impl SandboxRuntime for FirecrackerRuntime {
                 "clone count must be between 1 and 32",
             ));
         }
+        #[cfg(feature = "fault-injection")]
+        let injected_failure_after = injected_clone_failure_after().await;
         let record = self.snapshot_record(snapshot_id).await?;
         let record = record.lock().await;
         let verification = self.snapshot_store.verify(&record).await;
@@ -1547,7 +1549,16 @@ impl SandboxRuntime for FirecrackerRuntime {
                 .create_from_snapshot_artifact(&record, captured_guest_token.clone())
                 .await
             {
-                Ok(handle) => handles.push(handle),
+                Ok(handle) => {
+                    handles.push(handle);
+                    #[cfg(feature = "fault-injection")]
+                    if injected_failure_after == Some(handles.len()) {
+                        for handle in &handles {
+                            let _ = <Self as SandboxRuntime>::delete(self, &handle.sandbox_id).await;
+                        }
+                        return Err(RuntimeError::internal("injected partial clone failure"));
+                    }
+                }
                 Err(error) => {
                     for handle in &handles {
                         let _ = <Self as SandboxRuntime>::delete(self, &handle.sandbox_id).await;
@@ -1680,6 +1691,17 @@ impl SandboxRuntime for FirecrackerRuntime {
         let mut record = record.lock().await;
         self.terminate_record(&mut record).await
     }
+}
+
+#[cfg(feature = "fault-injection")]
+async fn injected_clone_failure_after() -> Option<usize> {
+    let path = std::env::var_os("FERROBOX_TEST_CLONE_FAILURE_FILE")?;
+    let value = fs::read_to_string(path).await.ok()?;
+    value
+        .trim()
+        .parse::<usize>()
+        .ok()
+        .filter(|count| (1..=32).contains(count))
 }
 
 fn guest_cid(spec: &SandboxSpec) -> u32 {

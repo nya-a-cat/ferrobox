@@ -107,3 +107,6 @@ The hosted KVM workflow must prove:
 - running-source and paused-source capture both preserve their required source
   state;
 - all partial directories and snapshot leases are absent after cleanup.
+
+These checks run in `.github/workflows/snapshots.yml`; the runtime, guest,
+artifact corruption, and resource observations all occur on the GitHub runner.
