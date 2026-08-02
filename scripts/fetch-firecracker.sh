@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-version="1.16.1"
+version="1.15.1"
 archive="firecracker-v${version}-x86_64.tgz"
-expected_sha256="382a02a869e4d6d5cb14c40577f9545e8458021ea8b0b2d3fc10ec14d9c242e6"
+expected_sha256="d4a32ab2322d887ca1bc4a4e7afa9cc35393e6362dfc2b3becb389d362e4275a"
 base_url="https://github.com/firecracker-microvm/firecracker/releases/download/v${version}"
 destination="${1:-${XDG_CACHE_HOME:-${HOME}/.cache}/ferrobox/firecracker-v${version}}"
 
@@ -68,4 +68,3 @@ printf '%s\n' "${base_url}/${archive}" >"${destination}/SOURCE.url"
 "${destination}/firecracker" --version
 "${destination}/jailer" --version
 printf 'Installed verified Firecracker tools in %s\n' "${destination}"
-

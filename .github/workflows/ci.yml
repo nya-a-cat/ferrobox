@@ -157,5 +157,5 @@ jobs:
 
       - name: Verify versions
         run: |
-          test "$("${RUNNER_TEMP}/firecracker/firecracker" --version | grep -c '1.16.1')" -eq 1
-          test "$("${RUNNER_TEMP}/firecracker/jailer" --version | grep -c '1.16.1')" -eq 1
+          test "$("${RUNNER_TEMP}/firecracker/firecracker" --version | grep -c '1.15.1')" -eq 1
+          test "$("${RUNNER_TEMP}/firecracker/jailer" --version | grep -c '1.15.1')" -eq 1

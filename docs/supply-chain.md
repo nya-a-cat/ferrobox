@@ -44,12 +44,18 @@ Ferrobox pins Firecracker and Jailer to the same upstream release:
 
 | Item | Value |
 | --- | --- |
-| Version | `1.16.1` |
-| Release date | 2026-07-02 |
+| Version | `1.15.1` |
+| Release date | 2026-04-07 |
 | Upstream | `firecracker-microvm/firecracker` |
 | License | Apache-2.0 |
-| x86_64 archive | `firecracker-v1.16.1-x86_64.tgz` |
-| SHA-256 | `382a02a869e4d6d5cb14c40577f9545e8458021ea8b0b2d3fc10ec14d9c242e6` |
+| x86_64 archive | `firecracker-v1.15.1-x86_64.tgz` |
+| SHA-256 | `d4a32ab2322d887ca1bc4a4e7afa9cc35393e6362dfc2b3becb389d362e4275a` |
+
+The pin stays on `1.15.1` while upstream
+[issue #6074](https://github.com/firecracker-microvm/firecracker/issues/6074)
+remains open for a `1.16.x` Pause/Resume vsock livelock. Promotion to a newer
+release requires the hosted KVM lifecycle gate to pass pause, rejected execution
+while paused, resume, and a post-resume guest command.
 
 `scripts/fetch-firecracker.sh` uses a fixed HTTPS URL, verifies the pinned hash
 before parsing, rejects absolute and parent-traversing archive members, extracts

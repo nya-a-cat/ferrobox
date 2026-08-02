@@ -39,7 +39,7 @@ use crate::{
     vsock::GuestConnector,
 };
 
-const FIRECRACKER_VERSION: &str = "1.16.1";
+const FIRECRACKER_VERSION: &str = "1.15.1";
 const FIRECRACKER_SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(300);
 const CGROUP_V2_ROOT: &str = "/sys/fs/cgroup";
 const JAILER_CGROUP_PARENT: &str = "ferrobox";
@@ -562,34 +562,6 @@ impl FirecrackerRuntime {
         }
     }
 
-    async fn wait_for_existing_guest(
-        &self,
-        client: &mut guest::guest_service_client::GuestServiceClient<tonic::transport::Channel>,
-    ) -> Result<(), RuntimeError> {
-        // Keep the established channel across Pause/Resume. Firecracker tracks new
-        // host-initiated vsock connection hangs after Resume in v1.16.x:
-        // https://github.com/firecracker-microvm/firecracker/issues/6074
-        let started = Instant::now();
-        loop {
-            if started.elapsed() >= self.config.boot_timeout {
-                return Err(RuntimeError::new(
-                    RuntimeErrorKind::Timeout,
-                    "guest agent did not become ready",
-                ));
-            }
-            if let Ok(Ok(response)) = timeout(
-                self.config.api_timeout,
-                client.health(Request::new(HealthRequest {})),
-            )
-            .await
-                && response.into_inner().ready
-            {
-                return Ok(());
-            }
-            sleep(Duration::from_millis(5)).await;
-        }
-    }
-
     async fn initialize_guest(
         &self,
         id: &SandboxId,
@@ -818,6 +790,16 @@ impl FirecrackerRuntime {
             ));
         }
         Ok((client, token_value))
+    }
+
+    async fn reconnect_guest(&self, record: &mut FirecrackerSandbox) -> Result<(), RuntimeError> {
+        let connector = GuestConnector::new(
+            record.chroot_root.join("run").join("guest.vsock"),
+            self.config.guest_port,
+            self.config.api_timeout,
+        );
+        record.guest_client = self.wait_for_guest(&connector).await?;
+        Ok(())
     }
 }
 
@@ -1465,8 +1447,7 @@ impl SandboxRuntime for FirecrackerRuntime {
             )
             .await
             .map_err(fc_error)?;
-        self.wait_for_existing_guest(&mut record.guest_client)
-            .await?;
+        self.reconnect_guest(&mut record).await?;
         record.state = SandboxState::Running;
         Ok(())
     }
@@ -1552,7 +1533,7 @@ impl SandboxRuntime for FirecrackerRuntime {
                 .await
                 .map_err(fc_error);
             if resumed.is_ok() {
-                self.wait_for_existing_guest(&mut source.guest_client).await
+                self.reconnect_guest(&mut source).await
             } else {
                 resumed
             }
