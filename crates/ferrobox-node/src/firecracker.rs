@@ -3,13 +3,19 @@ use std::{path::PathBuf, time::Duration};
 use bytes::Bytes;
 use http::{Method, Request, StatusCode};
 use http_body_util::{BodyExt as _, Full};
+#[cfg(unix)]
+use hyper_util::client::legacy::Client;
+#[cfg(unix)]
+use hyperlocal::{UnixClientExt as _, UnixConnector, Uri};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct FirecrackerClient {
     socket: PathBuf,
     timeout: Duration,
+    #[cfg(unix)]
+    client: Client<UnixConnector, Full<Bytes>>,
 }
 
 #[derive(Debug, Error)]
@@ -26,8 +32,13 @@ pub enum FirecrackerError {
 
 impl FirecrackerClient {
     #[must_use]
-    pub const fn new(socket: PathBuf, timeout: Duration) -> Self {
-        Self { socket, timeout }
+    pub fn new(socket: PathBuf, timeout: Duration) -> Self {
+        Self {
+            socket,
+            timeout,
+            #[cfg(unix)]
+            client: Client::unix(),
+        }
     }
 
     pub async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T, FirecrackerError> {
@@ -62,27 +73,26 @@ impl FirecrackerClient {
         path: &str,
         body: Bytes,
     ) -> Result<Bytes, FirecrackerError> {
-        use hyper_util::client::legacy::Client;
-        use hyperlocal::{UnixClientExt as _, UnixConnector, Uri};
-
-        let client: Client<UnixConnector, Full<Bytes>> = Client::unix();
+        let operation = format!("{method} {path}");
         let uri: hyper::Uri = Uri::new(&self.socket, path).into();
         let request = Request::builder()
             .method(method)
             .uri(uri)
             .header(http::header::CONTENT_TYPE, "application/json")
             .body(Full::new(body))
-            .map_err(|error| FirecrackerError::Transport(error.to_string()))?;
-        let response = tokio::time::timeout(self.timeout, client.request(request))
+            .map_err(|error| {
+                FirecrackerError::Transport(format!("{operation}: {error}"))
+            })?;
+        let response = tokio::time::timeout(self.timeout, self.client.request(request))
             .await
-            .map_err(|_| FirecrackerError::Transport("request timed out".to_owned()))?
-            .map_err(|error| FirecrackerError::Transport(error.to_string()))?;
+            .map_err(|_| FirecrackerError::Transport(format!("{operation}: request timed out")))?
+            .map_err(|error| FirecrackerError::Transport(format!("{operation}: {error}")))?;
         let status = response.status();
         let bytes = response
             .into_body()
             .collect()
             .await
-            .map_err(|error| FirecrackerError::Transport(error.to_string()))?
+            .map_err(|error| FirecrackerError::Transport(format!("{operation}: {error}")))?
             .to_bytes();
         if status.is_success() {
             Ok(bytes)

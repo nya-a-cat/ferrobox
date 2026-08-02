@@ -349,7 +349,7 @@ impl FirecrackerRuntime {
         let kill_result = fs::write(cgroup.join("cgroup.kill"), b"1").await;
 
         let mut last_error = None;
-        for _ in 0..50 {
+        for _ in 0..250 {
             match fs::remove_dir(&cgroup).await {
                 Ok(()) => return Ok(()),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),

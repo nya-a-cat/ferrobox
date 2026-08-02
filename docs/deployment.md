@@ -55,12 +55,15 @@ for the child process, drains remaining members through the leaf's cgroup v2
 `cgroup.kill` control, removes the exact leaf with `rmdir` semantics, and never
 recursively deletes the shared cgroup tree. Launch-failure cleanup follows the
 same bounded path and retains `cgroup.events` plus `cgroup.procs` diagnostics
-on failure. This implements the operator cleanup responsibility defined by the
-[Firecracker Jailer contract](https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md).
+on failure. The abnormal-exit path allows up to five seconds for PID-namespace
+children to leave the cgroup after `cgroup.kill`. This implements the operator
+cleanup responsibility defined by the [Firecracker Jailer contract](https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md).
 
 Startup treats the API socket inode as an intermediate state. Ferrobox retries
 the Firecracker version request until the configured API deadline, then begins
 machine configuration or snapshot loading only after the API accepts requests.
+Each VM retains one Hyper Unix-socket client for its complete lifecycle so the
+configuration sequence uses one bounded connection pool.
 
 Direct Firecracker execution is available only behind an explicit unsafe
 development option. The API refuses to expose that mode on a non-loopback

@@ -113,7 +113,9 @@ The hosted pool benchmark launches several VMs together. Each launch must pass
 an accepting Firecracker `/version` request after socket creation; a transient
 Unix-socket connect race is retried within the existing API deadline. Failed
 launch cleanup drains the exact cgroup leaf and records controller diagnostics
-if the leaf remains busy.
+if the leaf remains busy. Transport failures include the Firecracker HTTP
+method and API path, and each VM reuses one Unix HTTP client across the full
+configuration sequence.
 
 The HTTP artifact also retains a five-request concurrent burst with each
 request's latency and total wall time. Sequential and concurrent P95 must both
