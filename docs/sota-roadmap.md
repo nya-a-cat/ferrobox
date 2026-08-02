@@ -113,7 +113,7 @@ Status meanings:
 | Kubernetes | CRDs/controller, pools, RuntimeClass, and workload-provider integration | Missing | Kind-based API conformance and cleanup suite passes on GitHub |
 | Audit and diagnostics | Lifecycle/workload audit, reasoned state, metrics, logs, traces | Partial | Request IDs correlate API, runtime, guest, network, and audit events |
 | Tenant security | API keys, per-sandbox credentials, endpoint credentials, and organization boundaries | Partial | Cross-tenant authorization matrix and credential-redaction suite pass |
-| Supply-chain inventory | Action SHA pins, pinned binaries/images, checksums, manifests, SBOM, and update policy | Partial | In-toto provenance covers every executable, guest asset, image, and SBOM used by release E2E |
+| Supply-chain inventory | Action SHA pins, pinned binaries/images, checksums, manifests, SBOM, and update policy | Verified | In-toto provenance covers every executable, guest asset, image, and SBOM used by release E2E |
 | Release integrity | Digest-bound releases, keyless signatures, provenance attestations, and consumer verification | Partial | GitHub verifies signed source/binary artifacts and OCI digests against fixed workflow and repository identities |
 
 The four verified state-branching rows are backed by

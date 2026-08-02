@@ -43,6 +43,15 @@ and all SBOM hashes. The statement is accepted only after every serialized
 local-file digest is independently recomputed. Its outcome is reported beside
 the deferred performance gates and enforced at the final convergence step.
 
+Run 30762230170 verified this gate at commit `6fb848c` and retained artifact
+`8838016271`. The in-toto predicate contains five subjects, nineteen executed
+files, six guest assets, six upstream inputs, and three SPDX 2.3 SBOMs. The
+SBOMs report 277 source packages, 263 rootfs packages, and 141 comparator-image
+packages. Standard CI run 30762230183 and Live Snapshot KVM run 30762230199
+passed for the same revision. The full KVM result remained red after Kata
+cleanup hit its outer deadline and left the Kata JSON absent; the supply-chain,
+Internet, container, and file-workload outcomes passed independently.
+
 The same hosted-KVM job emits `ferrobox-benchmark.json` with:
 
 - five sorted ready-pool preparation samples plus P50 and P95;

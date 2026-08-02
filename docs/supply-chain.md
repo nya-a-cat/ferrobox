@@ -92,7 +92,8 @@ so copied or modified runtime assets fail the final verification loop.
 
 ## SBOM generator
 
-`scripts/fetch-syft.sh` installs the official Linux x86_64 Syft `v1.50.0`
+`scripts/fetch-syft.sh` installs the official Linux x86_64
+[Syft `v1.50.0`](https://github.com/anchore/syft/releases/tag/v1.50.0)
 archive after verifying SHA-256
 `bf7b29ff57f06da30918266a0e1c2885a8f99784798d1bdb1628886aa015d788`.
 It applies the same HTTPS, temporary-directory, and archive-path controls used
@@ -158,5 +159,21 @@ Before a parity release or pinned-input update:
    and digest verification result;
 6. preserve the prior pin in Git history as the rollback point.
 
-The first hosted run for this revision is the verification gate for the new
-schema. The capability remains partial until that artifact passes.
+GitHub KVM run
+[30762230170](https://github.com/nya-a-cat/ferrobox/actions/runs/30762230170)
+verified schema v1 at commit `6fb848c`. Its `kvm-evidence` artifact
+`8838016271` contains the in-toto statement plus all three SPDX documents. The
+statement records five subjects, nineteen executed files, six guest assets, six
+upstream inputs, and the fixed Python image digest. The source, rootfs, and
+image SBOMs contain 277, 263, and 141 packages respectively. The supply-chain
+step passed its schema and complete local re-hash loop.
+
+The run's final aggregate remained red because Kata cleanup reached its
+12-minute outer deadline after the final Python batch, which left its benchmark
+JSON absent, and the independent HTTP file-API gate failed. Standard CI run
+[30762230183](https://github.com/nya-a-cat/ferrobox/actions/runs/30762230183)
+and Live Snapshot KVM run
+[30762230199](https://github.com/nya-a-cat/ferrobox/actions/runs/30762230199)
+passed for the same commit. Supply-chain inventory is verified; the
+release-integrity row remains partial pending the permission-reviewed signing
+phase.
