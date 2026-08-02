@@ -92,6 +92,12 @@ byte hashes differ; all three report `e2fsck_read_only: true`.
 passed formatting, tests, Clippy, builds, process/CLI/OpenAPI conformance, and
 the Firecracker/Jailer `1.15.1` host gate for the same commit.
 
+[Live Snapshot KVM run 30769681594](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681594)
+also passed the complete running/paused snapshot, restore, clone, rollback,
+integrity, credential, and cleanup contract at `8a0c5dc`. Artifact `8840293443`
+has archive digest
+`sha256:062ffefef493979c193cdcf7f633a965ee1e7869b5c84f34e9cfb8722dfc5c8f`.
+
 ## KVM CI
 
 `.github/workflows/kvm.yml` requires `/dev/kvm`, builds the static guest and a

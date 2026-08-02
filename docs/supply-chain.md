@@ -57,6 +57,13 @@ remains open for a `1.16.x` Pause/Resume vsock livelock. Promotion to a newer
 release requires the hosted KVM lifecycle gate to pass pause, rejected execution
 while paused, resume, and a post-resume guest command.
 
+[Standard CI run 30769681624](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681624),
+three independent OCI KVM runs, and
+[Live Snapshot KVM run 30769681594](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681594)
+passed this pin at commit `8a0c5dc`. The snapshot run completed the running and
+paused source paths, restore, clone, rollback, integrity, credential, and cleanup
+contract and retained artifact `8840293443`.
+
 `scripts/fetch-firecracker.sh` uses a fixed HTTPS URL, verifies the pinned hash
 before parsing, rejects absolute and parent-traversing archive members, extracts
 into a fresh temporary directory, and installs only the two expected
