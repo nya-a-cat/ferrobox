@@ -177,9 +177,11 @@ credential redaction, and final snapshot artifact cleanup. Its uploaded
 `snapshot-cli-e2e.json` contains only IDs, counts, and check names.
 
 The current hosted proof is
-[Live Snapshot KVM E2E run 30758919945](https://github.com/nya-a-cat/ferrobox/actions/runs/30758919945)
-for commit `87d5456`. It completed all sixteen checks and uploaded artifact
-`8836989482`; standard CI for the same commit passed in run `30758919931`.
+[Live Snapshot KVM E2E run 30764234734](https://github.com/nya-a-cat/ferrobox/actions/runs/30764234734)
+for commit `b80d25b`. It completed seventeen API checks plus the seven-check CLI
+closed loop and uploaded artifact `8838607163`, whose archive digest is
+`sha256:fb0141120e4ca9a6acd8073c11cfa4f3c0281adf3e143d05798b38cad57267d0`.
+Standard CI for the same commit passed in run `30764234706`.
 
 The HTTP artifact also retains a five-request concurrent burst with each
 request's latency and total wall time. Sequential and concurrent P95 must both

@@ -58,6 +58,14 @@ passed the extended lifecycle contract at commit `4b3daae`: inspect and list
 returned the expected records, execution while paused returned HTTP 409, and
 resume restored the running state before cleanup.
 
+[Standard CI run 30764234706](https://github.com/nya-a-cat/ferrobox/actions/runs/30764234706)
+passed the complete snapshot command surface at commit `b80d25b`. The same
+commit passed the real Firecracker boundary in
+[Live Snapshot KVM E2E run 30764234734](https://github.com/nya-a-cat/ferrobox/actions/runs/30764234734).
+Artifact `8838607163` retains a sanitized schema-1 CLI record with seven checks,
+two clones, distinct sandbox and snapshot credentials, restored file state,
+credential redaction, and final artifact cleanup.
+
 ## Upstream basis
 
 The interface was audited against the pinned

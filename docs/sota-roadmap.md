@@ -125,13 +125,15 @@ The CLI command group also covers the complete snapshot API surface: create,
 paginated list, inspect, verify, restore, clone, rollback, and delete. The Live
 Snapshot KVM workflow enforces its separate conformance path.
 
-The four verified state-branching rows are backed by
-[Live Snapshot KVM E2E run 30758919945](https://github.com/nya-a-cat/ferrobox/actions/runs/30758919945)
-at commit `87d5456`. Its `live-snapshot-evidence` artifact records schema 1 and
-all sixteen contract checks, including process-memory continuation, independent
-restore, clone isolation, same-ID rollback, fault cleanup, integrity failure,
-and final resource cleanup. Standard CI for the same commit passed in
-[run 30758919931](https://github.com/nya-a-cat/ferrobox/actions/runs/30758919931).
+The four verified state-branching rows and the complete CLI snapshot surface
+are backed by
+[Live Snapshot KVM E2E run 30764234734](https://github.com/nya-a-cat/ferrobox/actions/runs/30764234734)
+at commit `b80d25b`. Its `live-snapshot-evidence` artifact `8838607163` records
+schema 1, seventeen API checks, and seven CLI checks, including process-memory
+continuation, independent restore, clone isolation, same-ID rollback, fault
+cleanup, integrity failure, credential separation, and final resource cleanup.
+Standard CI for the same commit passed in
+[run 30764234706](https://github.com/nya-a-cat/ferrobox/actions/runs/30764234706).
 
 ## SOTA evidence rules
 

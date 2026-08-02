@@ -130,9 +130,11 @@ The hosted KVM workflow must prove:
 These checks run in `.github/workflows/snapshots.yml`; the runtime, guest,
 artifact corruption, and resource observations all occur on the GitHub runner.
 
-Commit `87d5456` passed the complete contract in
-[GitHub run 30758919945](https://github.com/nya-a-cat/ferrobox/actions/runs/30758919945).
-Artifact `8836989482` contains the sanitized schema-1 manifest and the sixteen
-successful acceptance checks. The tested full-snapshot request uses a separate
-five-minute Firecracker deadline while ordinary control requests retain their
-five-second deadline.
+Commit `b80d25b` passed the complete API and CLI contract in
+[GitHub run 30764234734](https://github.com/nya-a-cat/ferrobox/actions/runs/30764234734).
+Artifact `8838607163` contains the sanitized schema-1 manifest, seventeen API
+acceptance checks, and seven CLI checks covering every snapshot subcommand.
+Standard CI for the same commit passed in
+[run 30764234706](https://github.com/nya-a-cat/ferrobox/actions/runs/30764234706).
+The tested full-snapshot request uses a separate five-minute Firecracker
+deadline while ordinary control requests retain their five-second deadline.
