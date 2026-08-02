@@ -121,6 +121,14 @@ impl GuestService {
         Dir::open_ambient_dir(path, ambient_authority())
             .map_err(|error| Status::internal(error.to_string()))
     }
+
+    fn directory_relative_path(relative: &Path) -> &Path {
+        if relative.as_os_str().is_empty() {
+            Path::new(".")
+        } else {
+            relative
+        }
+    }
 }
 
 #[tonic::async_trait]
@@ -466,7 +474,10 @@ impl guest_service_server::GuestService for GuestService {
             let directory = Self::open_workspace(&workspace_path)?;
             Self::verify_components(&directory, &relative, false)?;
             let mut output = Vec::new();
-            for entry in directory.read_dir(&relative).map_err(map_file_error)? {
+            for entry in directory
+                .read_dir(Self::directory_relative_path(&relative))
+                .map_err(map_file_error)?
+            {
                 if output.len() >= 4096 {
                     return Err(Status::resource_exhausted("directory entry limit exceeded"));
                 }
@@ -501,6 +512,34 @@ impl guest_service_server::GuestService for GuestService {
         .await
         .map_err(|error| Status::internal(error.to_string()))??;
         Ok(Response::new(ListDirectoryResponse { entries }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GuestService;
+
+    #[test]
+    fn lists_the_workspace_root_through_the_capability_directory() {
+        let workspace = tempfile::tempdir().expect("temporary workspace");
+        std::fs::write(workspace.path().join("oci.txt"), b"ferrobox-oci\n")
+            .expect("write fixture");
+        let directory = GuestService::open_workspace(workspace.path()).expect("open workspace");
+        let relative = GuestService::relative_path("/home/sandbox").expect("workspace path");
+
+        let names = directory
+            .read_dir(GuestService::directory_relative_path(&relative))
+            .expect("list workspace root")
+            .map(|entry| {
+                entry
+                    .expect("directory entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["oci.txt".to_owned()]);
     }
 }
 
