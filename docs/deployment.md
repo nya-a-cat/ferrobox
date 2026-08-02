@@ -62,6 +62,9 @@ cleanup responsibility defined by the [Firecracker Jailer contract](https://gith
 Startup treats the API socket inode as an intermediate state. Ferrobox retries
 the Firecracker version request until the configured API deadline, then begins
 machine configuration or snapshot loading only after the API accepts requests.
+Ordinary Firecracker control calls retain a five-second fail-fast deadline. Full
+snapshot creation has a dedicated five-minute deadline because Firecracker
+writes the configured guest memory to storage before replying.
 Each VM retains one Hyper Unix-socket client for its complete lifecycle so the
 configuration sequence uses one bounded connection pool.
 

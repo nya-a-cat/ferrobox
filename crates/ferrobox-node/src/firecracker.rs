@@ -50,6 +50,16 @@ impl FirecrackerClient {
         self.send_json(Method::PUT, path, value).await
     }
 
+    pub async fn put_with_timeout<T: Serialize>(
+        &self,
+        path: &str,
+        value: &T,
+        timeout: Duration,
+    ) -> Result<(), FirecrackerError> {
+        self.send_json_with_timeout(Method::PUT, path, value, timeout)
+            .await
+    }
+
     pub async fn patch<T: Serialize>(&self, path: &str, value: &T) -> Result<(), FirecrackerError> {
         self.send_json(Method::PATCH, path, value).await
     }
@@ -60,18 +70,41 @@ impl FirecrackerClient {
         path: &str,
         value: &T,
     ) -> Result<(), FirecrackerError> {
+        self.send_json_with_timeout(method, path, value, self.timeout)
+            .await
+    }
+
+    async fn send_json_with_timeout<T: Serialize>(
+        &self,
+        method: Method,
+        path: &str,
+        value: &T,
+        timeout: Duration,
+    ) -> Result<(), FirecrackerError> {
         let body = serde_json::to_vec(value)
             .map_err(|error| FirecrackerError::Decode(error.to_string()))?;
-        self.request(method, path, Bytes::from(body)).await?;
+        self.request_with_timeout(method, path, Bytes::from(body), timeout)
+            .await?;
         Ok(())
     }
 
-    #[cfg(unix)]
     async fn request(
         &self,
         method: Method,
         path: &str,
         body: Bytes,
+    ) -> Result<Bytes, FirecrackerError> {
+        self.request_with_timeout(method, path, body, self.timeout)
+            .await
+    }
+
+    #[cfg(unix)]
+    async fn request_with_timeout(
+        &self,
+        method: Method,
+        path: &str,
+        body: Bytes,
+        timeout: Duration,
     ) -> Result<Bytes, FirecrackerError> {
         let operation = format!("{method} {path}");
         let uri: hyper::Uri = Uri::new(&self.socket, path).into();
@@ -81,7 +114,7 @@ impl FirecrackerClient {
             .header(http::header::CONTENT_TYPE, "application/json")
             .body(Full::new(body))
             .map_err(|error| FirecrackerError::Transport(format!("{operation}: {error}")))?;
-        let response = tokio::time::timeout(self.timeout, self.client.request(request))
+        let response = tokio::time::timeout(timeout, self.client.request(request))
             .await
             .map_err(|_| FirecrackerError::Transport(format!("{operation}: request timed out")))?
             .map_err(|error| FirecrackerError::Transport(format!("{operation}: {error}")))?;
@@ -106,11 +139,12 @@ impl FirecrackerClient {
     }
 
     #[cfg(not(unix))]
-    async fn request(
+    async fn request_with_timeout(
         &self,
         _method: Method,
         _path: &str,
         _body: Bytes,
+        _timeout: Duration,
     ) -> Result<Bytes, FirecrackerError> {
         Err(FirecrackerError::UnsupportedHost)
     }

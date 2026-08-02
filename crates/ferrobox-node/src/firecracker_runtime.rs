@@ -40,6 +40,7 @@ use crate::{
 };
 
 const FIRECRACKER_VERSION: &str = "1.16.1";
+const FIRECRACKER_SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(300);
 const CGROUP_V2_ROOT: &str = "/sys/fs/cgroup";
 const JAILER_CGROUP_PARENT: &str = "ferrobox";
 
@@ -706,13 +707,14 @@ impl FirecrackerRuntime {
         )
         .await
         .map_err(fc_error)?;
-        api.put(
+        api.put_with_timeout(
             "/snapshot/create",
             &SnapshotCreate {
                 snapshot_type: SnapshotType::Full,
                 snapshot_path: "/snapshot/vmstate".to_owned(),
                 mem_file_path: "/snapshot/memory".to_owned(),
             },
+            FIRECRACKER_SNAPSHOT_TIMEOUT,
         )
         .await
         .map_err(fc_error)?;
@@ -1491,13 +1493,14 @@ impl SandboxRuntime for FirecrackerRuntime {
             }
             source
                 .api
-                .put(
+                .put_with_timeout(
                     "/snapshot/create",
                     &SnapshotCreate {
                         snapshot_type: SnapshotType::Full,
                         snapshot_path: format!("/snapshot/{stem}.vmstate"),
                         mem_file_path: format!("/snapshot/{stem}.memory"),
                     },
+                    FIRECRACKER_SNAPSHOT_TIMEOUT,
                 )
                 .await
                 .map_err(fc_error)?;
