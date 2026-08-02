@@ -205,8 +205,11 @@ impl guest_service_server::GuestService for GuestService {
             return Err(Status::invalid_argument("invalid rekey request"));
         }
         if !request.guest_ipv4.is_empty() {
-            run_guest_command("ip", &["address", "flush", "dev", "eth0", "scope", "global"])
-                .await?;
+            run_guest_command(
+                "ip",
+                &["address", "flush", "dev", "eth0", "scope", "global"],
+            )
+            .await?;
         }
         configure_guest_network(
             &request.guest_ipv4,

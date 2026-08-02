@@ -97,18 +97,12 @@ pub fn router(state: AppState) -> Router {
             "/v1/snapshots/{snapshot_id}",
             get(get_snapshot).delete(delete_snapshot),
         )
-        .route(
-            "/v1/snapshots/{snapshot_id}/verify",
-            post(verify_snapshot),
-        )
+        .route("/v1/snapshots/{snapshot_id}/verify", post(verify_snapshot))
         .route(
             "/v1/snapshots/{snapshot_id}/restore",
             post(restore_snapshot),
         )
-        .route(
-            "/v1/snapshots/{snapshot_id}/clones",
-            post(clone_snapshot),
-        )
+        .route("/v1/snapshots/{snapshot_id}/clones", post(clone_snapshot))
         .layer(RequestBodyLimitLayer::new(MAX_REQUEST_BODY))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -577,8 +571,7 @@ async fn list_snapshots(
         0
     };
     let end = start.saturating_add(query.limit).min(snapshots.len());
-    let next_cursor = (end < snapshots.len())
-        .then(|| snapshots[end - 1].snapshot_id.to_string());
+    let next_cursor = (end < snapshots.len()).then(|| snapshots[end - 1].snapshot_id.to_string());
     Ok(Json(ListSnapshotsResponse {
         snapshots: snapshots[start..end].to_vec(),
         next_cursor,

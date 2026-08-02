@@ -485,7 +485,9 @@ pub enum ValidationError {
     SandboxPath,
     #[error("process id is invalid")]
     ProcessId,
-    #[error("snapshot name must be 1-128 bytes without surrounding whitespace or control characters")]
+    #[error(
+        "snapshot name must be 1-128 bytes without surrounding whitespace or control characters"
+    )]
     SnapshotName,
 }
 
@@ -528,10 +530,7 @@ pub trait SandboxRuntime: Send + Sync {
         &self,
         sandbox_id: &SandboxId,
     ) -> Result<Vec<SnapshotHandle>, RuntimeError>;
-    async fn get_snapshot(
-        &self,
-        snapshot_id: &SnapshotId,
-    ) -> Result<SnapshotHandle, RuntimeError>;
+    async fn get_snapshot(&self, snapshot_id: &SnapshotId) -> Result<SnapshotHandle, RuntimeError>;
     async fn verify_snapshot(
         &self,
         snapshot_id: &SnapshotId,

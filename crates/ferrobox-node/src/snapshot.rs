@@ -154,9 +154,7 @@ impl SnapshotStore {
         &self,
         request: SnapshotStageRequest<'_>,
     ) -> Result<StagedSnapshot, RuntimeError> {
-        let partial_root = self
-            .root
-            .join(format!(".{}.partial", request.snapshot_id));
+        let partial_root = self.root.join(format!(".{}.partial", request.snapshot_id));
         let final_root = self.root.join(request.snapshot_id.to_string());
         if fs::metadata(&partial_root).await.is_ok() || fs::metadata(&final_root).await.is_ok() {
             return Err(RuntimeError::new(
@@ -168,7 +166,9 @@ impl SnapshotStore {
             .await
             .map_err(|error| RuntimeError::internal(format!("create snapshot stage: {error}")))?;
         set_mode(&partial_root, 0o700).await?;
-        let staged = self.stage_inner(request, partial_root.clone(), final_root).await;
+        let staged = self
+            .stage_inner(request, partial_root.clone(), final_root)
+            .await;
         if staged.is_err() {
             let _ = fs::remove_dir_all(&partial_root).await;
         }
@@ -188,7 +188,9 @@ impl SnapshotStore {
         ] {
             clone_rootfs(source, &partial_root.join(name))
                 .await
-                .map_err(|error| RuntimeError::internal(format!("stage snapshot {name}: {error}")))?;
+                .map_err(|error| {
+                    RuntimeError::internal(format!("stage snapshot {name}: {error}"))
+                })?;
             set_mode(&partial_root.join(name), 0o444).await?;
             sync_file(&partial_root.join(name)).await?;
         }
@@ -295,10 +297,7 @@ impl SnapshotStore {
         })
     }
 
-    pub(crate) async fn verify(
-        &self,
-        artifact: &SnapshotArtifact,
-    ) -> SnapshotVerification {
+    pub(crate) async fn verify(&self, artifact: &SnapshotArtifact) -> SnapshotVerification {
         match self.verified_manifest(artifact).await {
             Ok(_) => SnapshotVerification {
                 snapshot_id: artifact.manifest.snapshot_id.clone(),
@@ -332,7 +331,9 @@ impl SnapshotStore {
             || manifest.digest_sha256 != manifest.calculated_digest()?
             || manifest.artifacts.len() != ARTIFACT_NAMES.len()
         {
-            return Err(integrity_error("manifest identity or compatibility mismatch"));
+            return Err(integrity_error(
+                "manifest identity or compatibility mismatch",
+            ));
         }
         let mut total_size = 0_u64;
         for name in ARTIFACT_NAMES {
@@ -405,7 +406,7 @@ async fn sha256_file(path: &Path) -> Result<String, RuntimeError> {
         }
         digest.update(&buffer[..length]);
     }
-    Ok(format!("{digest:x}"))
+    Ok(format!("{:x}", digest.finalize()))
 }
 
 fn sha256_bytes(bytes: &[u8]) -> String {

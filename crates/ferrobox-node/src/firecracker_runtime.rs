@@ -325,10 +325,7 @@ impl FirecrackerRuntime {
         Ok(())
     }
 
-    async fn terminate_record(
-        &self,
-        record: &mut FirecrackerSandbox,
-    ) -> Result<(), RuntimeError> {
+    async fn terminate_record(&self, record: &mut FirecrackerSandbox) -> Result<(), RuntimeError> {
         record.state = SandboxState::Deleting;
         let _ = record
             .api
@@ -575,14 +572,8 @@ impl FirecrackerRuntime {
     > {
         let mut client = self.wait_for_guest(connector).await?;
         let network = GuestNetworkConfig::from_lease(network);
-        self.rekey_connected_guest(
-            id,
-            &mut client,
-            previous_token,
-            token_value,
-            &network,
-        )
-        .await?;
+        self.rekey_connected_guest(id, &mut client, previous_token, token_value, &network)
+            .await?;
         Ok(client)
     }
 
@@ -921,18 +912,20 @@ impl FirecrackerRuntime {
             && spec.memory_mb == 512
             && spec.network == ferrobox_core::NetworkMode::Disabled;
         let restore = if snapshot_compatible && self.snapshot_available().await {
-            self.config.snapshot_root.as_ref().map(|root| RestoreAssets {
-                vmstate_path: root.join("vmstate"),
-                memory_path: root.join("memory"),
-                rootfs_path: root.join("rootfs.ext4"),
-                captured_guest_token: None,
-            })
+            self.config
+                .snapshot_root
+                .as_ref()
+                .map(|root| RestoreAssets {
+                    vmstate_path: root.join("vmstate"),
+                    memory_path: root.join("memory"),
+                    rootfs_path: root.join("rootfs.ext4"),
+                    captured_guest_token: None,
+                })
         } else {
             None
         };
-        let capture_template = snapshot_compatible
-            && self.config.snapshot_root.is_some()
-            && restore.is_none();
+        let capture_template =
+            snapshot_compatible && self.config.snapshot_root.is_some() && restore.is_none();
         self.launch(spec, SandboxId::new(), restore, capture_template)
             .await
     }
@@ -965,9 +958,7 @@ impl FirecrackerRuntime {
         capture_template: bool,
     ) -> Result<SandboxHandle, RuntimeError> {
         let chroot_root = self.jail_root(&id)?;
-        let result = self
-            .launch_inner(spec, id, restore, capture_template)
-            .await;
+        let result = self.launch_inner(spec, id, restore, capture_template).await;
         if result.is_err()
             && let Err(cleanup_error) = self.cleanup_chroot(&chroot_root).await
         {
@@ -1018,18 +1009,16 @@ impl FirecrackerRuntime {
             .await
             .map_err(|error| RuntimeError::internal(error.to_string()))?;
         if let Some(assets) = &restore {
-            clone_readonly_asset(
-                &assets.vmstate_path,
-                &jail_snapshot_path.join("vmstate"),
-            )
-            .await
-            .map_err(|error| RuntimeError::internal(format!("clone snapshot state: {error}")))?;
-            clone_readonly_asset(
-                &assets.memory_path,
-                &jail_snapshot_path.join("memory"),
-            )
-            .await
-            .map_err(|error| RuntimeError::internal(format!("clone snapshot memory: {error}")))?;
+            clone_readonly_asset(&assets.vmstate_path, &jail_snapshot_path.join("vmstate"))
+                .await
+                .map_err(|error| {
+                    RuntimeError::internal(format!("clone snapshot state: {error}"))
+                })?;
+            clone_readonly_asset(&assets.memory_path, &jail_snapshot_path.join("memory"))
+                .await
+                .map_err(|error| {
+                    RuntimeError::internal(format!("clone snapshot memory: {error}"))
+                })?;
         }
 
         let permission_status = Command::new("chmod")
@@ -1091,10 +1080,7 @@ impl FirecrackerRuntime {
         command
             .args(["--", "--api-sock", "/run/firecracker.socket"])
             .stdout(Stdio::null());
-        let mut child = match command
-            .kill_on_drop(true)
-            .spawn()
-        {
+        let mut child = match command.kill_on_drop(true).spawn() {
             Ok(child) => child,
             Err(error) => {
                 if let Some(lease) = &network {
@@ -1499,15 +1485,16 @@ impl SandboxRuntime for FirecrackerRuntime {
         snapshots.sort_by(|left, right| {
             left.created_at_unix_ms
                 .cmp(&right.created_at_unix_ms)
-                .then_with(|| left.snapshot_id.to_string().cmp(&right.snapshot_id.to_string()))
+                .then_with(|| {
+                    left.snapshot_id
+                        .to_string()
+                        .cmp(&right.snapshot_id.to_string())
+                })
         });
         Ok(snapshots)
     }
 
-    async fn get_snapshot(
-        &self,
-        snapshot_id: &SnapshotId,
-    ) -> Result<SnapshotHandle, RuntimeError> {
+    async fn get_snapshot(&self, snapshot_id: &SnapshotId) -> Result<SnapshotHandle, RuntimeError> {
         let record = self.snapshot_record(snapshot_id).await?;
         let handle = record.lock().await.handle();
         Ok(handle)
@@ -1538,7 +1525,9 @@ impl SandboxRuntime for FirecrackerRuntime {
         count: u8,
     ) -> Result<Vec<SandboxHandle>, RuntimeError> {
         if !(1..=32).contains(&count) {
-            return Err(RuntimeError::invalid("clone count must be between 1 and 32"));
+            return Err(RuntimeError::invalid(
+                "clone count must be between 1 and 32",
+            ));
         }
         let record = self.snapshot_record(snapshot_id).await?;
         let record = record.lock().await;
