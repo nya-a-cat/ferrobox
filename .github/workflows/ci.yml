@@ -108,6 +108,7 @@ jobs:
         with:
           name: openapi-contract-evidence
           if-no-files-found: warn
+          include-hidden-files: true
           path: |
             ${{ runner.temp }}/openapi-generator/openapi-generator.manifest
             ${{ runner.temp }}/openapi-contract-evidence.json
