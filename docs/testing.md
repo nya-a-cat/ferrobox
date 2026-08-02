@@ -109,6 +109,12 @@ disabled and contain no active injection branch. Resource mismatch failures
 print the before/after Firecracker PID, jail root, cgroup leaf, and network
 namespace sets so hosted evidence identifies the leaked resource class.
 
+The hosted pool benchmark launches several VMs together. Each launch must pass
+an accepting Firecracker `/version` request after socket creation; a transient
+Unix-socket connect race is retried within the existing API deadline. Failed
+launch cleanup drains the exact cgroup leaf and records controller diagnostics
+if the leaf remains busy.
+
 The HTTP artifact also retains a five-request concurrent burst with each
 request's latency and total wall time. Sequential and concurrent P95 must both
 remain below 80 ms.

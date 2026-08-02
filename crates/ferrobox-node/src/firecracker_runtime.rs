@@ -335,6 +335,19 @@ impl FirecrackerRuntime {
             return Err(RuntimeError::internal("refusing unsafe cgroup cleanup"));
         }
 
+        match fs::metadata(&cgroup).await {
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => {
+                return Err(RuntimeError::internal(format!(
+                    "inspect cgroup {}: {error}",
+                    cgroup.display()
+                )));
+            }
+        }
+
+        let kill_result = fs::write(cgroup.join("cgroup.kill"), b"1").await;
+
         let mut last_error = None;
         for _ in 0..50 {
             match fs::remove_dir(&cgroup).await {
@@ -344,8 +357,17 @@ impl FirecrackerRuntime {
             }
             sleep(Duration::from_millis(20)).await;
         }
+        let events = fs::read_to_string(cgroup.join("cgroup.events"))
+            .await
+            .unwrap_or_else(|error| format!("unavailable: {error}"));
+        let processes = fs::read_to_string(cgroup.join("cgroup.procs"))
+            .await
+            .unwrap_or_else(|error| format!("unavailable: {error}"));
+        let kill = kill_result
+            .err()
+            .map_or_else(|| "ok".to_owned(), |error| error.to_string());
         Err(RuntimeError::internal(format!(
-            "remove cgroup {}: {}",
+            "remove cgroup {}: {}; cgroup.kill={kill}; events={events:?}; procs={processes:?}",
             cgroup.display(),
             last_error.expect("a failed cgroup removal records an error")
         )))
@@ -405,22 +427,37 @@ impl FirecrackerRuntime {
         ))
     }
 
+    async fn wait_for_api(&self, api: &FirecrackerClient) -> Result<(), RuntimeError> {
+        let started = Instant::now();
+        let mut last_error = "no request attempted".to_owned();
+        while started.elapsed() < self.config.api_timeout {
+            match api.get::<VersionResponse>("/version").await {
+                Ok(version) if version.firecracker_version == FIRECRACKER_VERSION => return Ok(()),
+                Ok(version) => {
+                    return Err(RuntimeError::new(
+                        RuntimeErrorKind::Unavailable,
+                        format!(
+                            "expected Firecracker {FIRECRACKER_VERSION}, got {}",
+                            version.firecracker_version
+                        ),
+                    ));
+                }
+                Err(error) => last_error = error.to_string(),
+            }
+            sleep(Duration::from_millis(5)).await;
+        }
+        Err(RuntimeError::new(
+            RuntimeErrorKind::Unavailable,
+            format!("Firecracker API did not become ready: {last_error}"),
+        ))
+    }
+
     async fn configure_and_start(
         &self,
         api: &FirecrackerClient,
         spec: &SandboxSpec,
         network: Option<&NetworkLease>,
     ) -> Result<(), RuntimeError> {
-        let version: VersionResponse = api.get("/version").await.map_err(fc_error)?;
-        if version.firecracker_version != FIRECRACKER_VERSION {
-            return Err(RuntimeError::new(
-                RuntimeErrorKind::Unavailable,
-                format!(
-                    "expected Firecracker {FIRECRACKER_VERSION}, got {}",
-                    version.firecracker_version
-                ),
-            ));
-        }
         api.put(
             "/machine-config",
             &MachineConfig {
@@ -484,16 +521,6 @@ impl FirecrackerRuntime {
     }
 
     async fn load_snapshot(&self, api: &FirecrackerClient) -> Result<(), RuntimeError> {
-        let version: VersionResponse = api.get("/version").await.map_err(fc_error)?;
-        if version.firecracker_version != FIRECRACKER_VERSION {
-            return Err(RuntimeError::new(
-                RuntimeErrorKind::Unavailable,
-                format!(
-                    "expected Firecracker {FIRECRACKER_VERSION}, got {}",
-                    version.firecracker_version
-                ),
-            ));
-        }
         api.put(
             "/snapshot/load",
             &SnapshotLoad {
@@ -1149,6 +1176,13 @@ impl FirecrackerRuntime {
             return Err(error);
         }
         let api = FirecrackerClient::new(api_socket, self.config.api_timeout);
+        if let Err(error) = self.wait_for_api(&api).await {
+            Self::kill_and_wait(&mut child).await;
+            if let Some(lease) = &network {
+                let _ = self.network.delete(lease).await;
+            }
+            return Err(error);
+        }
         let start_result = if restore_snapshot {
             self.load_snapshot(&api).await
         } else {

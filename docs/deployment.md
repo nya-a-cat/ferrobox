@@ -51,10 +51,16 @@ seccomp filter.
 Jailer places each v2 cgroup at `/sys/fs/cgroup/ferrobox/<jailer-id>`.
 Ferrobox retains that physical Jailer ID independently from the public sandbox
 ID so an in-place rollback can retire the old VM exactly. VM termination waits
-for the child process, removes the exact leaf with `rmdir` semantics, and never
+for the child process, drains remaining members through the leaf's cgroup v2
+`cgroup.kill` control, removes the exact leaf with `rmdir` semantics, and never
 recursively deletes the shared cgroup tree. Launch-failure cleanup follows the
-same bounded path. This implements the operator cleanup responsibility defined
-by the [Firecracker Jailer contract](https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md).
+same bounded path and retains `cgroup.events` plus `cgroup.procs` diagnostics
+on failure. This implements the operator cleanup responsibility defined by the
+[Firecracker Jailer contract](https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md).
+
+Startup treats the API socket inode as an intermediate state. Ferrobox retries
+the Firecracker version request until the configured API deadline, then begins
+machine configuration or snapshot loading only after the API accepts requests.
 
 Direct Firecracker execution is available only behind an explicit unsafe
 development option. The API refuses to expose that mode on a non-loopback
