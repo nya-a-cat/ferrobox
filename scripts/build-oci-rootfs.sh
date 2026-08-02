@@ -213,6 +213,13 @@ mkdir -p /dev/pts /run /sys/fs/cgroup
 mount -t devpts devpts /dev/pts 2>/dev/null || true
 mount -t tmpfs tmpfs /run 2>/dev/null || true
 mount -t cgroup2 cgroup2 /sys/fs/cgroup 2>/dev/null || true
+if ! grep -qw pids /sys/fs/cgroup/cgroup.controllers; then
+    echo "pids cgroup controller is unavailable" >&2
+    exit 1
+fi
+if ! grep -qw pids /sys/fs/cgroup/cgroup.subtree_control; then
+    printf '+pids\n' >/sys/fs/cgroup/cgroup.subtree_control
+fi
 exec /usr/local/bin/ferrobox-guest
 INIT
 chmod 0755 "${rootfs}/usr/local/bin/ferrobox-init"
