@@ -87,10 +87,10 @@ Status meanings:
 | Templates | Build, list, version, inspect, and delete reusable templates | Partial | Immutable template identity and provenance survive create/delete cycles |
 | Ready pools | Bounded pre-provisioning with safe replenishment | Verified | Allocation, concurrent claim, replenishment, TTL, and leak gates pass |
 | Lifecycle | Create, inspect, set TTL, pause, resume, hibernate, delete | Partial | State-transition contract passes for every runtime provider |
-| User snapshots | Named, inspectable, portable snapshots | Missing | Create/list/get/delete and integrity verification pass |
-| Live checkpoint | Capture memory, process, filesystem, and device state | Partial | Running Python state resumes with exact memory and file contents |
-| Clone/fork | Create independent children from one checkpoint | Missing | Concurrent children preserve the checkpoint and isolate later mutations |
-| Rollback | Restore an existing sandbox identity to a checkpoint | Missing | Memory, processes, files, token rotation, and stale-handle rejection pass |
+| User snapshots | Named, inspectable, portable snapshots | Verified | Create/list/get/delete and integrity verification pass |
+| Live checkpoint | Capture memory, process, filesystem, and device state | Verified | Running Python state resumes with exact memory and file contents |
+| Clone/fork | Create independent children from one checkpoint | Verified | Concurrent children preserve the checkpoint and isolate later mutations |
+| Rollback | Restore an existing sandbox identity to a checkpoint | Verified | Memory, processes, files, token rotation, and stale-handle rejection pass |
 | Incremental snapshots | Dirty-page and changed-block capture with bounded chain depth | Missing | 0/10/100/512 MiB dirty-state matrix retains size and latency evidence |
 | Command execution | Argv and explicit-shell execution, timeout, signal, exit reasons | Verified | Shared positive/error/timeout/signal suite passes |
 | Streaming execution | Incremental stdout/stderr and background process inspection | Partial | Slow producer is observable before exit; reconnect resumes from a cursor |
@@ -114,6 +114,14 @@ Status meanings:
 | Audit and diagnostics | Lifecycle/workload audit, reasoned state, metrics, logs, traces | Partial | Request IDs correlate API, runtime, guest, network, and audit events |
 | Tenant security | API keys, per-sandbox credentials, endpoint credentials, and organization boundaries | Partial | Cross-tenant authorization matrix and credential-redaction suite pass |
 | Supply chain | Pinned binaries/images, checksums, manifests, SBOM, and update policy | Partial | Provenance artifact covers every executable and image used by release E2E |
+
+The four verified state-branching rows are backed by
+[Live Snapshot KVM E2E run 30758919945](https://github.com/nya-a-cat/ferrobox/actions/runs/30758919945)
+at commit `87d5456`. Its `live-snapshot-evidence` artifact records schema 1 and
+all sixteen contract checks, including process-memory continuation, independent
+restore, clone isolation, same-ID rollback, fault cleanup, integrity failure,
+and final resource cleanup. Standard CI for the same commit passed in
+[run 30758919931](https://github.com/nya-a-cat/ferrobox/actions/runs/30758919931).
 
 ## SOTA evidence rules
 

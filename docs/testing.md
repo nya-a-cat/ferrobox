@@ -117,6 +117,11 @@ if the leaf remains busy. Transport failures include the Firecracker HTTP
 method and API path, and each VM reuses one Unix HTTP client across the full
 configuration sequence.
 
+The current hosted proof is
+[Live Snapshot KVM E2E run 30758919945](https://github.com/nya-a-cat/ferrobox/actions/runs/30758919945)
+for commit `87d5456`. It completed all sixteen checks and uploaded artifact
+`8836989482`; standard CI for the same commit passed in run `30758919931`.
+
 The HTTP artifact also retains a five-request concurrent burst with each
 request's latency and total wall time. Sequential and concurrent P95 must both
 remain below 80 ms.
