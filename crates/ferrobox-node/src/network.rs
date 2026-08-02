@@ -527,9 +527,9 @@ mod tests {
         assert_eq!(
             ipv4_nameservers(input),
             vec![
-                "127.0.0.53".parse().expect("loopback resolver"),
-                "10.0.0.2".parse().expect("private resolver"),
-                "168.63.129.16".parse().expect("cloud resolver"),
+                std::net::Ipv4Addr::new(127, 0, 0, 53),
+                std::net::Ipv4Addr::new(10, 0, 0, 2),
+                std::net::Ipv4Addr::new(168, 63, 129, 16),
             ]
         );
     }
