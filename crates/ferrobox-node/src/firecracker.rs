@@ -80,9 +80,7 @@ impl FirecrackerClient {
             .uri(uri)
             .header(http::header::CONTENT_TYPE, "application/json")
             .body(Full::new(body))
-            .map_err(|error| {
-                FirecrackerError::Transport(format!("{operation}: {error}"))
-            })?;
+            .map_err(|error| FirecrackerError::Transport(format!("{operation}: {error}")))?;
         let response = tokio::time::timeout(self.timeout, self.client.request(request))
             .await
             .map_err(|_| FirecrackerError::Transport(format!("{operation}: request timed out")))?
