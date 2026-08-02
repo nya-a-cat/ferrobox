@@ -61,6 +61,13 @@ token="$(jq -er '.token' <<<"${create_response}")"
 [[ "$(jq -r '.state' <<<"${create_response}")" == "running" ]]
 unset create_response
 
+inspect_response="$(
+    FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
+        inspect "${sandbox_id}"
+)"
+[[ "$(jq -r '.sandbox_id' <<<"${inspect_response}")" == "${sandbox_id}" ]]
+[[ "$(jq -r '.state' <<<"${inspect_response}")" == "running" ]]
+
 exec_response="$(
     FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
         exec "${sandbox_id}" -- python3 -c 'print(42)'
@@ -83,6 +90,41 @@ FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
     read "${sandbox_id}" /home/sandbox/input.txt \
     --output "${runtime_root}/output.txt"
 cmp "${runtime_root}/input.txt" "${runtime_root}/output.txt"
+
+list_response="$(
+    FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
+        list "${sandbox_id}" /home/sandbox
+)"
+[[ "$(jq -r '.entries[] | select(.name == "input.txt") | .kind' <<<"${list_response}")" == "file" ]]
+
+pause_output="$(
+    FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
+        pause "${sandbox_id}"
+)"
+[[ "${pause_output}" == "paused ${sandbox_id}" ]]
+paused_response="$(
+    FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
+        inspect "${sandbox_id}"
+)"
+[[ "$(jq -r '.state' <<<"${paused_response}")" == "paused" ]]
+if FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
+    exec "${sandbox_id}" -- python3 -c 'print(42)' \
+    >"${runtime_root}/paused-exec.log" 2>&1; then
+    echo "command unexpectedly ran while the sandbox was paused" >&2
+    exit 1
+fi
+grep --fixed-strings --quiet '409 Conflict' "${runtime_root}/paused-exec.log"
+
+resume_output="$(
+    FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
+        resume "${sandbox_id}"
+)"
+[[ "${resume_output}" == "resumed ${sandbox_id}" ]]
+resumed_response="$(
+    FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
+        inspect "${sandbox_id}"
+)"
+[[ "$(jq -r '.state' <<<"${resumed_response}")" == "running" ]]
 
 delete_output="$(
     FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \

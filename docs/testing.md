@@ -23,11 +23,12 @@ The process E2E checks `print(42)`, argv literal handling, file round-trip,
 path traversal rejection, deletion, and token redaction from audit records.
 
 The CLI/Agent Skill E2E repeats the user-facing flow through the compiled
-`ferrobox` binary. It captures the one-time token, proves literal argv handling,
-round-trips a host file, deletes the exact sandbox, checks post-delete rejection,
-and confirms that the audit log omits the bearer token. The static skill gate
-also validates its frontmatter, UI metadata, security invariants, command set,
-and remote-installer policy.
+`ferrobox` binary. It captures the one-time token, proves inspection and literal
+argv handling, round-trips and lists a host file, verifies the
+running-to-paused-to-running state machine and paused-command rejection, deletes
+the exact sandbox, checks post-delete rejection, and confirms that the audit log
+omits the bearer token. The static skill gate also validates its frontmatter,
+UI metadata, security invariants, command set, and remote-installer policy.
 
 [Standard CI run 30763552790](https://github.com/nya-a-cat/ferrobox/actions/runs/30763552790)
 passed the Process/API, Agent Skill contract, and CLI/Agent Skill E2E steps at

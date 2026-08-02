@@ -33,6 +33,11 @@ enum Command {
         #[arg(long)]
         internet: bool,
     },
+    Inspect {
+        sandbox_id: String,
+        #[arg(long, env = "FERROBOX_TOKEN")]
+        token: String,
+    },
     Exec {
         sandbox_id: String,
         #[arg(long, env = "FERROBOX_TOKEN")]
@@ -60,6 +65,23 @@ enum Command {
         token: String,
         #[arg(long)]
         output: Option<PathBuf>,
+    },
+    List {
+        sandbox_id: String,
+        #[arg(default_value = "/home/sandbox")]
+        remote_path: String,
+        #[arg(long, env = "FERROBOX_TOKEN")]
+        token: String,
+    },
+    Pause {
+        sandbox_id: String,
+        #[arg(long, env = "FERROBOX_TOKEN")]
+        token: String,
+    },
+    Resume {
+        sandbox_id: String,
+        #[arg(long, env = "FERROBOX_TOKEN")]
+        token: String,
     },
     Delete {
         sandbox_id: String,
@@ -92,6 +114,17 @@ async fn main() -> anyhow::Result<()> {
                 }))
                 .send()
                 .await?;
+            print_json(ensure_success(response).await?).await?;
+        }
+        Command::Inspect { sandbox_id, token } => {
+            let response = authorized(
+                &client,
+                Method::GET,
+                format!("{base}/v1/sandboxes/{sandbox_id}"),
+                &token,
+            )
+            .send()
+            .await?;
             print_json(ensure_success(response).await?).await?;
         }
         Command::Exec {
@@ -170,6 +203,46 @@ async fn main() -> anyhow::Result<()> {
             } else {
                 print!("{}", String::from_utf8_lossy(&data));
             }
+        }
+        Command::List {
+            sandbox_id,
+            remote_path,
+            token,
+        } => {
+            let response = authorized(
+                &client,
+                Method::GET,
+                format!("{base}/v1/sandboxes/{sandbox_id}/directories"),
+                &token,
+            )
+            .query(&[("path", remote_path)])
+            .send()
+            .await?;
+            print_json(ensure_success(response).await?).await?;
+        }
+        Command::Pause { sandbox_id, token } => {
+            let response = authorized(
+                &client,
+                Method::POST,
+                format!("{base}/v1/sandboxes/{sandbox_id}/pause"),
+                &token,
+            )
+            .send()
+            .await?;
+            ensure_success(response).await?;
+            println!("paused {sandbox_id}");
+        }
+        Command::Resume { sandbox_id, token } => {
+            let response = authorized(
+                &client,
+                Method::POST,
+                format!("{base}/v1/sandboxes/{sandbox_id}/resume"),
+                &token,
+            )
+            .send()
+            .await?;
+            ensure_success(response).await?;
+            println!("resumed {sandbox_id}");
         }
         Command::Delete { sandbox_id, token } => {
             let response = authorized(

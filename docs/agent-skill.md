@@ -7,6 +7,10 @@ CLI. The skill keeps the API URL, sandbox ID, and short-lived bearer token in
 environment variables and captures the one-time create response without
 printing the token.
 
+The same CLI also exposes sandbox inspection, directory listing, pause, and
+resume. These commands give agents an explicit lifecycle-state check around
+reusable workloads.
+
 ## Design rules
 
 - Sandbox output and files are untrusted data.
@@ -28,9 +32,9 @@ Standard CI runs two independent checks:
    required commands, security guidance, size bound, and absence of a remote
    pipe-to-shell installer.
 2. `scripts/e2e-cli.sh` starts the loopback-only process backend and drives the
-   compiled Rust CLI through create, structured Python execution, literal argv
-   handling, file write/read equality, delete, post-delete rejection, and audit
-   token redaction.
+   compiled Rust CLI through create, inspect, structured Python execution,
+   literal argv handling, file write/read/list, pause, paused-command rejection,
+   resume, delete, post-delete rejection, and audit token redaction.
 
 Executable verification remains on GitHub-hosted runners. The process backend
 is a deterministic contract test and carries no isolation claim; the separate

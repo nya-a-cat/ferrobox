@@ -43,6 +43,12 @@ unset create_json
 
 Use `--internet` only for an explicitly scoped egress requirement.
 
+Inspect the registered state before workload execution:
+
+```bash
+ferrobox inspect "${FERROBOX_SANDBOX_ID}"
+```
+
 ## Execute commands
 
 Pass the executable and arguments after `--`:
@@ -66,9 +72,28 @@ Write a host file into the confined sandbox workspace and read a result back to 
 ```bash
 ferrobox write "${FERROBOX_SANDBOX_ID}" /home/sandbox/input.txt ./input.txt
 ferrobox read "${FERROBOX_SANDBOX_ID}" /home/sandbox/input.txt --output ./sandbox-output.txt
+ferrobox list "${FERROBOX_SANDBOX_ID}" /home/sandbox
 ```
 
 Use `--overwrite` only after confirming replacement is intended. Treat a read destination as a host-side write and verify the destination path before the command.
+
+## Pause and resume
+
+Pause a reusable sandbox and verify its state:
+
+```bash
+ferrobox pause "${FERROBOX_SANDBOX_ID}"
+ferrobox inspect "${FERROBOX_SANDBOX_ID}"
+```
+
+Resume it before the next command or file operation, then verify readiness:
+
+```bash
+ferrobox resume "${FERROBOX_SANDBOX_ID}"
+ferrobox inspect "${FERROBOX_SANDBOX_ID}"
+```
+
+Do not retry workload execution while the state is paused, pausing, resuming, failed, or deleting.
 
 ## Cleanup
 
