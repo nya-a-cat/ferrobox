@@ -227,6 +227,15 @@ api_call resume 204 \
     --request POST \
     --header "authorization: Bearer ${token}" \
     "${api_url}/v1/sandboxes/${sandbox_id}/resume" >/dev/null
+resumed_response="$(
+    api_call resumed-exec 200 \
+        --request POST \
+        --header "authorization: Bearer ${token}" \
+        --header 'content-type: application/json' \
+        --data '{"argv":["/bin/true"],"cwd":"/home/sandbox","environment":{},"timeout_seconds":30,"max_output_bytes":1024}' \
+        "${api_url}/v1/sandboxes/${sandbox_id}/commands"
+)"
+[[ "$(jq -r '.termination.kind' <<<"${resumed_response}")" == "exited" ]]
 
 api_call delete 204 \
     --request DELETE \
