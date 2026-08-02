@@ -29,6 +29,10 @@ and confirms that the audit log omits the bearer token. The static skill gate
 also validates its frontmatter, UI metadata, security invariants, command set,
 and remote-installer policy.
 
+[Standard CI run 30763552790](https://github.com/nya-a-cat/ferrobox/actions/runs/30763552790)
+passed the Process/API, Agent Skill contract, and CLI/Agent Skill E2E steps at
+commit `8854525`.
+
 ## KVM CI
 
 `.github/workflows/kvm.yml` requires `/dev/kvm`, builds the static guest and a

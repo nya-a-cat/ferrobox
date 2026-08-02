@@ -117,9 +117,9 @@ Status meanings:
 | Release integrity | Digest-bound releases, keyless signatures, provenance attestations, and consumer verification | Partial | GitHub verifies signed source/binary artifacts and OCI digests against fixed workflow and repository identities |
 
 The CLI and first-party `ferrobox-sandbox` Agent Skill now have a shared
-GitHub-hosted create/exec/file/delete conformance path. The row remains Partial
-until the MCP surface passes the same scenario with an approved credential
-custody contract.
+[GitHub-hosted create/exec/file/delete conformance path](https://github.com/nya-a-cat/ferrobox/actions/runs/30763552790)
+at commit `8854525`. The row remains Partial until the MCP surface passes the
+same scenario with an approved credential custody contract.
 
 The four verified state-branching rows are backed by
 [Live Snapshot KVM E2E run 30758919945](https://github.com/nya-a-cat/ferrobox/actions/runs/30758919945)

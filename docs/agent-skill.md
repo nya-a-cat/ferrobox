@@ -36,6 +36,10 @@ Executable verification remains on GitHub-hosted runners. The process backend
 is a deterministic contract test and carries no isolation claim; the separate
 KVM workflow remains the Firecracker boundary proof.
 
+[Standard CI run 30763552790](https://github.com/nya-a-cat/ferrobox/actions/runs/30763552790)
+passed both checks at commit `8854525`. The retained log records successful
+Process/API, Skill-contract, and CLI/Agent Skill closed loops.
+
 ## Upstream basis
 
 The interface was audited against the pinned
