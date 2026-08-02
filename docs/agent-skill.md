@@ -44,6 +44,11 @@ KVM workflow remains the Firecracker boundary proof.
 passed both checks at commit `8854525`. The retained log records successful
 Process/API, Skill-contract, and CLI/Agent Skill closed loops.
 
+[Standard CI run 30763757911](https://github.com/nya-a-cat/ferrobox/actions/runs/30763757911)
+passed the extended lifecycle contract at commit `4b3daae`: inspect and list
+returned the expected records, execution while paused returned HTTP 409, and
+resume restored the running state before cleanup.
+
 ## Upstream basis
 
 The interface was audited against the pinned

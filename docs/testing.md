@@ -34,6 +34,11 @@ UI metadata, security invariants, command set, and remote-installer policy.
 passed the Process/API, Agent Skill contract, and CLI/Agent Skill E2E steps at
 commit `8854525`.
 
+[Standard CI run 30763757911](https://github.com/nya-a-cat/ferrobox/actions/runs/30763757911)
+passed formatting, Clippy, the Skill gate, and the extended CLI lifecycle E2E
+at commit `4b3daae`. Its state sequence was running, paused, rejected execution
+with HTTP 409, resumed, running, then deleted.
+
 ## KVM CI
 
 `.github/workflows/kvm.yml` requires `/dev/kvm`, builds the static guest and a
