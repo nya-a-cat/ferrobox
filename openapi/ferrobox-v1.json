@@ -1,0 +1,1057 @@
+{
+  "openapi": "3.1.2",
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "title": "Ferrobox API",
+    "version": "0.1.0",
+    "description": "Versioned contract for the implemented Ferrobox v1 lifecycle, command, file, and snapshot API.",
+    "license": {
+      "name": "Apache-2.0",
+      "identifier": "Apache-2.0"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8080",
+      "description": "Default loopback deployment"
+    }
+  ],
+  "tags": [
+    {"name": "System"},
+    {"name": "Sandboxes"},
+    {"name": "Commands"},
+    {"name": "Files"},
+    {"name": "Snapshots"}
+  ],
+  "security": [
+    {"bearerAuth": []}
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "health",
+        "summary": "Check API readiness",
+        "tags": ["System"],
+        "security": [],
+        "x-ferrobox-credential-scope": "none",
+        "responses": {
+          "204": {"$ref": "#/components/responses/NoContent"},
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/v1/sandboxes": {
+      "post": {
+        "operationId": "createSandbox",
+        "summary": "Create a sandbox",
+        "tags": ["Sandboxes"],
+        "security": [],
+        "x-ferrobox-credential-scope": "none",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/CreateSandboxRequest"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sandbox created; the bearer token is returned once.",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/CreateSandboxResponse"}
+              }
+            }
+          },
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/v1/sandboxes/{id}": {
+      "get": {
+        "operationId": "getSandbox",
+        "summary": "Inspect a sandbox",
+        "tags": ["Sandboxes"],
+        "x-ferrobox-credential-scope": "sandbox",
+        "parameters": [
+          {"$ref": "#/components/parameters/SandboxId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Current sandbox state",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SandboxResponse"}
+              }
+            }
+          },
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      },
+      "delete": {
+        "operationId": "deleteSandbox",
+        "summary": "Delete a sandbox",
+        "tags": ["Sandboxes"],
+        "x-ferrobox-credential-scope": "sandbox",
+        "parameters": [
+          {"$ref": "#/components/parameters/SandboxId"}
+        ],
+        "responses": {
+          "204": {"$ref": "#/components/responses/NoContent"},
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/v1/sandboxes/{id}/commands": {
+      "post": {
+        "operationId": "executeCommand",
+        "summary": "Execute an argument vector",
+        "tags": ["Commands"],
+        "x-ferrobox-credential-scope": "sandbox",
+        "parameters": [
+          {"$ref": "#/components/parameters/SandboxId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ExecuteCommandRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completed command result",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ExecuteCommandResponse"}
+              }
+            }
+          },
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/v1/sandboxes/{id}/files": {
+      "put": {
+        "operationId": "writeFile",
+        "summary": "Write one confined file",
+        "tags": ["Files"],
+        "x-ferrobox-credential-scope": "sandbox",
+        "parameters": [
+          {"$ref": "#/components/parameters/SandboxId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/WriteFileRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Write result",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/WriteFileResponse"}
+              }
+            }
+          },
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      },
+      "get": {
+        "operationId": "readFile",
+        "summary": "Read one confined file range",
+        "tags": ["Files"],
+        "x-ferrobox-credential-scope": "sandbox",
+        "parameters": [
+          {"$ref": "#/components/parameters/SandboxId"},
+          {"$ref": "#/components/parameters/FilePath"},
+          {"$ref": "#/components/parameters/FileOffset"},
+          {"$ref": "#/components/parameters/FileReadLimit"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Base64-encoded file range",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ReadFileResponse"}
+              }
+            }
+          },
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/v1/sandboxes/{id}/directories": {
+      "get": {
+        "operationId": "listDirectory",
+        "summary": "List a confined directory",
+        "tags": ["Files"],
+        "x-ferrobox-credential-scope": "sandbox",
+        "parameters": [
+          {"$ref": "#/components/parameters/SandboxId"},
+          {"$ref": "#/components/parameters/DirectoryPath"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Directory entries",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ListDirectoryResponse"}
+              }
+            }
+          },
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/v1/sandboxes/{id}/pause": {
+      "post": {
+        "operationId": "pauseSandbox",
+        "summary": "Pause a running sandbox",
+        "tags": ["Sandboxes"],
+        "x-ferrobox-credential-scope": "sandbox",
+        "parameters": [
+          {"$ref": "#/components/parameters/SandboxId"}
+        ],
+        "responses": {
+          "204": {"$ref": "#/components/responses/NoContent"},
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/v1/sandboxes/{id}/resume": {
+      "post": {
+        "operationId": "resumeSandbox",
+        "summary": "Resume a paused sandbox",
+        "tags": ["Sandboxes"],
+        "x-ferrobox-credential-scope": "sandbox",
+        "parameters": [
+          {"$ref": "#/components/parameters/SandboxId"}
+        ],
+        "responses": {
+          "204": {"$ref": "#/components/responses/NoContent"},
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/v1/sandboxes/{id}/snapshots": {
+      "post": {
+        "operationId": "createSnapshot",
+        "summary": "Create a named live snapshot",
+        "tags": ["Snapshots"],
+        "x-ferrobox-credential-scope": "sandbox",
+        "parameters": [
+          {"$ref": "#/components/parameters/SandboxId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/CreateSnapshotRequest"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Snapshot created; its distinct bearer token is returned once.",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/CreateSnapshotResponse"}
+              }
+            }
+          },
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      },
+      "get": {
+        "operationId": "listSnapshots",
+        "summary": "List source snapshots in creation order",
+        "tags": ["Snapshots"],
+        "x-ferrobox-credential-scope": "sandbox",
+        "parameters": [
+          {"$ref": "#/components/parameters/SandboxId"},
+          {"$ref": "#/components/parameters/SnapshotLimit"},
+          {"$ref": "#/components/parameters/SnapshotCursor"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Stable snapshot page",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ListSnapshotsResponse"}
+              }
+            }
+          },
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/v1/sandboxes/{id}/rollback/{snapshot_id}": {
+      "post": {
+        "operationId": "rollbackSnapshot",
+        "summary": "Restore a source sandbox in place",
+        "tags": ["Snapshots"],
+        "x-ferrobox-credential-scope": "sandbox",
+        "parameters": [
+          {"$ref": "#/components/parameters/SandboxId"},
+          {"$ref": "#/components/parameters/SnapshotId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Rolled-back sandbox state",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SandboxResponse"}
+              }
+            }
+          },
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/v1/snapshots/{snapshot_id}": {
+      "get": {
+        "operationId": "getSnapshot",
+        "summary": "Inspect a snapshot",
+        "tags": ["Snapshots"],
+        "x-ferrobox-credential-scope": "snapshot",
+        "parameters": [
+          {"$ref": "#/components/parameters/SnapshotId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Snapshot metadata",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SnapshotHandle"}
+              }
+            }
+          },
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      },
+      "delete": {
+        "operationId": "deleteSnapshot",
+        "summary": "Delete an unused snapshot",
+        "tags": ["Snapshots"],
+        "x-ferrobox-credential-scope": "snapshot",
+        "parameters": [
+          {"$ref": "#/components/parameters/SnapshotId"}
+        ],
+        "responses": {
+          "204": {"$ref": "#/components/responses/NoContent"},
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/v1/snapshots/{snapshot_id}/verify": {
+      "post": {
+        "operationId": "verifySnapshot",
+        "summary": "Rehash every snapshot artifact",
+        "tags": ["Snapshots"],
+        "x-ferrobox-credential-scope": "snapshot",
+        "parameters": [
+          {"$ref": "#/components/parameters/SnapshotId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Integrity result",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SnapshotVerification"}
+              }
+            }
+          },
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/v1/snapshots/{snapshot_id}/restore": {
+      "post": {
+        "operationId": "restoreSnapshot",
+        "summary": "Restore one independent sandbox",
+        "tags": ["Snapshots"],
+        "x-ferrobox-credential-scope": "snapshot",
+        "parameters": [
+          {"$ref": "#/components/parameters/SnapshotId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/RestoreSnapshotRequest"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Independent restored sandbox",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/CreateSandboxResponse"}
+              }
+            }
+          },
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/v1/snapshots/{snapshot_id}/clones": {
+      "post": {
+        "operationId": "cloneSnapshot",
+        "summary": "Create independent sandbox clones",
+        "tags": ["Snapshots"],
+        "x-ferrobox-credential-scope": "snapshot",
+        "parameters": [
+          {"$ref": "#/components/parameters/SnapshotId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/CloneSnapshotRequest"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Independent cloned sandboxes",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/CloneSnapshotResponse"}
+              }
+            }
+          },
+          "default": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Short-lived bearer credential scoped to one sandbox or one snapshot. The operation-level x-ferrobox-credential-scope field identifies the required credential class."
+      }
+    },
+    "parameters": {
+      "SandboxId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {"$ref": "#/components/schemas/SandboxId"}
+      },
+      "SnapshotId": {
+        "name": "snapshot_id",
+        "in": "path",
+        "required": true,
+        "schema": {"$ref": "#/components/schemas/SnapshotId"}
+      },
+      "FilePath": {
+        "name": "path",
+        "in": "query",
+        "required": true,
+        "schema": {"$ref": "#/components/schemas/SandboxPath"}
+      },
+      "FileOffset": {
+        "name": "offset",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "FileReadLimit": {
+        "name": "max_bytes",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1,
+          "maximum": 67108864,
+          "default": 67108864
+        }
+      },
+      "DirectoryPath": {
+        "name": "path",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "allOf": [
+            {"$ref": "#/components/schemas/SandboxPath"}
+          ],
+          "default": "/home/sandbox"
+        }
+      },
+      "SnapshotLimit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 50
+        }
+      },
+      "SnapshotCursor": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {"$ref": "#/components/schemas/SnapshotId"}
+      }
+    },
+    "responses": {
+      "NoContent": {
+        "description": "Operation completed without a response body."
+      },
+      "ApiError": {
+        "description": "Structured API or runtime error",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+          }
+        }
+      }
+    },
+    "schemas": {
+      "SandboxId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "UUIDv7 sandbox identity."
+      },
+      "SnapshotId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "UUIDv7 snapshot identity."
+      },
+      "SandboxPath": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Path confined below /home/sandbox; NUL and parent traversal are rejected."
+      },
+      "SandboxState": {
+        "type": "string",
+        "enum": [
+          "creating",
+          "running",
+          "pausing",
+          "paused",
+          "resuming",
+          "deleting",
+          "deleted",
+          "failed"
+        ]
+      },
+      "NetworkMode": {
+        "type": "string",
+        "enum": ["disabled", "internet"]
+      },
+      "NetworkRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "internet_access": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "SandboxSpec": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "template_id",
+          "cpu_count",
+          "memory_mb",
+          "timeout_seconds",
+          "network"
+        ],
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          },
+          "cpu_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32
+          },
+          "memory_mb": {
+            "type": "integer",
+            "minimum": 128,
+            "maximum": 32768
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 86400
+          },
+          "network": {"$ref": "#/components/schemas/NetworkMode"}
+        }
+      },
+      "CreateSandboxRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["template"],
+        "properties": {
+          "template": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          },
+          "cpu_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32,
+            "default": 1
+          },
+          "memory_mb": {
+            "type": "integer",
+            "minimum": 128,
+            "maximum": 32768,
+            "default": 512
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 86400,
+            "default": 300
+          },
+          "network": {"$ref": "#/components/schemas/NetworkRequest"}
+        }
+      },
+      "CreateSandboxResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sandbox_id",
+          "node_id",
+          "state",
+          "token",
+          "expires_at_unix_ms"
+        ],
+        "properties": {
+          "sandbox_id": {"$ref": "#/components/schemas/SandboxId"},
+          "node_id": {"type": "string", "minLength": 1},
+          "state": {"$ref": "#/components/schemas/SandboxState"},
+          "token": {
+            "type": "string",
+            "format": "password",
+            "readOnly": true,
+            "minLength": 1,
+            "x-ferrobox-sensitive": true
+          },
+          "expires_at_unix_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "SandboxResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sandbox_id", "node_id", "state", "expires_at_unix_ms"],
+        "properties": {
+          "sandbox_id": {"$ref": "#/components/schemas/SandboxId"},
+          "node_id": {"type": "string", "minLength": 1},
+          "state": {"$ref": "#/components/schemas/SandboxState"},
+          "expires_at_unix_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "ExecuteCommandRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["argv"],
+        "properties": {
+          "argv": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 256,
+            "items": {"type": "string", "maxLength": 131072}
+          },
+          "cwd": {
+            "allOf": [
+              {"$ref": "#/components/schemas/SandboxPath"}
+            ],
+            "default": "/home/sandbox"
+          },
+          "environment": {
+            "type": "object",
+            "maxProperties": 256,
+            "additionalProperties": {"type": "string"},
+            "default": {}
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 86400,
+            "default": 30
+          },
+          "max_output_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 16777216,
+            "default": 1048576
+          }
+        }
+      },
+      "ExecTermination": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "exit_code"],
+            "properties": {
+              "kind": {"const": "exited"},
+              "exit_code": {"type": "integer", "format": "int32"}
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "signal"],
+            "properties": {
+              "kind": {"const": "signaled"},
+              "signal": {"type": "integer", "format": "int32"}
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind"],
+            "properties": {"kind": {"const": "timed_out"}}
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind"],
+            "properties": {"kind": {"const": "output_limit_exceeded"}}
+          }
+        ]
+      },
+      "OutputTruncation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stdout", "stderr"],
+        "properties": {
+          "stdout": {"type": "boolean"},
+          "stderr": {"type": "boolean"}
+        }
+      },
+      "ExecuteCommandResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "process_id",
+          "termination",
+          "stdout",
+          "stderr",
+          "stdout_base64",
+          "stderr_base64",
+          "truncation"
+        ],
+        "properties": {
+          "process_id": {"type": "string", "minLength": 1, "maxLength": 128},
+          "termination": {"$ref": "#/components/schemas/ExecTermination"},
+          "stdout": {"type": "string"},
+          "stderr": {"type": "string"},
+          "stdout_base64": {
+            "type": "string",
+            "contentEncoding": "base64",
+            "contentMediaType": "application/octet-stream"
+          },
+          "stderr_base64": {
+            "type": "string",
+            "contentEncoding": "base64",
+            "contentMediaType": "application/octet-stream"
+          },
+          "truncation": {"$ref": "#/components/schemas/OutputTruncation"}
+        }
+      },
+      "WriteFileRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "content_base64"],
+        "properties": {
+          "path": {"$ref": "#/components/schemas/SandboxPath"},
+          "content_base64": {
+            "type": "string",
+            "contentEncoding": "base64",
+            "contentMediaType": "application/octet-stream",
+            "maxLength": 89478488
+          },
+          "overwrite": {"type": "boolean", "default": false},
+          "mode": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "maximum": 4095
+          }
+        }
+      },
+      "WriteFileResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["bytes_written"],
+        "properties": {
+          "bytes_written": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 67108864
+          }
+        }
+      },
+      "ReadFileResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["content_base64", "bytes", "eof"],
+        "properties": {
+          "content_base64": {
+            "type": "string",
+            "contentEncoding": "base64",
+            "contentMediaType": "application/octet-stream"
+          },
+          "bytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 67108864
+          },
+          "eof": {"type": "boolean"}
+        }
+      },
+      "FileKind": {
+        "type": "string",
+        "enum": ["file", "directory"]
+      },
+      "DirectoryEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "path",
+          "kind",
+          "size_bytes",
+          "modified_unix_millis",
+          "mode"
+        ],
+        "properties": {
+          "name": {"type": "string"},
+          "path": {"$ref": "#/components/schemas/SandboxPath"},
+          "kind": {"$ref": "#/components/schemas/FileKind"},
+          "size_bytes": {"type": "integer", "format": "int64", "minimum": 0},
+          "modified_unix_millis": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "minimum": 0
+          },
+          "mode": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "maximum": 4095
+          }
+        }
+      },
+      "ListDirectoryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["entries"],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/DirectoryEntry"}
+          }
+        }
+      },
+      "CreateSnapshotRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      },
+      "SnapshotHandle": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "snapshot_id",
+          "source_sandbox_id",
+          "name",
+          "created_at_unix_ms",
+          "source_state",
+          "spec",
+          "size_bytes",
+          "digest_sha256"
+        ],
+        "properties": {
+          "snapshot_id": {"$ref": "#/components/schemas/SnapshotId"},
+          "source_sandbox_id": {"$ref": "#/components/schemas/SandboxId"},
+          "name": {"type": ["string", "null"], "maxLength": 128},
+          "created_at_unix_ms": {"type": "integer", "format": "int64", "minimum": 0},
+          "source_state": {"$ref": "#/components/schemas/SandboxState"},
+          "spec": {"$ref": "#/components/schemas/SandboxSpec"},
+          "size_bytes": {"type": "integer", "format": "int64", "minimum": 0},
+          "digest_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "CreateSnapshotResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "snapshot_id",
+          "source_sandbox_id",
+          "name",
+          "created_at_unix_ms",
+          "source_state",
+          "spec",
+          "size_bytes",
+          "digest_sha256",
+          "token"
+        ],
+        "properties": {
+          "snapshot_id": {"$ref": "#/components/schemas/SnapshotId"},
+          "source_sandbox_id": {"$ref": "#/components/schemas/SandboxId"},
+          "name": {"type": ["string", "null"], "maxLength": 128},
+          "created_at_unix_ms": {"type": "integer", "format": "int64", "minimum": 0},
+          "source_state": {"$ref": "#/components/schemas/SandboxState"},
+          "spec": {"$ref": "#/components/schemas/SandboxSpec"},
+          "size_bytes": {"type": "integer", "format": "int64", "minimum": 0},
+          "digest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "token": {
+            "type": "string",
+            "format": "password",
+            "readOnly": true,
+            "minLength": 1,
+            "x-ferrobox-sensitive": true
+          }
+        }
+      },
+      "ListSnapshotsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["snapshots", "next_cursor"],
+        "properties": {
+          "snapshots": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/SnapshotHandle"}
+          },
+          "next_cursor": {
+            "oneOf": [
+              {"$ref": "#/components/schemas/SnapshotId"},
+              {"type": "null"}
+            ]
+          }
+        }
+      },
+      "SnapshotVerification": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["snapshot_id", "valid", "checked_artifacts", "failure"],
+        "properties": {
+          "snapshot_id": {"$ref": "#/components/schemas/SnapshotId"},
+          "valid": {"type": "boolean"},
+          "checked_artifacts": {"type": "integer", "minimum": 0, "maximum": 255},
+          "failure": {"type": ["string", "null"]}
+        }
+      },
+      "RestoreSnapshotRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "timeout_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 86400,
+            "default": 300
+          }
+        }
+      },
+      "CloneSnapshotRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["count"],
+        "properties": {
+          "count": {"type": "integer", "minimum": 1, "maximum": 32},
+          "timeout_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 86400,
+            "default": 300
+          }
+        }
+      },
+      "CloneSnapshotResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sandboxes"],
+        "properties": {
+          "sandboxes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {"$ref": "#/components/schemas/CreateSandboxResponse"}
+          }
+        }
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "unauthorized",
+              "not_found",
+              "conflict",
+              "sandbox_expired",
+              "unsupported",
+              "timeout",
+              "resource_exhausted",
+              "unavailable",
+              "internal"
+            ]
+          },
+          "message": {"type": "string"}
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error"],
+        "properties": {
+          "error": {"$ref": "#/components/schemas/ErrorDetail"}
+        }
+      }
+    }
+  }
+}

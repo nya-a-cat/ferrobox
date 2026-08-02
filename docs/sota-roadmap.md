@@ -125,6 +125,13 @@ The CLI command group also covers the complete snapshot API surface: create,
 paginated list, inspect, verify, restore, clone, rollback, and delete. The Live
 Snapshot KVM workflow enforces its separate conformance path.
 
+The implemented eighteen-operation HTTP surface now has one checked-in OpenAPI
+3.1 contract. Standard CI validates it with a digest-pinned official generator,
+emits seven language source trees, compares it with the Axum route set, and
+drives a generated Python client through the existing API. The OpenAPI and SDK
+rows remain Partial while stable language packages and the missing diagnostics,
+ingress, and richer egress endpoints are still outstanding.
+
 The four verified state-branching rows and the complete CLI snapshot surface
 are backed by
 [Live Snapshot KVM E2E run 30764234734](https://github.com/nya-a-cat/ferrobox/actions/runs/30764234734)

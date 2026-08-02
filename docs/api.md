@@ -3,6 +3,11 @@
 The API listens on loopback by default. Each create response returns a
 short-lived bearer token that authorizes only the created sandbox.
 
+The machine-readable form of every implemented route and schema is
+[`openapi/ferrobox-v1.json`](../openapi/ferrobox-v1.json). Its generator,
+credential-scope, and GitHub conformance rules are documented in
+[`openapi.md`](openapi.md).
+
 ## Create
 
 ```http

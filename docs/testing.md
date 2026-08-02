@@ -16,8 +16,11 @@ resource usage low and results reproducible.
 - process-backend HTTP end-to-end verification;
 - first-party Agent Skill contract validation;
 - Rust CLI create/exec/file/delete end-to-end verification;
-- Firecracker/Jailer checksum and version verification.
-- full-commit GitHub Action pin verification across every workflow.
+- Firecracker/Jailer checksum and version verification;
+- full-commit GitHub Action pin verification across every workflow;
+- OpenAPI 3.1 validation, exact Axum route matching, and seven generated SDK
+  source trees;
+- a generated Python SDK create/exec/file/delete closed loop through `uv`.
 
 The process E2E checks `print(42)`, argv literal handling, file round-trip,
 path traversal rejection, deletion, and token redaction from audit records.
@@ -38,6 +41,13 @@ commit `8854525`.
 passed formatting, Clippy, the Skill gate, and the extended CLI lifecycle E2E
 at commit `4b3daae`. Its state sequence was running, paused, rejected execution
 with HTTP 409, resumed, running, then deleted.
+
+The OpenAPI gate uses `openapi/ferrobox-v1.json` as the common input for the
+official generator, the exact source-route comparison, and the generated
+Python black-box client. It retains a structural evidence document, a sanitized
+seven-check runtime document, the generator manifest, the generated Python
+`uv.lock`, and all seven generated source trees. See
+[`openapi.md`](openapi.md) for the credential and supply-chain boundary.
 
 ## KVM CI
 

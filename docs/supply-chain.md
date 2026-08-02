@@ -108,6 +108,21 @@ for Firecracker.
 The gate requires a non-empty package set and document namespace in each SBOM.
 Syft update checks are disabled during evidence generation.
 
+## OpenAPI generator and Python tooling pins
+
+Standard CI generates developer-client evidence with OpenAPI Generator v7.22.0.
+`scripts/fetch-openapi-generator.sh` downloads the official GitHub release JAR,
+requires size 31,390,141 bytes, verifies SHA-256
+`37f23217f40cabac50c435312ea1d3ff5e61271092edb210695cd6e876a7cc8c`, and
+checks the executable-reported version before generation. The signed release
+commit is `f4d1cb8c15e1bc0476c75bcbc3febf1edec89b25`.
+
+The same workflow pins `astral-sh/setup-uv` v9.0.0 to full commit
+`c771a70e6277c0a99b617c7a806ffedaca235ff9`, fixes uv to 0.12.1 and Python to
+3.12, and disables the action cache. The generated Python dependency graph is
+resolved with a fixed upload-date cutoff, locked before execution, and retained
+inside the OpenAPI evidence artifact.
+
 ## E2E provenance schema v1
 
 `scripts/generate-e2e-provenance.sh` emits
