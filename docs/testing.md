@@ -126,6 +126,17 @@ The HTTP artifact also retains a five-request concurrent burst with each
 request's latency and total wall time. Sequential and concurrent P95 must both
 remain below 80 ms.
 
+## Hosted density evidence
+
+The KVM workflow starts a zero-pool API on a dedicated jail and runtime root,
+then `scripts/benchmark-density.py` accumulates 1, 5, 10, and 25 live snapshot-
+restored sandboxes. The JSON artifact retains all create-to-ready samples,
+five-sample host `MemAvailable` medians, Firecracker RSS/PSS/USS, cgroup
+`memory.current`, kernel version, commit identity, sandbox specification, and
+cleanup state. Schema validation requires exact tier counts, live Firecracker
+processes, positive PSS/USS/controller totals, a positive 25-instance host
+delta, and zero cgroup leaves after deletion.
+
 ## Completion rule
 
 Workflow presence is not evidence of success. Ferrobox remains incomplete until

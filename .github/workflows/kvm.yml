@@ -172,6 +172,70 @@ jobs:
           FERROBOX_BENCHMARK_PREPARE_CEILING_US: "4000000"
         run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_CHROOT_BASE,FERROBOX_RUNTIME_ROOT,FERROBOX_NODE_BINARY,FERROBOX_BENCHMARK_OUTPUT,FERROBOX_BENCHMARK_CREATE_ITERATIONS,FERROBOX_BENCHMARK_ITERATIONS,FERROBOX_BENCHMARK_PYTHON_ITERATIONS,FERROBOX_BENCHMARK_FILE_ITERATIONS,FERROBOX_BENCHMARK_PREPARE_CEILING_US bash scripts/benchmark-kvm.sh
 
+      - name: Measure Firecracker density
+        env:
+          FERROBOX_DENSITY_OUTPUT: ${{ runner.temp }}/ferrobox-density.json
+          FERROBOX_DENSITY_API_LOG: ${{ runner.temp }}/ferrobox-density-api.log
+        run: |
+          set -euo pipefail
+          sudo install -d -o root -g root -m 0755 \
+            /mnt/ferrobox/jailer-density \
+            /mnt/ferrobox/runtime-density
+          sudo target/debug/ferrobox-api \
+            --backend firecracker \
+            --listen 127.0.0.1:18082 \
+            --audit-log /mnt/ferrobox/runtime-density/audit.jsonl \
+            --firecracker /opt/ferrobox/bin/firecracker \
+            --jailer /opt/ferrobox/bin/jailer \
+            --kernel /mnt/ferrobox/images/vmlinux \
+            --rootfs /mnt/ferrobox/images/python.ext4 \
+            --snapshot-root /mnt/ferrobox/snapshots/python \
+            --chroot-base /mnt/ferrobox/jailer-density \
+            --runtime-root /mnt/ferrobox/runtime-density \
+            >"${FERROBOX_DENSITY_API_LOG}" 2>&1 &
+          api_pid=$!
+          cleanup() {
+            sudo pkill --signal TERM --parent "${api_pid}" 2>/dev/null || true
+            sudo kill "${api_pid}" 2>/dev/null || true
+            wait "${api_pid}" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for _ in $(seq 1 200); do
+            if curl --fail --silent http://127.0.0.1:18082/healthz >/dev/null; then
+              break
+            fi
+            if ! sudo kill -0 "${api_pid}" 2>/dev/null; then
+              cat "${FERROBOX_DENSITY_API_LOG}" >&2
+              exit 1
+            fi
+            sleep 0.05
+          done
+          curl --fail --silent http://127.0.0.1:18082/healthz >/dev/null
+          sudo python3 scripts/benchmark-density.py \
+            --url http://127.0.0.1:18082 \
+            --tiers 1,5,10,25 \
+            --github-sha "${GITHUB_SHA}" \
+            >"${FERROBOX_DENSITY_OUTPUT}"
+          jq --exit-status '
+            .schema_version == 1 and
+            .github_sha == env.GITHUB_SHA and
+            .tiers_requested == [1, 5, 10, 25] and
+            (.create_to_ready_us | length) == 25 and
+            (.tiers | length) == 4 and
+            all(.tiers[];
+              .cgroup_count == .sandbox_count and
+              .firecracker_process_count >= .sandbox_count and
+              .firecracker_rss_kib > 0 and
+              .firecracker_pss_kib > 0 and
+              .firecracker_uss_kib > 0 and
+              .cgroup_memory_current_kib > 0 and
+              ((.process_names | index("firecracker")) != null)
+            ) and
+            .tiers[-1].host_used_delta_kib > 0 and
+            .cleanup.cgroup_count == 0
+          ' "${FERROBOX_DENSITY_OUTPUT}" >/dev/null
+          cat "${FERROBOX_DENSITY_OUTPUT}"
+
       - name: Benchmark HTTP ready-pool allocation
         env:
           FERROBOX_HTTP_BENCHMARK_OUTPUT: ${{ runner.temp }}/ferrobox-http-benchmark.json
@@ -572,6 +636,8 @@ jobs:
             ${{ runner.temp }}/kernel.manifest
             ${{ runner.temp }}/ferrobox-benchmark.json
             ${{ runner.temp }}/ferrobox-fresh-pool-benchmark.json
+            ${{ runner.temp }}/ferrobox-density.json
+            ${{ runner.temp }}/ferrobox-density-api.log
             ${{ runner.temp }}/ferrobox-http-benchmark.json
             ${{ runner.temp }}/docker-benchmark.json
             ${{ runner.temp }}/docker-image-digests.json

@@ -374,6 +374,30 @@ interpreter startup, filesystem work, and exit observation. Ferrobox uses its
 ext4 rootfs over Firecracker virtio-blk, Docker/runc uses the runner's Docker
 storage path, and gVisor/runsc uses its configured filesystem path.
 
+### Density boundary
+
+The hosted density probe follows
+[CubeSandbox's published cumulative method](https://github.com/TencentCloud/CubeSandbox/blob/6b01f08e0a233570fcdd42baed2718ba08318759/docs/blog/posts/2026-06-01-cubesandbox-perf-benchmark.md#33-single-host-deployment-density-memory-overhead):
+record an empty-runtime `MemAvailable` baseline, keep sandboxes alive in
+increasing tiers, and divide the host-memory decrease by the live count. The
+Ferrobox tiers are 1, 5, 10, and 25 instances with a fixed 1-vCPU/512-MiB
+network-disabled specification. Five `/proc/meminfo` samples are retained at
+every tier and their median provides the host-memory value.
+
+The probe also reads every process ID from the exact
+`/sys/fs/cgroup/ferrobox/<jailer-id>/cgroup.procs` leaves. Linux
+[`smaps_rollup`](https://docs.kernel.org/6.5/filesystems/proc.html) supplies
+summed RSS and proportional-set size. USS is recorded as private clean, private
+dirty, and private hugetlb pages. Each cgroup's `memory.current` supplies a
+controller-accounted total that includes the VM process boundary. The artifact
+retains totals and per-sandbox values for all four measures.
+
+The API starts with no ready pool, the probe requires zero Ferrobox cgroup
+leaves at baseline, and successful cleanup requires the leaf count to return to
+zero. The measurement runs before container and alternate-VMM comparators can
+change the hosted runner's memory population. Results describe that GitHub
+runner and specification; cross-host ratios require a matched deployment.
+
 ## Targets
 
 The optimization program tracks two different thresholds:
