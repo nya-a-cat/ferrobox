@@ -522,8 +522,7 @@ mod tests {
     #[test]
     fn lists_the_workspace_root_through_the_capability_directory() {
         let workspace = tempfile::tempdir().expect("temporary workspace");
-        std::fs::write(workspace.path().join("oci.txt"), b"ferrobox-oci\n")
-            .expect("write fixture");
+        std::fs::write(workspace.path().join("oci.txt"), b"ferrobox-oci\n").expect("write fixture");
         let directory = GuestService::open_workspace(workspace.path()).expect("open workspace");
         let relative = GuestService::relative_path("/home/sandbox").expect("workspace path");
 
