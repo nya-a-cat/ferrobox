@@ -5,6 +5,7 @@ package ferrobox.guest.v1;
 service GuestService {
   rpc Health(HealthRequest) returns (HealthResponse);
   rpc Init(InitRequest) returns (InitResponse);
+  rpc Rekey(RekeyRequest) returns (RekeyResponse);
   rpc StartProcess(StartProcessRequest) returns (stream ProcessEvent);
   rpc SignalProcess(SignalProcessRequest) returns (SignalProcessResponse);
   rpc WriteFile(WriteFileRequest) returns (WriteFileResponse);
@@ -36,6 +37,21 @@ message InitResponse {
   bool initialized = 1;
   bool replayed = 2;
 }
+message RekeyRequest {
+  Auth auth = 1;
+  string request_id = 2;
+  string sandbox_id = 3;
+  string token = 4;
+  uint32 command_uid = 5;
+  uint32 command_gid = 6;
+  uint64 max_file_bytes = 7;
+  uint32 max_processes = 8;
+  string guest_ipv4 = 9;
+  uint32 guest_prefix_length = 10;
+  string gateway_ipv4 = 11;
+  string dns_ipv4 = 12;
+}
+message RekeyResponse { bool rekeyed = 1; }
 message StartProcessRequest {
   Auth auth = 1;
   string request_id = 2;

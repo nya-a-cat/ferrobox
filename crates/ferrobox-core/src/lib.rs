@@ -13,6 +13,7 @@ pub const MAX_MEMORY_MB: u32 = 32 * 1024;
 pub const MAX_TIMEOUT_SECONDS: u64 = 86_400;
 pub const MAX_OUTPUT_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
+pub const MAX_SNAPSHOT_NAME_BYTES: usize = 128;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -48,6 +49,37 @@ impl fmt::Display for SandboxId {
 }
 
 impl std::str::FromStr for SandboxId {
+    type Err = uuid::Error;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        value.parse().map(Self)
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SnapshotId(Uuid);
+
+impl SnapshotId {
+    #[must_use]
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
+}
+
+impl Default for SnapshotId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for SnapshotId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+impl std::str::FromStr for SnapshotId {
     type Err = uuid::Error;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
@@ -134,6 +166,45 @@ pub struct SandboxHandle {
     pub sandbox_id: SandboxId,
     pub node_id: String,
     pub state: SandboxState,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CreateSnapshotRequest {
+    pub name: Option<String>,
+}
+
+impl CreateSnapshotRequest {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.name.as_ref().is_some_and(|name| {
+            name.is_empty()
+                || name.len() > MAX_SNAPSHOT_NAME_BYTES
+                || name.trim() != name
+                || name.chars().any(char::is_control)
+        }) {
+            return Err(ValidationError::SnapshotName);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SnapshotHandle {
+    pub snapshot_id: SnapshotId,
+    pub source_sandbox_id: SandboxId,
+    pub name: Option<String>,
+    pub created_at_unix_ms: u128,
+    pub source_state: SandboxState,
+    pub spec: SandboxSpec,
+    pub size_bytes: u64,
+    pub digest_sha256: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SnapshotVerification {
+    pub snapshot_id: SnapshotId,
+    pub valid: bool,
+    pub checked_artifacts: u8,
+    pub failure: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -414,6 +485,8 @@ pub enum ValidationError {
     SandboxPath,
     #[error("process id is invalid")]
     ProcessId,
+    #[error("snapshot name must be 1-128 bytes without surrounding whitespace or control characters")]
+    SnapshotName,
 }
 
 #[async_trait]
@@ -446,12 +519,46 @@ pub trait SandboxRuntime: Send + Sync {
     ) -> Result<ListDirectoryResult, RuntimeError>;
     async fn pause(&self, sandbox_id: &SandboxId) -> Result<(), RuntimeError>;
     async fn resume(&self, sandbox_id: &SandboxId) -> Result<(), RuntimeError>;
+    async fn create_snapshot(
+        &self,
+        sandbox_id: &SandboxId,
+        request: CreateSnapshotRequest,
+    ) -> Result<SnapshotHandle, RuntimeError>;
+    async fn list_snapshots(
+        &self,
+        sandbox_id: &SandboxId,
+    ) -> Result<Vec<SnapshotHandle>, RuntimeError>;
+    async fn get_snapshot(
+        &self,
+        snapshot_id: &SnapshotId,
+    ) -> Result<SnapshotHandle, RuntimeError>;
+    async fn verify_snapshot(
+        &self,
+        snapshot_id: &SnapshotId,
+    ) -> Result<SnapshotVerification, RuntimeError>;
+    async fn restore_snapshot(
+        &self,
+        snapshot_id: &SnapshotId,
+    ) -> Result<SandboxHandle, RuntimeError>;
+    async fn clone_snapshot(
+        &self,
+        snapshot_id: &SnapshotId,
+        count: u8,
+    ) -> Result<Vec<SandboxHandle>, RuntimeError>;
+    async fn rollback_snapshot(
+        &self,
+        sandbox_id: &SandboxId,
+        snapshot_id: &SnapshotId,
+    ) -> Result<SandboxHandle, RuntimeError>;
+    async fn delete_snapshot(&self, snapshot_id: &SnapshotId) -> Result<(), RuntimeError>;
     async fn delete(&self, sandbox_id: &SandboxId) -> Result<(), RuntimeError>;
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ExecRequest, NetworkMode, SandboxPath, SandboxSpec, SandboxState};
+    use super::{
+        CreateSnapshotRequest, ExecRequest, NetworkMode, SandboxPath, SandboxSpec, SandboxState,
+    };
 
     #[test]
     fn validates_spec_and_argv_without_shell_parsing() {
@@ -486,5 +593,23 @@ mod tests {
         assert!(SandboxState::Creating.can_transition_to(SandboxState::Running));
         assert!(!SandboxState::Creating.can_transition_to(SandboxState::Paused));
         assert!(SandboxState::Failed.can_transition_to(SandboxState::Deleting));
+    }
+
+    #[test]
+    fn validates_snapshot_name() {
+        assert!(
+            CreateSnapshotRequest {
+                name: Some("checkpoint-1".to_owned())
+            }
+            .validate()
+            .is_ok()
+        );
+        assert!(
+            CreateSnapshotRequest {
+                name: Some(" padded".to_owned())
+            }
+            .validate()
+            .is_err()
+        );
     }
 }

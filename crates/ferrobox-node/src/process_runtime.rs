@@ -7,11 +7,11 @@ use std::{
 
 use async_trait::async_trait;
 use ferrobox_core::{
-    DirectoryEntry, ExecRequest, ExecResult, ExecTermination, FileKind, ListDirectoryRequest,
-    ListDirectoryResult, MAX_FILE_BYTES, OutputTruncation, ProcessId, ReadFileRequest,
-    ReadFileResult, RuntimeError, RuntimeErrorKind, SandboxHandle, SandboxId, SandboxPath,
-    SandboxRuntime, SandboxSpec, SandboxState, SignalRequest, SignalResult, WriteFileRequest,
-    WriteFileResult,
+    CreateSnapshotRequest, DirectoryEntry, ExecRequest, ExecResult, ExecTermination, FileKind,
+    ListDirectoryRequest, ListDirectoryResult, MAX_FILE_BYTES, OutputTruncation, ProcessId,
+    ReadFileRequest, ReadFileResult, RuntimeError, RuntimeErrorKind, SandboxHandle, SandboxId,
+    SandboxPath, SandboxRuntime, SandboxSpec, SandboxState, SignalRequest, SignalResult,
+    SnapshotHandle, SnapshotId, SnapshotVerification, WriteFileRequest, WriteFileResult,
 };
 use tokio::{
     fs,
@@ -441,6 +441,65 @@ impl SandboxRuntime for ProcessRuntime {
         Ok(())
     }
 
+    async fn create_snapshot(
+        &self,
+        sandbox_id: &SandboxId,
+        _request: CreateSnapshotRequest,
+    ) -> Result<SnapshotHandle, RuntimeError> {
+        self.sandbox(sandbox_id).await?;
+        Err(snapshot_unsupported())
+    }
+
+    async fn list_snapshots(
+        &self,
+        sandbox_id: &SandboxId,
+    ) -> Result<Vec<SnapshotHandle>, RuntimeError> {
+        self.sandbox(sandbox_id).await?;
+        Err(snapshot_unsupported())
+    }
+
+    async fn get_snapshot(
+        &self,
+        _snapshot_id: &SnapshotId,
+    ) -> Result<SnapshotHandle, RuntimeError> {
+        Err(snapshot_unsupported())
+    }
+
+    async fn verify_snapshot(
+        &self,
+        _snapshot_id: &SnapshotId,
+    ) -> Result<SnapshotVerification, RuntimeError> {
+        Err(snapshot_unsupported())
+    }
+
+    async fn restore_snapshot(
+        &self,
+        _snapshot_id: &SnapshotId,
+    ) -> Result<SandboxHandle, RuntimeError> {
+        Err(snapshot_unsupported())
+    }
+
+    async fn clone_snapshot(
+        &self,
+        _snapshot_id: &SnapshotId,
+        _count: u8,
+    ) -> Result<Vec<SandboxHandle>, RuntimeError> {
+        Err(snapshot_unsupported())
+    }
+
+    async fn rollback_snapshot(
+        &self,
+        sandbox_id: &SandboxId,
+        _snapshot_id: &SnapshotId,
+    ) -> Result<SandboxHandle, RuntimeError> {
+        self.sandbox(sandbox_id).await?;
+        Err(snapshot_unsupported())
+    }
+
+    async fn delete_snapshot(&self, _snapshot_id: &SnapshotId) -> Result<(), RuntimeError> {
+        Err(snapshot_unsupported())
+    }
+
     async fn delete(&self, sandbox_id: &SandboxId) -> Result<(), RuntimeError> {
         let sandbox = self
             .sandboxes
@@ -468,6 +527,13 @@ impl SandboxRuntime for ProcessRuntime {
         .await;
         Ok(())
     }
+}
+
+fn snapshot_unsupported() -> RuntimeError {
+    RuntimeError::new(
+        RuntimeErrorKind::Unsupported,
+        "snapshots require the Firecracker runtime",
+    )
 }
 
 #[cfg(unix)]

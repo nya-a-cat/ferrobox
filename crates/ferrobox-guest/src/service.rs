@@ -190,6 +190,43 @@ impl guest_service_server::GuestService for GuestService {
         }))
     }
 
+    async fn rekey(
+        &self,
+        request: Request<protocol::RekeyRequest>,
+    ) -> Result<Response<protocol::RekeyResponse>, Status> {
+        let request = request.into_inner();
+        self.authorized(request.auth.as_ref()).await?;
+        if request.sandbox_id.is_empty()
+            || request.token.len() < 32
+            || request.command_uid == 0
+            || request.max_file_bytes == 0
+            || request.max_processes == 0
+        {
+            return Err(Status::invalid_argument("invalid rekey request"));
+        }
+        if !request.guest_ipv4.is_empty() {
+            run_guest_command("ip", &["address", "flush", "dev", "eth0", "scope", "global"])
+                .await?;
+        }
+        configure_guest_network(
+            &request.guest_ipv4,
+            request.guest_prefix_length,
+            &request.gateway_ipv4,
+            &request.dns_ipv4,
+        )
+        .await?;
+        let candidate = InitState {
+            sandbox_id: request.sandbox_id,
+            token_digest: Sha256::digest(request.token.as_bytes()).into(),
+            uid: request.command_uid,
+            gid: request.command_gid,
+            max_file_bytes: request.max_file_bytes,
+            guest_cgroup_available: configure_pids_limit(request.max_processes).await?,
+        };
+        *self.initialization.write().await = Some(candidate);
+        Ok(Response::new(protocol::RekeyResponse { rekeyed: true }))
+    }
+
     async fn start_process(
         &self,
         request: Request<StartProcessRequest>,

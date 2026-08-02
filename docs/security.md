@@ -61,3 +61,10 @@ The MVP has no multi-tenant organization authorization, encrypted persistent
 volume, confidential-computing guarantee, FQDN allowlist or answer-pinning
 policy, browser isolation, GPU isolation, or cross-node recovery guarantee.
 Those capabilities require separate threat models and acceptance tests.
+
+Snapshot artifacts contain guest memory and filesystem data and are therefore
+sensitive host data. Their directories are root-owned, runtime files are
+read-only after publication, and the captured restore credential is mode
+`0400`. SHA-256 verification provides corruption detection. Encryption at rest,
+artifact signing, tenant-scoped durable metadata, and cross-node key management
+remain separate security gates.

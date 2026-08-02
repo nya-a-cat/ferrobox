@@ -8,14 +8,15 @@ use std::{
 
 use async_trait::async_trait;
 use ferrobox_core::{
-    DirectoryEntry, ExecRequest, ExecResult, ExecTermination, FileKind, ListDirectoryRequest,
-    ListDirectoryResult, OutputTruncation, ProcessId, ReadFileRequest, ReadFileResult,
-    RuntimeError, RuntimeErrorKind, SandboxHandle, SandboxId, SandboxPath, SandboxRuntime,
-    SandboxSpec, SandboxState, SignalRequest, SignalResult, WriteFileRequest, WriteFileResult,
+    CreateSnapshotRequest, DirectoryEntry, ExecRequest, ExecResult, ExecTermination, FileKind,
+    ListDirectoryRequest, ListDirectoryResult, OutputTruncation, ProcessId, ReadFileRequest,
+    ReadFileResult, RuntimeError, RuntimeErrorKind, SandboxHandle, SandboxId, SandboxPath,
+    SandboxRuntime, SandboxSpec, SandboxState, SignalRequest, SignalResult, SnapshotHandle,
+    SnapshotId, SnapshotVerification, WriteFileRequest, WriteFileResult,
 };
 use ferrobox_protocol::guest::v1::{
     self as guest, Auth, HealthRequest, InitRequest, ListDirectoryRequest as GuestListRequest,
-    ReadFileRequest as GuestReadRequest, SignalProcessRequest as GuestSignalRequest,
+    ReadFileRequest as GuestReadRequest, RekeyRequest, SignalProcessRequest as GuestSignalRequest,
     StartProcessRequest, WriteFileRequest as GuestWriteRequest, process_event,
 };
 use tokio::{
@@ -34,6 +35,7 @@ use crate::{
     },
     network::{NetworkLease, NetworkManager},
     rootfs::{clone_readonly_asset, clone_rootfs, verify_regular_file},
+    snapshot::{SnapshotArtifact, SnapshotStageRequest, SnapshotStore},
     vsock::GuestConnector,
 };
 
@@ -90,6 +92,7 @@ impl FirecrackerRuntimeConfig {
 
 struct FirecrackerSandbox {
     state: SandboxState,
+    spec: SandboxSpec,
     child: Child,
     api: FirecrackerClient,
     guest_client: guest::guest_service_client::GuestServiceClient<tonic::transport::Channel>,
@@ -101,8 +104,40 @@ struct FirecrackerSandbox {
 pub struct FirecrackerRuntime {
     config: FirecrackerRuntimeConfig,
     network: NetworkManager,
+    snapshot_store: SnapshotStore,
     sandboxes: RwLock<HashMap<SandboxId, Arc<Mutex<FirecrackerSandbox>>>>,
+    snapshots: RwLock<HashMap<SnapshotId, Arc<Mutex<SnapshotArtifact>>>>,
     ready_pool: Mutex<Vec<SandboxHandle>>,
+}
+
+#[derive(Clone, Debug)]
+struct RestoreAssets {
+    vmstate_path: PathBuf,
+    memory_path: PathBuf,
+    rootfs_path: PathBuf,
+    captured_guest_token: Option<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct GuestNetworkConfig {
+    guest_ipv4: String,
+    guest_prefix_length: u32,
+    gateway_ipv4: String,
+    dns_ipv4: String,
+}
+
+impl GuestNetworkConfig {
+    fn from_lease(network: Option<&NetworkLease>) -> Self {
+        let Some(lease) = network else {
+            return Self::default();
+        };
+        Self {
+            guest_ipv4: lease.guest_address.clone(),
+            guest_prefix_length: 24,
+            gateway_ipv4: lease.gateway.clone(),
+            dns_ipv4: lease.dns_ipv4.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -123,10 +158,19 @@ impl FirecrackerRuntime {
         fs::create_dir_all(&config.runtime_root)
             .await
             .map_err(|error| RuntimeError::internal(format!("create runtime root: {error}")))?;
+        let snapshot_store = SnapshotStore::new(
+            config.runtime_root.join("snapshots"),
+            config.node_id.clone(),
+            FIRECRACKER_VERSION,
+            &config.kernel_image,
+        )
+        .await?;
         Ok(Self {
             config,
             network: NetworkManager,
+            snapshot_store,
             sandboxes: RwLock::new(HashMap::new()),
+            snapshots: RwLock::new(HashMap::new()),
             ready_pool: Mutex::new(Vec::new()),
         })
     }
@@ -265,6 +309,57 @@ impl FirecrackerRuntime {
             .join(executable_name)
             .join(id.to_string())
             .join("root"))
+    }
+
+    async fn cleanup_chroot(&self, chroot_root: &Path) -> Result<(), RuntimeError> {
+        if !chroot_root.starts_with(&self.config.chroot_base)
+            || chroot_root == self.config.chroot_base
+        {
+            return Err(RuntimeError::internal("refusing unsafe chroot cleanup"));
+        }
+        if fs::metadata(chroot_root).await.is_ok() {
+            fs::remove_dir_all(chroot_root)
+                .await
+                .map_err(|error| RuntimeError::internal(format!("remove jail: {error}")))?;
+        }
+        Ok(())
+    }
+
+    async fn terminate_record(
+        &self,
+        record: &mut FirecrackerSandbox,
+    ) -> Result<(), RuntimeError> {
+        record.state = SandboxState::Deleting;
+        let _ = record
+            .api
+            .put(
+                "/actions",
+                &InstanceAction {
+                    action_type: InstanceActionType::SendCtrlAltDel,
+                },
+            )
+            .await;
+        match timeout(Duration::from_secs(2), record.child.wait()).await {
+            Ok(Ok(_)) => {}
+            Ok(Err(_)) | Err(_) => {
+                let _ = record.child.kill().await;
+                let _ = record.child.wait().await;
+            }
+        }
+
+        let network_result = if let Some(lease) = &record.network {
+            self.network.delete(lease).await
+        } else {
+            Ok(())
+        };
+        let jail_result = self.cleanup_chroot(&record.chroot_root).await;
+        if network_result.is_ok() && jail_result.is_ok() {
+            record.state = SandboxState::Deleted;
+        } else {
+            record.state = SandboxState::Failed;
+        }
+        network_result?;
+        jail_result
     }
 
     async fn wait_for_socket(path: &Path, limit: Duration) -> Result<(), RuntimeError> {
@@ -467,6 +562,60 @@ impl FirecrackerRuntime {
         }
     }
 
+    async fn rekey_guest(
+        &self,
+        id: &SandboxId,
+        connector: &GuestConnector,
+        previous_token: &str,
+        token_value: &str,
+        network: Option<&NetworkLease>,
+    ) -> Result<
+        guest::guest_service_client::GuestServiceClient<tonic::transport::Channel>,
+        RuntimeError,
+    > {
+        let mut client = self.wait_for_guest(connector).await?;
+        let network = GuestNetworkConfig::from_lease(network);
+        self.rekey_connected_guest(
+            id,
+            &mut client,
+            previous_token,
+            token_value,
+            &network,
+        )
+        .await?;
+        Ok(client)
+    }
+
+    async fn rekey_connected_guest(
+        &self,
+        id: &SandboxId,
+        client: &mut guest::guest_service_client::GuestServiceClient<tonic::transport::Channel>,
+        previous_token: &str,
+        token_value: &str,
+        network: &GuestNetworkConfig,
+    ) -> Result<(), RuntimeError> {
+        client
+            .rekey(Request::new(RekeyRequest {
+                auth: Some(Auth {
+                    token: previous_token.to_owned(),
+                }),
+                request_id: uuid::Uuid::new_v4().to_string(),
+                sandbox_id: id.to_string(),
+                token: token_value.to_owned(),
+                command_uid: 1000,
+                command_gid: 1000,
+                max_file_bytes: ferrobox_core::MAX_FILE_BYTES,
+                max_processes: 256,
+                guest_ipv4: network.guest_ipv4.clone(),
+                guest_prefix_length: network.guest_prefix_length,
+                gateway_ipv4: network.gateway_ipv4.clone(),
+                dns_ipv4: network.dns_ipv4.clone(),
+            }))
+            .await
+            .map_err(guest_error)?;
+        Ok(())
+    }
+
     fn snapshot_paths(root: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
         (
             root.join("vmstate"),
@@ -600,6 +749,18 @@ impl FirecrackerRuntime {
         let started = std::time::Instant::now();
         let _ = self.guest_client(sandbox_id).await?;
         Ok(started.elapsed().as_micros())
+    }
+
+    async fn snapshot_record(
+        &self,
+        id: &SnapshotId,
+    ) -> Result<Arc<Mutex<SnapshotArtifact>>, RuntimeError> {
+        self.snapshots
+            .read()
+            .await
+            .get(id)
+            .cloned()
+            .ok_or_else(|| RuntimeError::not_found("snapshot does not exist"))
     }
 
     pub async fn benchmark_execute(
@@ -759,8 +920,76 @@ impl FirecrackerRuntime {
         let snapshot_compatible = spec.cpu_count == 1
             && spec.memory_mb == 512
             && spec.network == ferrobox_core::NetworkMode::Disabled;
-        let restore_snapshot = snapshot_compatible && self.snapshot_available().await;
-        let id = SandboxId::new();
+        let restore = if snapshot_compatible && self.snapshot_available().await {
+            self.config.snapshot_root.as_ref().map(|root| RestoreAssets {
+                vmstate_path: root.join("vmstate"),
+                memory_path: root.join("memory"),
+                rootfs_path: root.join("rootfs.ext4"),
+                captured_guest_token: None,
+            })
+        } else {
+            None
+        };
+        let capture_template = snapshot_compatible
+            && self.config.snapshot_root.is_some()
+            && restore.is_none();
+        self.launch(spec, SandboxId::new(), restore, capture_template)
+            .await
+    }
+
+    async fn create_from_snapshot_artifact(
+        &self,
+        artifact: &SnapshotArtifact,
+        captured_guest_token: String,
+    ) -> Result<SandboxHandle, RuntimeError> {
+        let restore = RestoreAssets {
+            vmstate_path: artifact.vmstate_path(),
+            memory_path: artifact.memory_path(),
+            rootfs_path: artifact.rootfs_path(),
+            captured_guest_token: Some(captured_guest_token),
+        };
+        self.launch(
+            artifact.spec().clone(),
+            SandboxId::new(),
+            Some(restore),
+            false,
+        )
+        .await
+    }
+
+    async fn launch(
+        &self,
+        spec: SandboxSpec,
+        id: SandboxId,
+        restore: Option<RestoreAssets>,
+        capture_template: bool,
+    ) -> Result<SandboxHandle, RuntimeError> {
+        let chroot_root = self.jail_root(&id)?;
+        let result = self
+            .launch_inner(spec, id, restore, capture_template)
+            .await;
+        if result.is_err()
+            && let Err(cleanup_error) = self.cleanup_chroot(&chroot_root).await
+        {
+            tracing::warn!(
+                error = %cleanup_error,
+                path = %chroot_root.display(),
+                "failed to clean a sandbox jail after launch failure"
+            );
+        }
+        result
+    }
+
+    async fn launch_inner(
+        &self,
+        spec: SandboxSpec,
+        id: SandboxId,
+        restore: Option<RestoreAssets>,
+        capture_template: bool,
+    ) -> Result<SandboxHandle, RuntimeError> {
+        spec.validate()
+            .map_err(|error| RuntimeError::invalid(error.to_string()))?;
+        let restore_snapshot = restore.is_some();
         let chroot_root = self.jail_root(&id)?;
         let kernel_path = chroot_root.join("kernel").join("vmlinux");
         let rootfs_path = chroot_root.join("images").join("rootfs.ext4");
@@ -781,32 +1010,22 @@ impl FirecrackerRuntime {
         clone_readonly_asset(&self.config.kernel_image, &kernel_path)
             .await
             .map_err(|error| RuntimeError::internal(format!("clone kernel: {error}")))?;
-        let rootfs_source = if restore_snapshot {
-            self.config
-                .snapshot_root
-                .as_ref()
-                .expect("available snapshot has a root")
-                .join("rootfs.ext4")
-        } else {
-            self.config.rootfs_template.clone()
-        };
+        let rootfs_source = restore.as_ref().map_or_else(
+            || self.config.rootfs_template.clone(),
+            |assets| assets.rootfs_path.clone(),
+        );
         clone_rootfs(&rootfs_source, &rootfs_path)
             .await
             .map_err(|error| RuntimeError::internal(error.to_string()))?;
-        if restore_snapshot {
-            let snapshot_root = self
-                .config
-                .snapshot_root
-                .as_ref()
-                .expect("available snapshot has a root");
+        if let Some(assets) = &restore {
             clone_readonly_asset(
-                &snapshot_root.join("vmstate"),
+                &assets.vmstate_path,
                 &jail_snapshot_path.join("vmstate"),
             )
             .await
             .map_err(|error| RuntimeError::internal(format!("clone snapshot state: {error}")))?;
             clone_readonly_asset(
-                &snapshot_root.join("memory"),
+                &assets.memory_path,
                 &jail_snapshot_path.join("memory"),
             )
             .await
@@ -872,10 +1091,18 @@ impl FirecrackerRuntime {
         command
             .args(["--", "--api-sock", "/run/firecracker.socket"])
             .stdout(Stdio::null());
-        let mut child = command
+        let mut child = match command
             .kill_on_drop(true)
             .spawn()
-            .map_err(|error| RuntimeError::internal(format!("start jailer: {error}")))?;
+        {
+            Ok(child) => child,
+            Err(error) => {
+                if let Some(lease) = &network {
+                    let _ = self.network.delete(lease).await;
+                }
+                return Err(RuntimeError::internal(format!("start jailer: {error}")));
+            }
+        };
 
         let api_socket = run_path.join("firecracker.socket");
         if let Err(error) = Self::wait_for_socket(&api_socket, self.config.api_timeout).await {
@@ -904,9 +1131,12 @@ impl FirecrackerRuntime {
             self.config.guest_port,
             self.config.api_timeout,
         );
-        if snapshot_compatible && self.config.snapshot_root.is_some() && !restore_snapshot {
+        if capture_template {
             if let Err(error) = self.wait_for_guest(&connector).await {
                 let _ = child.kill().await;
+                if let Some(lease) = &network {
+                    let _ = self.network.delete(lease).await;
+                }
                 return Err(error);
             }
             if let Err(error) = self
@@ -914,14 +1144,30 @@ impl FirecrackerRuntime {
                 .await
             {
                 let _ = child.kill().await;
+                if let Some(lease) = &network {
+                    let _ = self.network.delete(lease).await;
+                }
                 return Err(error);
             }
         }
         let guest_token = format!("{}{}", uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
-        let guest_client = match self
-            .initialize_guest(&id, &connector, &guest_token, network.as_ref())
-            .await
+        let initialized = if let Some(previous_token) = restore
+            .as_ref()
+            .and_then(|assets| assets.captured_guest_token.as_deref())
         {
+            self.rekey_guest(
+                &id,
+                &connector,
+                previous_token,
+                &guest_token,
+                network.as_ref(),
+            )
+            .await
+        } else {
+            self.initialize_guest(&id, &connector, &guest_token, network.as_ref())
+                .await
+        };
+        let guest_client = match initialized {
             Ok(client) => client,
             Err(error) => {
                 let _ = child.kill().await;
@@ -935,6 +1181,7 @@ impl FirecrackerRuntime {
             id.clone(),
             Arc::new(Mutex::new(FirecrackerSandbox {
                 state: SandboxState::Running,
+                spec,
                 child,
                 api,
                 guest_client,
@@ -1131,6 +1378,309 @@ impl SandboxRuntime for FirecrackerRuntime {
         Ok(())
     }
 
+    async fn create_snapshot(
+        &self,
+        sandbox_id: &SandboxId,
+        request: CreateSnapshotRequest,
+    ) -> Result<SnapshotHandle, RuntimeError> {
+        request
+            .validate()
+            .map_err(|error| RuntimeError::invalid(error.to_string()))?;
+        let source = self.record(sandbox_id).await?;
+        let snapshot_id = SnapshotId::new();
+        let mut source = source.lock().await;
+        let source_state = source.state;
+        if !matches!(source_state, SandboxState::Running | SandboxState::Paused) {
+            return Err(RuntimeError::new(
+                RuntimeErrorKind::Conflict,
+                "sandbox must be running or paused to create a snapshot",
+            ));
+        }
+        let stem = format!("user-{snapshot_id}");
+        let jail_snapshot_root = source.chroot_root.join("snapshot");
+        let jail_vmstate = jail_snapshot_root.join(format!("{stem}.vmstate"));
+        let jail_memory = jail_snapshot_root.join(format!("{stem}.memory"));
+        let rootfs = source.chroot_root.join("images").join("rootfs.ext4");
+        let mut paused_by_request = false;
+        let capture = async {
+            if source_state == SandboxState::Running {
+                source
+                    .api
+                    .patch(
+                        "/vm",
+                        &VmState {
+                            state: VmStateValue::Paused,
+                        },
+                    )
+                    .await
+                    .map_err(fc_error)?;
+                source.state = SandboxState::Paused;
+                paused_by_request = true;
+            }
+            source
+                .api
+                .put(
+                    "/snapshot/create",
+                    &SnapshotCreate {
+                        snapshot_type: SnapshotType::Full,
+                        snapshot_path: format!("/snapshot/{stem}.vmstate"),
+                        mem_file_path: format!("/snapshot/{stem}.memory"),
+                    },
+                )
+                .await
+                .map_err(fc_error)?;
+            self.snapshot_store
+                .stage(SnapshotStageRequest {
+                    snapshot_id: &snapshot_id,
+                    source_sandbox_id: sandbox_id,
+                    name: request.name,
+                    source_state,
+                    spec: &source.spec,
+                    vmstate_path: &jail_vmstate,
+                    memory_path: &jail_memory,
+                    rootfs_path: &rootfs,
+                    restore_token: &source.guest_token,
+                })
+                .await
+        }
+        .await;
+        let _ = fs::remove_file(&jail_vmstate).await;
+        let _ = fs::remove_file(&jail_memory).await;
+        let resume = if paused_by_request {
+            source
+                .api
+                .patch(
+                    "/vm",
+                    &VmState {
+                        state: VmStateValue::Resumed,
+                    },
+                )
+                .await
+                .map_err(fc_error)
+        } else {
+            Ok(())
+        };
+        if resume.is_ok() {
+            source.state = source_state;
+        } else {
+            source.state = SandboxState::Failed;
+        }
+        drop(source);
+        let staged = match (capture, resume) {
+            (Ok(staged), Ok(())) => staged,
+            (Ok(staged), Err(error)) => {
+                self.snapshot_store.discard(staged).await;
+                return Err(error);
+            }
+            (Err(error), _) => return Err(error),
+        };
+        let artifact = self.snapshot_store.finalize(staged).await?;
+        let handle = artifact.handle();
+        self.snapshots
+            .write()
+            .await
+            .insert(snapshot_id, Arc::new(Mutex::new(artifact)));
+        Ok(handle)
+    }
+
+    async fn list_snapshots(
+        &self,
+        sandbox_id: &SandboxId,
+    ) -> Result<Vec<SnapshotHandle>, RuntimeError> {
+        self.record(sandbox_id).await?;
+        let records: Vec<_> = self.snapshots.read().await.values().cloned().collect();
+        let mut snapshots = Vec::new();
+        for record in records {
+            let record = record.lock().await;
+            if record.source_sandbox_id() == sandbox_id {
+                snapshots.push(record.handle());
+            }
+        }
+        snapshots.sort_by(|left, right| {
+            left.created_at_unix_ms
+                .cmp(&right.created_at_unix_ms)
+                .then_with(|| left.snapshot_id.to_string().cmp(&right.snapshot_id.to_string()))
+        });
+        Ok(snapshots)
+    }
+
+    async fn get_snapshot(
+        &self,
+        snapshot_id: &SnapshotId,
+    ) -> Result<SnapshotHandle, RuntimeError> {
+        let record = self.snapshot_record(snapshot_id).await?;
+        let handle = record.lock().await.handle();
+        Ok(handle)
+    }
+
+    async fn verify_snapshot(
+        &self,
+        snapshot_id: &SnapshotId,
+    ) -> Result<SnapshotVerification, RuntimeError> {
+        let record = self.snapshot_record(snapshot_id).await?;
+        let record = record.lock().await;
+        Ok(self.snapshot_store.verify(&record).await)
+    }
+
+    async fn restore_snapshot(
+        &self,
+        snapshot_id: &SnapshotId,
+    ) -> Result<SandboxHandle, RuntimeError> {
+        let mut restored = self.clone_snapshot(snapshot_id, 1).await?;
+        restored
+            .pop()
+            .ok_or_else(|| RuntimeError::internal("snapshot restore produced no sandbox"))
+    }
+
+    async fn clone_snapshot(
+        &self,
+        snapshot_id: &SnapshotId,
+        count: u8,
+    ) -> Result<Vec<SandboxHandle>, RuntimeError> {
+        if !(1..=32).contains(&count) {
+            return Err(RuntimeError::invalid("clone count must be between 1 and 32"));
+        }
+        let record = self.snapshot_record(snapshot_id).await?;
+        let record = record.lock().await;
+        let verification = self.snapshot_store.verify(&record).await;
+        if !verification.valid {
+            return Err(RuntimeError::new(
+                RuntimeErrorKind::Unavailable,
+                verification
+                    .failure
+                    .unwrap_or_else(|| "snapshot integrity verification failed".to_owned()),
+            ));
+        }
+        let captured_guest_token = self.snapshot_store.restore_token(&record).await?;
+        let mut handles = Vec::with_capacity(usize::from(count));
+        for _ in 0..count {
+            match self
+                .create_from_snapshot_artifact(&record, captured_guest_token.clone())
+                .await
+            {
+                Ok(handle) => handles.push(handle),
+                Err(error) => {
+                    for handle in &handles {
+                        let _ = <Self as SandboxRuntime>::delete(self, &handle.sandbox_id).await;
+                    }
+                    return Err(error);
+                }
+            }
+        }
+        Ok(handles)
+    }
+
+    async fn rollback_snapshot(
+        &self,
+        sandbox_id: &SandboxId,
+        snapshot_id: &SnapshotId,
+    ) -> Result<SandboxHandle, RuntimeError> {
+        let source_record = self.record(sandbox_id).await?;
+        let mut source = source_record.lock().await;
+        if !matches!(source.state, SandboxState::Running | SandboxState::Paused) {
+            return Err(RuntimeError::new(
+                RuntimeErrorKind::Conflict,
+                "sandbox must be running or paused to roll back",
+            ));
+        }
+
+        let snapshot_record = self.snapshot_record(snapshot_id).await?;
+        let snapshot = snapshot_record.lock().await;
+        if snapshot.source_sandbox_id() != sandbox_id {
+            return Err(RuntimeError::new(
+                RuntimeErrorKind::Conflict,
+                "snapshot belongs to another sandbox",
+            ));
+        }
+        let verification = self.snapshot_store.verify(&snapshot).await;
+        if !verification.valid {
+            return Err(RuntimeError::new(
+                RuntimeErrorKind::Unavailable,
+                verification
+                    .failure
+                    .unwrap_or_else(|| "snapshot integrity verification failed".to_owned()),
+            ));
+        }
+        let captured_guest_token = self.snapshot_store.restore_token(&snapshot).await?;
+        let replacement_handle = self
+            .create_from_snapshot_artifact(&snapshot, captured_guest_token)
+            .await?;
+        drop(snapshot);
+
+        let replacement_id = replacement_handle.sandbox_id;
+        let replacement_record = self.record(&replacement_id).await?;
+        let mut replacement = replacement_record.lock().await;
+        let replacement_token = format!("{}{}", uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+        let previous_token = replacement.guest_token.clone();
+        let network = GuestNetworkConfig::from_lease(replacement.network.as_ref());
+        if let Err(error) = self
+            .rekey_connected_guest(
+                sandbox_id,
+                &mut replacement.guest_client,
+                &previous_token,
+                &replacement_token,
+                &network,
+            )
+            .await
+        {
+            drop(replacement);
+            let _ = <Self as SandboxRuntime>::delete(self, &replacement_id).await;
+            return Err(error);
+        }
+        replacement.guest_token = replacement_token;
+
+        let swap_result = {
+            let mut sandboxes = self.sandboxes.write().await;
+            let source_matches = sandboxes
+                .get(sandbox_id)
+                .is_some_and(|current| Arc::ptr_eq(current, &source_record));
+            let replacement_matches = sandboxes
+                .get(&replacement_id)
+                .is_some_and(|current| Arc::ptr_eq(current, &replacement_record));
+            if !source_matches || !replacement_matches {
+                Err(RuntimeError::new(
+                    RuntimeErrorKind::Conflict,
+                    "sandbox changed while rollback was preparing",
+                ))
+            } else {
+                sandboxes.remove(sandbox_id);
+                sandboxes.remove(&replacement_id);
+                sandboxes.insert(sandbox_id.clone(), Arc::clone(&replacement_record));
+                Ok(())
+            }
+        };
+        if let Err(error) = swap_result {
+            drop(replacement);
+            let _ = <Self as SandboxRuntime>::delete(self, &replacement_id).await;
+            return Err(error);
+        }
+        drop(replacement);
+
+        if let Err(error) = self.terminate_record(&mut source).await {
+            tracing::warn!(
+                sandbox_id = %sandbox_id,
+                error = %error,
+                "replacement VM committed while old VM cleanup reported an error"
+            );
+        }
+        Ok(SandboxHandle {
+            sandbox_id: sandbox_id.clone(),
+            node_id: self.config.node_id.clone(),
+            state: SandboxState::Running,
+        })
+    }
+
+    async fn delete_snapshot(&self, snapshot_id: &SnapshotId) -> Result<(), RuntimeError> {
+        let record = self.snapshot_record(snapshot_id).await?;
+        let record_guard = record.try_lock().map_err(|_| {
+            RuntimeError::new(RuntimeErrorKind::Conflict, "snapshot is currently in use")
+        })?;
+        self.snapshot_store.delete(&record_guard).await?;
+        drop(record_guard);
+        self.snapshots.write().await.remove(snapshot_id);
+        Ok(())
+    }
+
     async fn delete(&self, sandbox_id: &SandboxId) -> Result<(), RuntimeError> {
         let record = self
             .sandboxes
@@ -1139,39 +1689,7 @@ impl SandboxRuntime for FirecrackerRuntime {
             .remove(sandbox_id)
             .ok_or_else(|| RuntimeError::not_found("sandbox does not exist"))?;
         let mut record = record.lock().await;
-        record.state = SandboxState::Deleting;
-        let _ = record
-            .api
-            .put(
-                "/actions",
-                &InstanceAction {
-                    action_type: InstanceActionType::SendCtrlAltDel,
-                },
-            )
-            .await;
-        if timeout(Duration::from_secs(2), record.child.wait())
-            .await
-            .is_err()
-        {
-            let _ = record.child.kill().await;
-            let _ = record.child.wait().await;
-        }
-        if let Some(lease) = &record.network {
-            let _ = self.network.delete(lease).await;
-        }
-        let chroot_root = record.chroot_root.clone();
-        drop(record);
-        if !chroot_root.starts_with(&self.config.chroot_base)
-            || chroot_root == self.config.chroot_base
-        {
-            return Err(RuntimeError::internal("refusing unsafe chroot cleanup"));
-        }
-        if fs::metadata(&chroot_root).await.is_ok() {
-            fs::remove_dir_all(&chroot_root)
-                .await
-                .map_err(|error| RuntimeError::internal(format!("remove jail: {error}")))?;
-        }
-        Ok(())
+        self.terminate_record(&mut record).await
     }
 }
 

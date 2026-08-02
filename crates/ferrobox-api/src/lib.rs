@@ -18,8 +18,9 @@ use axum::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use ferrobox_core::{
-    ExecRequest, ListDirectoryRequest, NetworkMode, ReadFileRequest, RuntimeError,
-    RuntimeErrorKind, SandboxId, SandboxPath, SandboxRuntime, SandboxSpec, SandboxState,
+    CreateSnapshotRequest, ExecRequest, ListDirectoryRequest, MAX_TIMEOUT_SECONDS, NetworkMode,
+    ReadFileRequest, RuntimeError, RuntimeErrorKind, SandboxHandle, SandboxId, SandboxPath,
+    SandboxRuntime, SandboxSpec, SandboxState, SnapshotHandle, SnapshotId, SnapshotVerification,
     WriteFileRequest,
 };
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,7 @@ pub struct AppState {
 struct AppStateInner {
     runtime: Arc<dyn SandboxRuntime>,
     records: RwLock<HashMap<SandboxId, SandboxRecord>>,
+    snapshots: RwLock<HashMap<SnapshotId, SnapshotRecord>>,
     audit: AuditLog,
 }
 
@@ -48,6 +50,12 @@ struct SandboxRecord {
     expires_at_unix_ms: u128,
 }
 
+#[derive(Clone)]
+struct SnapshotRecord {
+    token: TokenDigest,
+    source_sandbox_id: SandboxId,
+}
+
 impl AppState {
     pub async fn new(
         runtime: Arc<dyn SandboxRuntime>,
@@ -57,6 +65,7 @@ impl AppState {
             inner: Arc::new(AppStateInner {
                 runtime,
                 records: RwLock::new(HashMap::new()),
+                snapshots: RwLock::new(HashMap::new()),
                 audit: AuditLog::open(audit_path).await?,
             }),
         })
@@ -76,6 +85,30 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/sandboxes/{id}/directories", get(list_directory))
         .route("/v1/sandboxes/{id}/pause", post(pause_sandbox))
         .route("/v1/sandboxes/{id}/resume", post(resume_sandbox))
+        .route(
+            "/v1/sandboxes/{id}/snapshots",
+            post(create_snapshot).get(list_snapshots),
+        )
+        .route(
+            "/v1/sandboxes/{id}/rollback/{snapshot_id}",
+            post(rollback_snapshot),
+        )
+        .route(
+            "/v1/snapshots/{snapshot_id}",
+            get(get_snapshot).delete(delete_snapshot),
+        )
+        .route(
+            "/v1/snapshots/{snapshot_id}/verify",
+            post(verify_snapshot),
+        )
+        .route(
+            "/v1/snapshots/{snapshot_id}/restore",
+            post(restore_snapshot),
+        )
+        .route(
+            "/v1/snapshots/{snapshot_id}/clones",
+            post(clone_snapshot),
+        )
         .layer(RequestBodyLimitLayer::new(MAX_REQUEST_BODY))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -158,10 +191,30 @@ async fn create_sandbox(
             return Err(ApiError::from_runtime(error));
         }
     };
+    let response = register_sandbox(&state, handle, spec.timeout_seconds).await;
+    state
+        .inner
+        .audit
+        .record(
+            Some(&response.sandbox_id.to_string()),
+            "create",
+            "succeeded",
+            &details,
+        )
+        .await
+        .map_err(ApiError::internal)?;
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+async fn register_sandbox(
+    state: &AppState,
+    handle: SandboxHandle,
+    ttl_seconds: u64,
+) -> CreateSandboxResponse {
     let (token, digest) = TokenDigest::issue();
-    let expires_at = Instant::now() + Duration::from_secs(spec.timeout_seconds);
+    let expires_at = Instant::now() + Duration::from_secs(ttl_seconds);
     let expires_at_unix_ms =
-        unix_millis().saturating_add(u128::from(spec.timeout_seconds).saturating_mul(1000));
+        unix_millis().saturating_add(u128::from(ttl_seconds).saturating_mul(1000));
     state.inner.records.write().await.insert(
         handle.sandbox_id.clone(),
         SandboxRecord {
@@ -172,32 +225,14 @@ async fn create_sandbox(
             expires_at_unix_ms,
         },
     );
-    state
-        .inner
-        .audit
-        .record(
-            Some(&handle.sandbox_id.to_string()),
-            "create",
-            "succeeded",
-            &details,
-        )
-        .await
-        .map_err(ApiError::internal)?;
-    spawn_ttl_reaper(
-        state.clone(),
-        handle.sandbox_id.clone(),
-        spec.timeout_seconds,
-    );
-    Ok((
-        StatusCode::CREATED,
-        Json(CreateSandboxResponse {
-            sandbox_id: handle.sandbox_id,
-            node_id: handle.node_id,
-            state: handle.state,
-            token,
-            expires_at_unix_ms,
-        }),
-    ))
+    spawn_ttl_reaper(state.clone(), handle.sandbox_id.clone(), ttl_seconds);
+    CreateSandboxResponse {
+        sandbox_id: handle.sandbox_id,
+        node_id: handle.node_id,
+        state: handle.state,
+        token,
+        expires_at_unix_ms,
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -452,6 +487,303 @@ async fn resume_sandbox(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[derive(Debug, Serialize)]
+struct CreateSnapshotResponse {
+    #[serde(flatten)]
+    snapshot: SnapshotHandle,
+    token: String,
+}
+
+async fn create_snapshot(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<CreateSnapshotRequest>,
+) -> Result<(StatusCode, Json<CreateSnapshotResponse>), ApiError> {
+    let id = parse_id(&id)?;
+    authorize(&state, &id, &headers).await?;
+    request
+        .validate()
+        .map_err(|error| ApiError::bad_request(error.to_string()))?;
+    let snapshot = state
+        .inner
+        .runtime
+        .create_snapshot(&id, request)
+        .await
+        .map_err(ApiError::from_runtime)?;
+    let (token, digest) = TokenDigest::issue();
+    state.inner.snapshots.write().await.insert(
+        snapshot.snapshot_id.clone(),
+        SnapshotRecord {
+            token: digest,
+            source_sandbox_id: id.clone(),
+        },
+    );
+    state
+        .inner
+        .audit
+        .record(
+            Some(&id.to_string()),
+            "snapshot_create",
+            "succeeded",
+            &BTreeMap::from([("snapshot_id".to_owned(), snapshot.snapshot_id.to_string())]),
+        )
+        .await
+        .map_err(ApiError::internal)?;
+    Ok((
+        StatusCode::CREATED,
+        Json(CreateSnapshotResponse { snapshot, token }),
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+struct ListSnapshotsQuery {
+    #[serde(default = "default_snapshot_limit")]
+    limit: usize,
+    cursor: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ListSnapshotsResponse {
+    snapshots: Vec<SnapshotHandle>,
+    next_cursor: Option<String>,
+}
+
+async fn list_snapshots(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Query(query): Query<ListSnapshotsQuery>,
+) -> Result<Json<ListSnapshotsResponse>, ApiError> {
+    let id = parse_id(&id)?;
+    authorize(&state, &id, &headers).await?;
+    if !(1..=100).contains(&query.limit) {
+        return Err(ApiError::bad_request("limit must be between 1 and 100"));
+    }
+    let snapshots = state
+        .inner
+        .runtime
+        .list_snapshots(&id)
+        .await
+        .map_err(ApiError::from_runtime)?;
+    let start = if let Some(cursor) = query.cursor {
+        let cursor = parse_snapshot_id(&cursor)?;
+        snapshots
+            .iter()
+            .position(|snapshot| snapshot.snapshot_id == cursor)
+            .map(|index| index + 1)
+            .ok_or_else(|| ApiError::bad_request("cursor does not belong to this sandbox"))?
+    } else {
+        0
+    };
+    let end = start.saturating_add(query.limit).min(snapshots.len());
+    let next_cursor = (end < snapshots.len())
+        .then(|| snapshots[end - 1].snapshot_id.to_string());
+    Ok(Json(ListSnapshotsResponse {
+        snapshots: snapshots[start..end].to_vec(),
+        next_cursor,
+    }))
+}
+
+async fn get_snapshot(
+    State(state): State<AppState>,
+    Path(snapshot_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<SnapshotHandle>, ApiError> {
+    let snapshot_id = parse_snapshot_id(&snapshot_id)?;
+    authorize_snapshot(&state, &snapshot_id, &headers).await?;
+    state
+        .inner
+        .runtime
+        .get_snapshot(&snapshot_id)
+        .await
+        .map(Json)
+        .map_err(ApiError::from_runtime)
+}
+
+async fn verify_snapshot(
+    State(state): State<AppState>,
+    Path(snapshot_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<SnapshotVerification>, ApiError> {
+    let snapshot_id = parse_snapshot_id(&snapshot_id)?;
+    authorize_snapshot(&state, &snapshot_id, &headers).await?;
+    state
+        .inner
+        .runtime
+        .verify_snapshot(&snapshot_id)
+        .await
+        .map(Json)
+        .map_err(ApiError::from_runtime)
+}
+
+#[derive(Debug, Deserialize)]
+struct RestoreSnapshotRequest {
+    #[serde(default = "default_ttl")]
+    timeout_seconds: u64,
+}
+
+async fn restore_snapshot(
+    State(state): State<AppState>,
+    Path(snapshot_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<RestoreSnapshotRequest>,
+) -> Result<(StatusCode, Json<CreateSandboxResponse>), ApiError> {
+    validate_ttl(request.timeout_seconds)?;
+    let snapshot_id = parse_snapshot_id(&snapshot_id)?;
+    authorize_snapshot(&state, &snapshot_id, &headers).await?;
+    let handle = state
+        .inner
+        .runtime
+        .restore_snapshot(&snapshot_id)
+        .await
+        .map_err(ApiError::from_runtime)?;
+    let response = register_sandbox(&state, handle, request.timeout_seconds).await;
+    state
+        .inner
+        .audit
+        .record(
+            Some(&response.sandbox_id.to_string()),
+            "snapshot_restore",
+            "succeeded",
+            &BTreeMap::from([("snapshot_id".to_owned(), snapshot_id.to_string())]),
+        )
+        .await
+        .map_err(ApiError::internal)?;
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+#[derive(Debug, Deserialize)]
+struct CloneSnapshotRequest {
+    count: u8,
+    #[serde(default = "default_ttl")]
+    timeout_seconds: u64,
+}
+
+#[derive(Debug, Serialize)]
+struct CloneSnapshotResponse {
+    sandboxes: Vec<CreateSandboxResponse>,
+}
+
+async fn clone_snapshot(
+    State(state): State<AppState>,
+    Path(snapshot_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<CloneSnapshotRequest>,
+) -> Result<(StatusCode, Json<CloneSnapshotResponse>), ApiError> {
+    validate_ttl(request.timeout_seconds)?;
+    if !(1..=32).contains(&request.count) {
+        return Err(ApiError::bad_request("count must be between 1 and 32"));
+    }
+    let snapshot_id = parse_snapshot_id(&snapshot_id)?;
+    authorize_snapshot(&state, &snapshot_id, &headers).await?;
+    let handles = state
+        .inner
+        .runtime
+        .clone_snapshot(&snapshot_id, request.count)
+        .await
+        .map_err(ApiError::from_runtime)?;
+    let mut sandboxes = Vec::with_capacity(handles.len());
+    for handle in handles {
+        let response = register_sandbox(&state, handle, request.timeout_seconds).await;
+        state
+            .inner
+            .audit
+            .record(
+                Some(&response.sandbox_id.to_string()),
+                "snapshot_clone",
+                "succeeded",
+                &BTreeMap::from([("snapshot_id".to_owned(), snapshot_id.to_string())]),
+            )
+            .await
+            .map_err(ApiError::internal)?;
+        sandboxes.push(response);
+    }
+    Ok((
+        StatusCode::CREATED,
+        Json(CloneSnapshotResponse { sandboxes }),
+    ))
+}
+
+async fn rollback_snapshot(
+    State(state): State<AppState>,
+    Path((id, snapshot_id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Result<Json<SandboxResponse>, ApiError> {
+    let id = parse_id(&id)?;
+    let snapshot_id = parse_snapshot_id(&snapshot_id)?;
+    let record = authorize(&state, &id, &headers).await?;
+    let snapshot_record = state
+        .inner
+        .snapshots
+        .read()
+        .await
+        .get(&snapshot_id)
+        .cloned()
+        .ok_or_else(|| ApiError::not_found("snapshot does not exist"))?;
+    if snapshot_record.source_sandbox_id != id {
+        return Err(ApiError::conflict("snapshot belongs to another sandbox"));
+    }
+    let handle = state
+        .inner
+        .runtime
+        .rollback_snapshot(&id, &snapshot_id)
+        .await
+        .map_err(ApiError::from_runtime)?;
+    let mut records = state.inner.records.write().await;
+    let current = records
+        .get_mut(&id)
+        .ok_or_else(|| ApiError::not_found("sandbox does not exist"))?;
+    current.state = handle.state;
+    current.node_id = handle.node_id.clone();
+    drop(records);
+    state
+        .inner
+        .audit
+        .record(
+            Some(&id.to_string()),
+            "snapshot_rollback",
+            "succeeded",
+            &BTreeMap::from([("snapshot_id".to_owned(), snapshot_id.to_string())]),
+        )
+        .await
+        .map_err(ApiError::internal)?;
+    Ok(Json(SandboxResponse {
+        sandbox_id: id,
+        node_id: handle.node_id,
+        state: handle.state,
+        expires_at_unix_ms: record.expires_at_unix_ms,
+    }))
+}
+
+async fn delete_snapshot(
+    State(state): State<AppState>,
+    Path(snapshot_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let snapshot_id = parse_snapshot_id(&snapshot_id)?;
+    let record = authorize_snapshot(&state, &snapshot_id, &headers).await?;
+    state
+        .inner
+        .runtime
+        .delete_snapshot(&snapshot_id)
+        .await
+        .map_err(ApiError::from_runtime)?;
+    state.inner.snapshots.write().await.remove(&snapshot_id);
+    state
+        .inner
+        .audit
+        .record(
+            Some(&record.source_sandbox_id.to_string()),
+            "snapshot_delete",
+            "succeeded",
+            &BTreeMap::from([("snapshot_id".to_owned(), snapshot_id.to_string())]),
+        )
+        .await
+        .map_err(ApiError::internal)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn delete_sandbox(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -554,6 +886,26 @@ async fn authorize_running(
     Ok(record)
 }
 
+async fn authorize_snapshot(
+    state: &AppState,
+    id: &SnapshotId,
+    headers: &HeaderMap,
+) -> Result<SnapshotRecord, ApiError> {
+    let token = bearer(headers)?;
+    let record = state
+        .inner
+        .snapshots
+        .read()
+        .await
+        .get(id)
+        .cloned()
+        .ok_or_else(|| ApiError::not_found("snapshot does not exist"))?;
+    if !record.token.matches(token) {
+        return Err(ApiError::unauthorized("invalid snapshot bearer token"));
+    }
+    Ok(record)
+}
+
 fn bearer(headers: &HeaderMap) -> Result<&str, ApiError> {
     headers
         .get(axum::http::header::AUTHORIZATION)
@@ -567,6 +919,21 @@ fn parse_id(value: &str) -> Result<SandboxId, ApiError> {
     value
         .parse()
         .map_err(|_| ApiError::bad_request("sandbox id is invalid"))
+}
+
+fn parse_snapshot_id(value: &str) -> Result<SnapshotId, ApiError> {
+    value
+        .parse()
+        .map_err(|_| ApiError::bad_request("snapshot id is invalid"))
+}
+
+fn validate_ttl(value: u64) -> Result<(), ApiError> {
+    if !(1..=MAX_TIMEOUT_SECONDS).contains(&value) {
+        return Err(ApiError::bad_request(
+            "timeout_seconds is outside the supported range",
+        ));
+    }
+    Ok(())
 }
 
 fn unix_millis() -> u128 {
@@ -593,6 +960,9 @@ const fn default_output_limit() -> u64 {
 }
 const fn default_file_read_limit() -> u64 {
     64 * 1024 * 1024
+}
+const fn default_snapshot_limit() -> usize {
+    50
 }
 fn default_cwd() -> String {
     "/home/sandbox".to_owned()

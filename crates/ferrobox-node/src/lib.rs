@@ -6,6 +6,7 @@ pub mod firecracker_runtime;
 pub mod network;
 pub mod process_runtime;
 pub mod rootfs;
+mod snapshot;
 pub mod vsock;
 
 pub use firecracker_runtime::{FirecrackerRuntime, FirecrackerRuntimeConfig};
