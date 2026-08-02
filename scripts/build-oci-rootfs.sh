@@ -45,7 +45,7 @@ if [[ -e "${output_image}" || -e "${evidence_dir}" ]]; then
     exit 3
 fi
 
-for executable in jq python3 sha256sum stat mkfs.ext4 e2fsck realpath; do
+for executable in jq python3 sha256sum stat mkfs.ext4 e2fsck dumpe2fs realpath; do
     command -v "${executable}" >/dev/null
 done
 
@@ -252,15 +252,81 @@ if ((image_bytes > 8589934592)); then
     echo "materialized rootfs exceeds the 8 GiB image limit" >&2
     exit 5
 fi
-install -d -m 0755 "$(dirname -- "${output_image}")" "$(dirname -- "${evidence_dir}")"
-truncate --size "${image_bytes}" "${partial_image}"
-mkfs.ext4 -q -F -L ferrobox-oci -d "${rootfs}" "${partial_image}"
-e2fsck -fn "${partial_image}" >"${staging}/evidence/e2fsck.txt"
 
 guest_sha256="$(sha256sum "${guest_binary}" | awk '{print $1}')"
 init_sha256="$(sha256sum "${rootfs}/usr/local/bin/ferrobox-init" | awk '{print $1}')"
+image_created="$(jq -r '.created // ""' "${staging}/evidence/image-config.json")"
+source_date_epoch="${FERROBOX_OCI_SOURCE_DATE_EPOCH:-}"
+source_date_origin=environment
+if [[ -z "${source_date_epoch}" ]]; then
+    if [[ -n "${image_created}" ]]; then
+        source_date_epoch="$(python3 - "${image_created}" <<'PY'
+import datetime
+import sys
+
+raw = sys.argv[1]
+if raw.endswith("Z"):
+    raw = raw[:-1] + "+00:00"
+try:
+    instant = datetime.datetime.fromisoformat(raw)
+except ValueError as error:
+    raise SystemExit(f"OCI config created timestamp is invalid: {error}") from error
+if instant.tzinfo is None:
+    raise SystemExit("OCI config created timestamp must include a timezone")
+epoch = int(instant.timestamp())
+if epoch <= 0:
+    raise SystemExit("OCI config created timestamp must be after the Unix epoch")
+print(epoch)
+PY
+)"
+        source_date_origin=oci-config-created
+    else
+        source_date_epoch=946684800
+        source_date_origin=fixed-fallback-2000-01-01
+    fi
+fi
+[[ "${source_date_epoch}" =~ ^[1-9][0-9]*$ ]] || {
+    echo "OCI source date epoch must be a positive decimal integer" >&2
+    exit 5
+}
+
+reproducibility_material="${rootfs_tar_sha256}:${guest_sha256}:${init_sha256}:${image_bytes}:${source_date_epoch}"
+mapfile -t reproducible_uuids < <(python3 - "${reproducibility_material}" <<'PY'
+import sys
+import uuid
+
+material = sys.argv[1]
+base = "https://github.com/nya-a-cat/ferrobox/oci-rootfs/v1/"
+print(uuid.uuid5(uuid.NAMESPACE_URL, base + material))
+print(uuid.uuid5(uuid.NAMESPACE_URL, base + material + "/directory-hash"))
+PY
+)
+[[ "${#reproducible_uuids[@]}" -eq 2 ]]
+filesystem_uuid="${reproducible_uuids[0]}"
+directory_hash_seed="${reproducible_uuids[1]}"
+[[ "${filesystem_uuid}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
+[[ "${directory_hash_seed}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
+
+install -d -m 0755 "$(dirname -- "${output_image}")" "$(dirname -- "${evidence_dir}")"
+truncate --size "${image_bytes}" "${partial_image}"
+{
+    mkfs.ext4 -V
+} >"${staging}/evidence/mkfs-version.txt" 2>&1
+LC_ALL=C \
+SOURCE_DATE_EPOCH="${source_date_epoch}" \
+E2FSPROGS_FAKE_TIME="${source_date_epoch}" \
+mkfs.ext4 -q -F \
+    -L ferrobox-oci \
+    -U "${filesystem_uuid}" \
+    -E "hash_seed=${directory_hash_seed},lazy_itable_init=0,lazy_journal_init=0" \
+    -d "${rootfs}" \
+    "${partial_image}"
+e2fsck -fn "${partial_image}" >"${staging}/evidence/e2fsck.txt"
+dumpe2fs -h "${partial_image}" >"${staging}/evidence/dumpe2fs.txt" 2>&1
+
 rootfs_sha256="$(sha256sum "${partial_image}" | awk '{print $1}')"
 crane_version="$("${crane}" version)"
+mkfs_version="$(cat "${staging}/evidence/mkfs-version.txt")"
 jq -n \
     --arg image_reference "${image_reference}" \
     --arg platform "${platform}" \
@@ -275,17 +341,23 @@ jq -n \
     --arg config_media_type "${config_media_type}" \
     --argjson config_size "${config_size}" \
     --arg crane_version "${crane_version}" \
+    --arg image_created "${image_created}" \
     --arg rootfs_tar_sha256 "${rootfs_tar_sha256}" \
     --argjson rootfs_tar_size "${rootfs_tar_size}" \
     --arg guest_sha256 "${guest_sha256}" \
     --arg init_sha256 "${init_sha256}" \
     --arg rootfs_sha256 "${rootfs_sha256}" \
     --argjson rootfs_size "${image_bytes}" \
+    --arg source_date_epoch "${source_date_epoch}" \
+    --arg source_date_origin "${source_date_origin}" \
+    --arg filesystem_uuid "${filesystem_uuid}" \
+    --arg directory_hash_seed "${directory_hash_seed}" \
+    --arg mkfs_version "${mkfs_version}" \
     --slurpfile config "${staging}/evidence/image-config.json" \
     --slurpfile layers "${staging}/evidence/layers.json" \
     --slurpfile extraction "${staging}/evidence/extraction.json" \
     '{
-        schema_version: 1,
+        schema_version: 2,
         image_reference: $image_reference,
         platform: $platform,
         source: {
@@ -305,6 +377,7 @@ jq -n \
             size: $config_size,
             os: $config[0].os,
             architecture: $config[0].architecture,
+            created: (if $image_created == "" then null else $image_created end),
             user: ($config[0].config.User // ""),
             entrypoint: ($config[0].config.Entrypoint // []),
             command: ($config[0].config.Cmd // []),
@@ -327,7 +400,15 @@ jq -n \
         ext4: {
             sha256: $rootfs_sha256,
             size: $rootfs_size,
-            e2fsck_read_only: true
+            e2fsck_read_only: true,
+            deterministic_parameters: true,
+            source_date_epoch: ($source_date_epoch | tonumber),
+            source_date_origin: $source_date_origin,
+            filesystem_uuid: $filesystem_uuid,
+            directory_hash_seed: $directory_hash_seed,
+            lazy_itable_init: false,
+            lazy_journal_init: false,
+            mkfs_version: $mkfs_version
         }
     }' >"${staging}/evidence/oci-rootfs-evidence.json"
 

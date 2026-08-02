@@ -151,10 +151,13 @@ guest/init identities, and ten KVM lifecycle checks. The checks include UID
 1000 Python execution, file write/read/list, pause-time rejection, resume,
 post-resume execution, credential redaction, and resource cleanup.
 
-The three generated ext4 files have distinct SHA-256 values because the current
-filesystem builder emits per-run filesystem metadata. Every image passed
-read-only `e2fsck` and the same microVM contract. Byte-identical ext4 packaging,
-private-registry authentication, and a public image-selection API remain open.
+The three original generated ext4 files have distinct SHA-256 values because
+their filesystem metadata was generated per run. Every image passed read-only
+`e2fsck` and the same microVM contract. The current builder fixes every known
+e2fsprogs time, UUID, directory-seed, locale, and lazy-initialization input, and
+the OCI workflow now requires two full builds to be byte-identical before KVM
+boot. This reproducibility gate remains pending until a hosted run passes.
+Private-registry authentication and a public image-selection API remain open.
 
 The four verified state-branching rows and the complete CLI snapshot surface
 are backed by

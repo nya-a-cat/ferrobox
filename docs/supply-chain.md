@@ -129,8 +129,21 @@ member count, and logical bytes. Rootfs-contained absolute links are rewritten
 to safe archive-relative targets. Three independent runs produced the same
 flattened tar SHA-256
 `6118c08463cec1d2abf919ae45a79f2390ecd45366c394aa22cab80ab457e9d8`
-and extraction counts. The ext4 byte hashes differ across runs; each generated
-image passed read-only `e2fsck` and the complete KVM lifecycle gate.
+and extraction counts. Those runs exposed per-run ext4 metadata as the
+remaining byte-reproducibility gap.
+
+The ext4 builder now derives its filesystem UUID and directory hash seed from
+the flattened-rootfs, guest, init, size, and source-date identities. It uses the
+OCI config `created` timestamp as a positive epoch, records a fixed 2000-01-01
+fallback for configs without that field, sets both the e2fsprogs 1.47.0 fake
+time and standard source-date environment, fixes `LC_ALL=C`, and disables lazy
+inode-table and journal initialization. The workflow performs two complete OCI
+pull, extraction, injection, and ext4 builds, requires byte-for-byte equality,
+and retains both schema-2 build records plus a separate reproducibility record.
+Read-only `e2fsck` and the real KVM lifecycle remain mandatory after this gate.
+The relevant upstream controls are documented in
+[mke2fs(8)](https://man7.org/linux/man-pages/man8/mke2fs.8.html) and the
+[e2fsprogs 1.47.1 source-date release note](https://github.com/tytso/e2fsprogs/blob/v1.47.1/doc/RelNotes/v1.47.1.txt).
 
 ## SBOM generator
 

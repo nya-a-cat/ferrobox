@@ -41,6 +41,13 @@ Suggested development layout:
 All `/opt/ferrobox` inputs and their parent directories must be root-owned and
 unwritable by the runtime UID. Each writable rootfs is copied into its own jail.
 
+`scripts/build-oci-rootfs.sh` creates a deterministic ext4 identity from the
+verified OCI and injected guest inputs. It uses the OCI config `created` value
+as its source-date epoch. Images without `created` use the recorded epoch
+`946684800` (2000-01-01 UTC). Operators that require another fixed epoch may set
+`FERROBOX_OCI_SOURCE_DATE_EPOCH` to a positive decimal integer; that value is
+part of the derived filesystem identity and the retained evidence.
+
 ## Jailer
 
 Production mode always invokes Jailer. The Jailer creates the mount/PID

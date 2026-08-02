@@ -67,6 +67,13 @@ the index, selected manifest, config, layer digests and sizes, builds a hardened
 flattened rootfs, injects the static guest and init, creates an ext4 image, runs
 read-only `e2fsck`, and boots the result through the real HTTP/Firecracker path.
 
+The rootfs stage performs two independent builds from the digest-qualified
+registry reference. It fixes the e2fsprogs time, filesystem UUID, directory hash
+seed, locale, and lazy-initialization settings, then requires equal ext4 bytes
+and equal schema-2 deterministic fields. The retained
+`oci-rootfs-reproducibility.json` records both SHA-256 values, `cmp` status, and
+the complete ext4 identity used by the KVM test.
+
 The API flow verifies UID 1000 Python execution, literal argv execution, file
 write/read/root-directory listing, paused-command rejection, resume followed by
 a fresh guest command, delete/stale-handle behavior, audit credential redaction,

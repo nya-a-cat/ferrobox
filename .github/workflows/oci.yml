@@ -120,7 +120,7 @@ jobs:
       - name: Build verified patched crane
         run: bash scripts/build-crane.sh "${RUNNER_TEMP}/crane"
 
-      - name: Build digest-verified OCI rootfs
+      - name: Build digest-verified reproducible OCI rootfs
         run: |
           sudo --preserve-env=FERROBOX_OCI_IMAGE,FERROBOX_OCI_PLATFORM \
             bash scripts/build-oci-rootfs.sh \
@@ -130,10 +130,20 @@ jobs:
               target/x86_64-unknown-linux-musl/release/ferrobox-guest \
               "${RUNNER_TEMP}/oci-python.ext4" \
               "${RUNNER_TEMP}/oci-rootfs-evidence"
-          sudo chmod 0444 "${RUNNER_TEMP}/oci-python.ext4"
+          sudo --preserve-env=FERROBOX_OCI_IMAGE,FERROBOX_OCI_PLATFORM \
+            bash scripts/build-oci-rootfs.sh \
+              "${RUNNER_TEMP}/crane/crane" \
+              "${FERROBOX_OCI_IMAGE}" \
+              "${FERROBOX_OCI_PLATFORM}" \
+              target/x86_64-unknown-linux-musl/release/ferrobox-guest \
+              "${RUNNER_TEMP}/oci-python-rebuild.ext4" \
+              "${RUNNER_TEMP}/oci-rootfs-rebuild-evidence"
+          sudo chmod 0444 \
+            "${RUNNER_TEMP}/oci-python.ext4" \
+            "${RUNNER_TEMP}/oci-python-rebuild.ext4"
           jq --exit-status \
             --arg image "${FERROBOX_OCI_IMAGE}" '
-              .schema_version == 1 and
+              .schema_version == 2 and
               .image_reference == $image and
               .platform == "linux/amd64" and
               .source.digest == ($image | split("@") | last) and
@@ -150,9 +160,56 @@ jobs:
               .ferrobox_injection.command_uid == 1000 and
               .ferrobox_injection.command_gid == 1000 and
               .ext4.size >= 1073741824 and
-              .ext4.e2fsck_read_only == true
+              .ext4.e2fsck_read_only == true and
+              .ext4.deterministic_parameters == true and
+              .ext4.source_date_epoch > 0 and
+              (.ext4.filesystem_uuid | test("^[0-9a-f-]{36}$")) and
+              (.ext4.directory_hash_seed | test("^[0-9a-f-]{36}$")) and
+              .ext4.lazy_itable_init == false and
+              .ext4.lazy_journal_init == false and
+              (.ext4.mkfs_version | contains("mke2fs"))
             ' "${RUNNER_TEMP}/oci-rootfs-evidence/oci-rootfs-evidence.json" \
             >/dev/null
+          first_sha256="$(sha256sum "${RUNNER_TEMP}/oci-python.ext4" | awk '{print $1}')"
+          second_sha256="$(sha256sum "${RUNNER_TEMP}/oci-python-rebuild.ext4" | awk '{print $1}')"
+          set +e
+          cmp_detail="$(cmp --print-bytes \
+            "${RUNNER_TEMP}/oci-python.ext4" \
+            "${RUNNER_TEMP}/oci-python-rebuild.ext4" 2>&1)"
+          cmp_status=$?
+          set -e
+          jq -n \
+            --arg first_sha256 "${first_sha256}" \
+            --arg second_sha256 "${second_sha256}" \
+            --arg cmp_detail "${cmp_detail}" \
+            --argjson cmp_status "${cmp_status}" \
+            --slurpfile first "${RUNNER_TEMP}/oci-rootfs-evidence/oci-rootfs-evidence.json" \
+            --slurpfile second "${RUNNER_TEMP}/oci-rootfs-rebuild-evidence/oci-rootfs-evidence.json" '
+              {
+                schema_version: 1,
+                first_sha256: $first_sha256,
+                second_sha256: $second_sha256,
+                cmp_status: $cmp_status,
+                cmp_detail: $cmp_detail,
+                byte_identical: ($cmp_status == 0 and $first_sha256 == $second_sha256),
+                deterministic_fields_equal: (
+                  $first[0].schema_version == 2 and
+                  $second[0].schema_version == 2 and
+                  $first[0].flattened_rootfs.sha256 == $second[0].flattened_rootfs.sha256 and
+                  $first[0].ferrobox_injection == $second[0].ferrobox_injection and
+                  $first[0].ext4 == $second[0].ext4
+                ),
+                ext4: $first[0].ext4
+              }
+            ' >"${RUNNER_TEMP}/oci-rootfs-reproducibility.json"
+          jq --exit-status '
+            .schema_version == 1 and
+            .byte_identical == true and
+            .deterministic_fields_equal == true and
+            .first_sha256 == .second_sha256 and
+            .first_sha256 == .ext4.sha256
+          ' "${RUNNER_TEMP}/oci-rootfs-reproducibility.json" >/dev/null
+          sudo rm -- "${RUNNER_TEMP}/oci-python-rebuild.ext4"
 
       - name: Prepare copy-on-write OCI runtime storage
         run: |
@@ -222,6 +279,8 @@ jobs:
             ${{ runner.temp }}/crane/SOURCE.manifest
             ${{ runner.temp }}/oci-kernel.manifest
             ${{ runner.temp }}/oci-rootfs-evidence
+            ${{ runner.temp }}/oci-rootfs-rebuild-evidence
+            ${{ runner.temp }}/oci-rootfs-reproducibility.json
             ${{ runner.temp }}/oci-kvm-api-failure.json
             ${{ runner.temp }}/oci-kvm-e2e.json
 
