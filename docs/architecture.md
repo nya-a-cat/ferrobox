@@ -126,7 +126,8 @@ persistent distribution firewall configuration.
 User snapshots are separate from the immutable template snapshot used by the
 ready pool. They capture live memory/device state and the writable rootfs at one
 pause point, publish versioned integrity metadata below the runtime root, and
-remain independently addressable after source deletion. Restore authenticates
-the captured guest and rotates it to a fresh sandbox identity. Clone and
-rollback build on the same verified artifact. The lifecycle, identity, atomicity,
-and failure rules are specified in [Snapshot, restore, clone, and rollback](snapshots.md).
+remain independently addressable after source deletion. A running source gets
+a fresh host-side vsock channel after resume. Restore authenticates the captured
+guest and rotates it to a fresh sandbox identity. Clone and rollback build on
+the same verified artifact. The lifecycle, identity, atomicity, and failure
+rules are specified in [Snapshot, restore, clone, and rollback](snapshots.md).

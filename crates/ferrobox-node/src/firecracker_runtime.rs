@@ -730,6 +730,16 @@ impl FirecrackerRuntime {
         }
         Ok((client, token_value))
     }
+
+    async fn reconnect_guest(&self, record: &mut FirecrackerSandbox) -> Result<(), RuntimeError> {
+        let connector = GuestConnector::new(
+            record.chroot_root.join("run").join("guest.vsock"),
+            self.config.guest_port,
+            self.config.api_timeout,
+        );
+        record.guest_client = self.wait_for_guest(&connector).await?;
+        Ok(())
+    }
 }
 
 impl FirecrackerRuntime {
@@ -1360,6 +1370,7 @@ impl SandboxRuntime for FirecrackerRuntime {
             )
             .await
             .map_err(fc_error)?;
+        self.reconnect_guest(&mut record).await?;
         record.state = SandboxState::Running;
         Ok(())
     }
@@ -1433,7 +1444,7 @@ impl SandboxRuntime for FirecrackerRuntime {
         let _ = fs::remove_file(&jail_vmstate).await;
         let _ = fs::remove_file(&jail_memory).await;
         let resume = if paused_by_request {
-            source
+            let resumed = source
                 .api
                 .patch(
                     "/vm",
@@ -1442,7 +1453,12 @@ impl SandboxRuntime for FirecrackerRuntime {
                     },
                 )
                 .await
-                .map_err(fc_error)
+                .map_err(fc_error);
+            if resumed.is_ok() {
+                self.reconnect_guest(&mut source).await
+            } else {
+                resumed
+            }
         } else {
             Ok(())
         };

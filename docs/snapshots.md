@@ -14,7 +14,7 @@ rootfs from one VM pause point. A request against a running sandbox:
 2. pauses the VM;
 3. asks Firecracker for a full state and memory snapshot;
 4. creates copy-on-write artifact copies of state, memory, and rootfs;
-5. resumes the source VM;
+5. resumes the source VM and establishes a fresh authenticated vsock channel;
 6. hashes and atomically publishes the artifact directory.
 
 A source that was paused remains paused. A failure before publication removes

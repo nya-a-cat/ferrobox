@@ -258,6 +258,7 @@ def run() -> None:
     assert api(
         "GET", f"/v1/sandboxes/{source_id}", token=source_token
     )["state"] == "running"
+    assert read_file(source_id, source_token, "/home/sandbox/state.txt") == b"captured"
     checks.extend(["running-capture", "artifact-schema"])
 
     secondary = create_snapshot(source_id, source_token, "pagination-checkpoint")
