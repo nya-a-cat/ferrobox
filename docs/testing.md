@@ -70,6 +70,16 @@ finished, continue long enough to expose every failed dimension, and are then
 enforced together. A red gate therefore still uploads the complete available
 matrix instead of stopping at the first slower comparison.
 
+Kata containerd management calls have TERM and KILL deadlines. The Kata step
+also continues to the shared enforcement point when its shim path fails or
+hits the outer step deadline. Later container, file, and Internet-policy checks
+still run, the missing or failed Kata result makes the final job red, and the
+containerd log is retained with the other evidence.
+
+The hosted `ctr` comparator uses Kata's documented single sandbox-cgroup mode.
+This avoids accumulating per-container cgroups on the nested-KVM runner. The
+exact derived Kata configuration is retained next to `containerd.log`.
+
 The HTTP artifact also retains a five-request concurrent burst with each
 request's latency and total wall time. Sequential and concurrent P95 must both
 remain below 80 ms.

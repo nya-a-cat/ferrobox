@@ -16,6 +16,7 @@ containerd_socket="${runtime_root}/containerd.sock"
 containerd_root="${runtime_root}/containerd-root"
 containerd_state="${runtime_root}/containerd-state"
 containerd_log="${runtime_root}/containerd.log"
+kata_config="${runtime_root}/configuration-qemu.toml"
 namespace="ferrobox-kata-benchmark"
 runtime="io.containerd.kata.v2"
 
@@ -36,7 +37,7 @@ ctr() {
 ctr_admin() {
     local limit="$1"
     shift
-    timeout --signal=TERM "${limit}" \
+    timeout --signal=TERM --kill-after=5s "${limit}" \
         "${ctr_binary}" \
         --address "${containerd_socket}" \
         --namespace "${namespace}" \
@@ -71,7 +72,13 @@ stop_persistent() {
 
 rm -rf -- "${containerd_root}" "${containerd_state}"
 mkdir -p "${containerd_root}" "${containerd_state}"
-KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-qemu.toml \
+cp -- /opt/kata/share/defaults/kata-containers/configuration-qemu.toml "${kata_config}"
+sed -i -E \
+    's/^(sandbox_cgroup_only[[:space:]]*=[[:space:]]*)false$/\1true/' \
+    "${kata_config}"
+grep -E '^sandbox_cgroup_only[[:space:]]*=[[:space:]]*true$' \
+    "${kata_config}" >/dev/null
+KATA_CONF_FILE="${kata_config}" \
 PATH="/usr/local/bin:/opt/kata/bin:${PATH}" \
 "${containerd_binary}" \
     --address "${containerd_socket}" \
@@ -97,6 +104,7 @@ ctr images list --quiet |
 
 cold_job_us=()
 for iteration in $(seq 1 5); do
+    echo "Kata cold job ${iteration}/5" >&2
     container_id="kata-cold-${iteration}"
     started_ns="$(date +%s%N)"
     ctr run --rm --runtime "${runtime}" \

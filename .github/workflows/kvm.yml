@@ -424,6 +424,8 @@ jobs:
           key: ${{ steps.kata-cache.outputs.cache-primary-key }}
 
       - name: Benchmark Kata Containers QEMU boundary
+        id: kata-benchmark
+        continue-on-error: true
         timeout-minutes: 12
         env:
           FERROBOX_CTR: /usr/bin/ctr
@@ -536,16 +538,19 @@ jobs:
       - name: Enforce performance gates
         if: always()
         env:
+          KATA_BENCHMARK: ${{ steps.kata-benchmark.outcome }}
           MICROVM_GATE: ${{ steps.microvm-performance-gate.outcome }}
           CONTAINER_GATE: ${{ steps.container-performance-gate.outcome }}
           FILE_WORKLOAD_GATE: ${{ steps.file-workload-performance-gate.outcome }}
           FILE_API_GATE: ${{ steps.file-api-performance-gate.outcome }}
         run: |
-          printf 'microvm=%s container=%s file_workload=%s file_api=%s\n' \
+          printf 'kata=%s microvm=%s container=%s file_workload=%s file_api=%s\n' \
+            "${KATA_BENCHMARK}" \
             "${MICROVM_GATE}" \
             "${CONTAINER_GATE}" \
             "${FILE_WORKLOAD_GATE}" \
             "${FILE_API_GATE}"
+          [[ "${KATA_BENCHMARK}" == success ]]
           [[ "${MICROVM_GATE}" == success ]]
           [[ "${CONTAINER_GATE}" == success ]]
           [[ "${FILE_WORKLOAD_GATE}" == success ]]
@@ -577,6 +582,7 @@ jobs:
             ${{ runner.temp }}/kata-static.sha256
             ${{ runner.temp }}/ferrobox-api.log
             /mnt/ferrobox/runtime/kata/containerd.log
+            /mnt/ferrobox/runtime/kata/configuration-qemu.toml
             /opt/ferrobox/images/python.ext4.manifest.json
             /mnt/ferrobox/jailer/**/root/*.log
             /srv/ferrobox/jailer/**/root/*.log
