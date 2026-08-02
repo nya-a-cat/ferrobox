@@ -59,6 +59,39 @@ language file counts and tree hashes match across the two runs. The Python
 tree contains 60 retained source/metadata/lock files and no runtime bytecode or
 installation cache.
 
+## OCI image KVM CI
+
+`.github/workflows/oci.yml` runs entirely on a GitHub-hosted Ubuntu 24.04
+nested-KVM runner. It requires a digest-qualified `linux/amd64` image, verifies
+the index, selected manifest, config, layer digests and sizes, builds a hardened
+flattened rootfs, injects the static guest and init, creates an ext4 image, runs
+read-only `e2fsck`, and boots the result through the real HTTP/Firecracker path.
+
+The API flow verifies UID 1000 Python execution, literal argv execution, file
+write/read/root-directory listing, paused-command rejection, resume followed by
+a fresh guest command, delete/stale-handle behavior, audit credential redaction,
+and final process/network cleanup. A failure records only its stage, HTTP status,
+error code, and message.
+
+Runs
+[30769681608](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681608),
+[30769811422](https://github.com/nya-a-cat/ferrobox/actions/runs/30769811422),
+and
+[30769812772](https://github.com/nya-a-cat/ferrobox/actions/runs/30769812772)
+passed independently at commit `8a0c5dc`. Their artifacts are `8840115730`,
+`8840141572`, and `8840143404`, with archive digests
+`sha256:cc390daf989cd8b688d701e02d2c2cb18e9c7a95ec1b51a247eed6737e5b5b2e`,
+`sha256:aa9d04a9c80f63051c028daa9582aca70d64bc849566faa9577d8bc6841f4ecf`,
+and
+`sha256:766291a6845d432cd48e742f482d821528d7b597f0bdf5d520eb7b6eda2c15a6`.
+All three retained the same source, manifest, flattened-rootfs, guest, init,
+Python-version, member-count, link-rewrite, and ten-check values. Their ext4
+byte hashes differ; all three report `e2fsck_read_only: true`.
+
+[Standard CI run 30769681624](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681624)
+passed formatting, tests, Clippy, builds, process/CLI/OpenAPI conformance, and
+the Firecracker/Jailer `1.15.1` host gate for the same commit.
+
 ## KVM CI
 
 `.github/workflows/kvm.yml` requires `/dev/kvm`, builds the static guest and a

@@ -96,6 +96,35 @@ Python rootfs build manifest records:
 The unified evidence record separately hashes the installed kernel and rootfs,
 so copied or modified runtime assets fail the final verification loop.
 
+## OCI root filesystem pipeline
+
+The hosted OCI gate fixes the public Python conformance image to repository
+digest
+`sha256:b18992999dbe963a45a8a4da40ac2b1975be1a776d939d098c647482bcad5cba`
+and selects the `linux/amd64` manifest
+`sha256:28255a3ace7eb4c48bc1b57b90af29e1bc82b4fd6c60614a8e3dce61b87ff941`.
+The builder verifies descriptor bytes, index-to-manifest linkage, config
+identity and platform, layer count against diff IDs, and every layer's digest,
+size, and supported media type before extraction.
+
+Rootfs export uses `go-containerregistry` v0.21.8 source archive SHA-256
+`54d520389ab2e7dbaceafb94fbe5ba151ae51e2dc613d3f3f58689d3bbfce984`.
+The repository patch admits a valid root directory tar entry while retaining
+the release's unsafe-path, digest-verification, and opaque-whiteout fixes. The
+workflow applies the patch, runs its focused upstream regression tests, builds
+`crane` twice with byte equality, and retains source, toolchain, patch, test,
+and build records. Upstream publishes no SLSA provenance for this source
+archive, so that absence stays explicit in `BUILDINFO.txt`.
+
+`scripts/safe-extract-tar.py` applies Python 3.12's data filter plus Ferrobox
+limits for traversal, absolute member paths, links, duplicates, special files,
+member count, and logical bytes. Rootfs-contained absolute links are rewritten
+to safe archive-relative targets. Three independent runs produced the same
+flattened tar SHA-256
+`6118c08463cec1d2abf919ae45a79f2390ecd45366c394aa22cab80ab457e9d8`
+and extraction counts. The ext4 byte hashes differ across runs; each generated
+image passed read-only `e2fsck` and the complete KVM lifecycle gate.
+
 ## SBOM generator
 
 `scripts/fetch-syft.sh` installs the official Linux x86_64

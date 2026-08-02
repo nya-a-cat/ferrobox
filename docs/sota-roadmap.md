@@ -82,7 +82,7 @@ Status meanings:
 | --- | --- | --- | --- |
 | Hardware isolation | Dedicated microVM boundary | Verified | Firecracker/Jailer KVM E2E and cross-sandbox escape suite pass |
 | Runtime abstraction | Embedded/local runtime plus server and Docker/Kubernetes providers | Partial | Each provider passes one shared lifecycle conformance suite |
-| OCI images | Pull and run pinned public/private OCI images | Missing | Digest-pinned image boots and executes on GitHub without a bespoke rootfs build |
+| OCI images | Pull and run pinned public/private OCI images | Partial | Public digest-pinned image boots and executes on GitHub; private-registry custody and API image selection pass their contracts |
 | Host architecture | Linux x86_64, Linux aarch64, macOS Apple Silicon, Windows/WSL2 where supported | Partial | Platform matrix reports the exact isolation backend and passes the shared smoke contract |
 | Templates | Build, list, version, inspect, and delete reusable templates | Partial | Immutable template identity and provenance survive create/delete cycles |
 | Ready pools | Bounded pre-provisioning with safe replenishment | Verified | Allocation, concurrent claim, replenishment, TTL, and leak gates pass |
@@ -137,6 +137,24 @@ all seven clients; each run also passed an internal byte-for-byte regeneration
 gate. The OpenAPI and SDK rows remain Partial. Stable language packages, six
 additional language runtime checks, diagnostics, ingress, and richer egress
 endpoints are outstanding.
+
+OCI image parity now has a verified public-image slice. Runs
+[30769681608](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681608),
+[30769811422](https://github.com/nya-a-cat/ferrobox/actions/runs/30769811422),
+and
+[30769812772](https://github.com/nya-a-cat/ferrobox/actions/runs/30769812772)
+independently passed at commit `8a0c5dc`. Each run verified the same repository
+and platform manifest digests, flattened rootfs SHA-256
+`6118c08463cec1d2abf919ae45a79f2390ecd45366c394aa22cab80ab457e9d8`,
+7,237 extracted members, 183 safely rooted absolute symbolic links, injected
+guest/init identities, and ten KVM lifecycle checks. The checks include UID
+1000 Python execution, file write/read/list, pause-time rejection, resume,
+post-resume execution, credential redaction, and resource cleanup.
+
+The three generated ext4 files have distinct SHA-256 values because the current
+filesystem builder emits per-run filesystem metadata. Every image passed
+read-only `e2fsck` and the same microVM contract. Byte-identical ext4 packaging,
+private-registry authentication, and a public image-selection API remain open.
 
 The four verified state-branching rows and the complete CLI snapshot surface
 are backed by
