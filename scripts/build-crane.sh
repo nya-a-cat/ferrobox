@@ -80,8 +80,18 @@ fi
 module_root="$(dirname -- "${module_files[0]}")"
 grep --fixed-strings --line-regexp \
     'module github.com/google/go-containerregistry' \
-    "${module_root}/go.mod" >/dev/null
-grep --fixed-strings --line-regexp 'go 1.26.5' "${module_root}/go.mod" >/dev/null
+    "${module_root}/go.mod" >/dev/null || {
+        echo "The verified source archive has an unexpected Go module path." >&2
+        exit 4
+    }
+grep --fixed-strings --line-regexp 'go 1.25.0' "${module_root}/go.mod" >/dev/null || {
+    echo "The verified source archive has an unexpected minimum Go version." >&2
+    exit 4
+}
+grep --fixed-strings --line-regexp '1.26.5' "${module_root}/.go-version" >/dev/null || {
+    echo "The verified source archive has an unexpected release Go version." >&2
+    exit 4
+}
 
 patch_sha256="$(sha256sum "${patch_file}" | awk '{print $1}')"
 install -d -m 0755 "${destination}"
