@@ -1,0 +1,214 @@
+name: OCI image KVM E2E
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/oci.yml
+      - Cargo.toml
+      - rust-toolchain.toml
+      - crates/ferrobox-api/**
+      - crates/ferrobox-core/**
+      - crates/ferrobox-guest/**
+      - crates/ferrobox-node/**
+      - crates/ferrobox-protocol/**
+      - scripts/build-oci-rootfs.sh
+      - scripts/e2e-oci-kvm.sh
+      - scripts/fetch-crane.sh
+      - scripts/fetch-firecracker.sh
+      - scripts/safe-extract-tar.py
+      - scripts/test-safe-extract-tar.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+  FERROBOX_OCI_IMAGE: docker.io/library/python@sha256:b18992999dbe963a45a8a4da40ac2b1975be1a776d939d098c647482bcad5cba
+  FERROBOX_OCI_PLATFORM: linux/amd64
+
+jobs:
+  oci-kvm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-08-03
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: Install image build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            btrfs-progs \
+            e2fsprogs \
+            jq \
+            musl-tools \
+            protobuf-compiler
+
+      - name: Verify hardened tar extraction
+        run: |
+          python3 scripts/test-safe-extract-tar.py \
+            >"${RUNNER_TEMP}/safe-extract-evidence.json"
+          jq --exit-status '
+            .schema_version == 1 and
+            (.checks | length) == 7
+          ' "${RUNNER_TEMP}/safe-extract-evidence.json" >/dev/null
+
+      - name: Require nested KVM
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          sudo chgrp "$(id -gn)" /dev/kvm
+          sudo chmod 660 /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+
+      - name: Build API and static guest
+        run: |
+          cargo generate-lockfile
+          cargo build -p ferrobox-api --locked
+          cargo build -p ferrobox-guest \
+            --release \
+            --target x86_64-unknown-linux-musl \
+            --locked
+
+      - name: Fetch verified Firecracker
+        run: |
+          bash scripts/fetch-firecracker.sh "${RUNNER_TEMP}/firecracker"
+          sudo install -d -o root -g root -m 0755 /opt/ferrobox/bin
+          sudo install -o root -g root -m 0755 \
+            "${RUNNER_TEMP}/firecracker/firecracker" \
+            /opt/ferrobox/bin/firecracker
+          sudo install -o root -g root -m 0755 \
+            "${RUNNER_TEMP}/firecracker/jailer" \
+            /opt/ferrobox/bin/jailer
+
+      - name: Fetch verified Firecracker CI kernel
+        run: |
+          set -euo pipefail
+          kernel_key='firecracker-ci/v1.15/x86_64/vmlinux-6.1.155'
+          expected_kernel_sha256='e20e46d0c36c55c0d1014eb20576171b3f3d922260d9f792017aeff53af3d4f2'
+          kernel="${RUNNER_TEMP}/vmlinux"
+          curl --fail --location --silent --show-error \
+            --proto '=https' \
+            --tlsv1.2 \
+            --output "${kernel}" \
+            "https://s3.amazonaws.com/spec.ccfc.min/${kernel_key}"
+          actual_kernel_sha256="$(sha256sum "${kernel}" | awk '{print $1}')"
+          [[ "${actual_kernel_sha256}" == "${expected_kernel_sha256}" ]]
+          {
+            printf 'kernel_key=%s\n' "${kernel_key}"
+            printf 'kernel_sha256=%s\n' "${actual_kernel_sha256}"
+          } >"${RUNNER_TEMP}/oci-kernel.manifest"
+
+      - name: Fetch verified crane
+        run: bash scripts/fetch-crane.sh "${RUNNER_TEMP}/crane"
+
+      - name: Build digest-verified OCI rootfs
+        run: |
+          sudo --preserve-env=FERROBOX_OCI_IMAGE,FERROBOX_OCI_PLATFORM \
+            bash scripts/build-oci-rootfs.sh \
+              "${RUNNER_TEMP}/crane/crane" \
+              "${FERROBOX_OCI_IMAGE}" \
+              "${FERROBOX_OCI_PLATFORM}" \
+              target/x86_64-unknown-linux-musl/release/ferrobox-guest \
+              "${RUNNER_TEMP}/oci-python.ext4" \
+              "${RUNNER_TEMP}/oci-rootfs-evidence"
+          sudo chmod 0444 "${RUNNER_TEMP}/oci-python.ext4"
+          jq --exit-status \
+            --arg image "${FERROBOX_OCI_IMAGE}" '
+              .schema_version == 1 and
+              .image_reference == $image and
+              .platform == "linux/amd64" and
+              .source.digest == ($image | split("@") | last) and
+              .source.verified_digest == .source.digest and
+              (.manifest.digest | test("^sha256:[0-9a-f]{64}$")) and
+              .config.os == "linux" and
+              .config.architecture == "amd64" and
+              (.layers | length) > 0 and
+              all(.layers[]; (.digest | test("^sha256:[0-9a-f]{64}$")) and .size > 0) and
+              .descriptor_bytes_verified == true and
+              .flattened_rootfs.size > 0 and
+              .flattened_rootfs.extraction.member_count > 0 and
+              .ferrobox_injection.command_uid == 1000 and
+              .ferrobox_injection.command_gid == 1000 and
+              .ext4.size >= 1073741824 and
+              .ext4.e2fsck_read_only == true
+            ' "${RUNNER_TEMP}/oci-rootfs-evidence/oci-rootfs-evidence.json" \
+            >/dev/null
+
+      - name: Prepare copy-on-write OCI runtime storage
+        run: |
+          sudo truncate -s 4G "${RUNNER_TEMP}/ferrobox-oci.btrfs"
+          sudo mkfs.btrfs --force --quiet "${RUNNER_TEMP}/ferrobox-oci.btrfs"
+          sudo install -d -o root -g root -m 0755 /mnt/ferrobox-oci
+          sudo mount -o loop "${RUNNER_TEMP}/ferrobox-oci.btrfs" /mnt/ferrobox-oci
+          sudo install -d -o root -g root -m 0755 \
+            /mnt/ferrobox-oci/images \
+            /mnt/ferrobox-oci/jailer \
+            /mnt/ferrobox-oci/runtime
+          sudo cp --sparse=always "${RUNNER_TEMP}/vmlinux" \
+            /mnt/ferrobox-oci/images/vmlinux
+          sudo cp --sparse=always "${RUNNER_TEMP}/oci-python.ext4" \
+            /mnt/ferrobox-oci/images/oci-python.ext4
+          sudo chmod 0444 \
+            /mnt/ferrobox-oci/images/vmlinux \
+            /mnt/ferrobox-oci/images/oci-python.ext4
+          sudo cp --reflink=always \
+            /mnt/ferrobox-oci/images/oci-python.ext4 \
+            /mnt/ferrobox-oci/images/reflink-check.ext4
+          sudo rm /mnt/ferrobox-oci/images/reflink-check.ext4
+          if [[ -w /sys/fs/cgroup/cgroup.subtree_control ]]; then
+            echo '+cpu +memory +pids' |
+              sudo tee /sys/fs/cgroup/cgroup.subtree_control >/dev/null || true
+          fi
+
+      - name: Run OCI-derived Firecracker API end-to-end
+        env:
+          FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
+          FERROBOX_JAILER: /opt/ferrobox/bin/jailer
+          FERROBOX_KERNEL: /mnt/ferrobox-oci/images/vmlinux
+          FERROBOX_ROOTFS: /mnt/ferrobox-oci/images/oci-python.ext4
+          FERROBOX_CHROOT_BASE: /mnt/ferrobox-oci/jailer
+          FERROBOX_RUNTIME_ROOT: /mnt/ferrobox-oci/runtime
+          FERROBOX_API_BINARY: target/debug/ferrobox-api
+          FERROBOX_OCI_ROOTFS_EVIDENCE: ${{ runner.temp }}/oci-rootfs-evidence/oci-rootfs-evidence.json
+          FERROBOX_OCI_E2E_OUTPUT: ${{ runner.temp }}/oci-kvm-e2e.json
+        run: |
+          sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_CHROOT_BASE,FERROBOX_RUNTIME_ROOT,FERROBOX_API_BINARY,FERROBOX_OCI_ROOTFS_EVIDENCE,FERROBOX_OCI_E2E_OUTPUT,GITHUB_SHA \
+            bash scripts/e2e-oci-kvm.sh
+          jq --exit-status \
+            --arg sha "${GITHUB_SHA}" \
+            --arg image "${FERROBOX_OCI_IMAGE}" '
+              .schema_version == 1 and
+              .github_sha == $sha and
+              .image_reference == $image and
+              .platform == "linux/amd64" and
+              (.checks | length) == 10 and
+              (.python_version | startswith("oci-python="))
+            ' "${RUNNER_TEMP}/oci-kvm-e2e.json" >/dev/null
+
+      - name: Upload OCI KVM evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: oci-kvm-evidence
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/safe-extract-evidence.json
+            ${{ runner.temp }}/crane/SOURCE.manifest
+            ${{ runner.temp }}/oci-kernel.manifest
+            ${{ runner.temp }}/oci-rootfs-evidence
+            ${{ runner.temp }}/oci-kvm-e2e.json
+
+      - name: Unmount OCI runtime storage
+        if: always()
+        run: sudo umount /mnt/ferrobox-oci 2>/dev/null || true
