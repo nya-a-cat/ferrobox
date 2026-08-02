@@ -80,7 +80,7 @@ if [[ -e "${output_image}" || -e "${evidence_dir}" ]]; then
     exit 3
 fi
 
-for executable in env jq python3 realpath sha256sum stat tar truncate; do
+for executable in chmod chown env jq python3 realpath sha256sum stat tar truncate; do
     command -v "${executable}" >/dev/null
 done
 tar_version="$(tar --version | head -n 1)"
@@ -203,6 +203,8 @@ python3 "${script_dir}/safe-extract-tar.py" \
     --evidence "${staging}/evidence/extraction.json" \
     >/dev/null
 rootfs="${staging}/rootfs"
+chown 0:0 "${rootfs}"
+chmod 0755 "${rootfs}"
 
 ensure_inside_rootfs() {
     local path="$1"
@@ -331,6 +333,12 @@ fi
 }
 
 materialized_rootfs_tar="${staging}/materialized-rootfs.tar"
+materialized_root_uid="$(stat --format '%u' "${rootfs}")"
+materialized_root_gid="$(stat --format '%g' "${rootfs}")"
+materialized_root_mode="$(stat --format '%04a' "${rootfs}")"
+[[ "${materialized_root_uid}" == 0 ]]
+[[ "${materialized_root_gid}" == 0 ]]
+[[ "${materialized_root_mode}" == 0755 ]]
 LC_ALL=C tar \
     --create \
     --file="${materialized_rootfs_tar}" \
@@ -415,6 +423,9 @@ jq -n \
     --argjson rootfs_tar_size "${rootfs_tar_size}" \
     --arg materialized_rootfs_sha256 "${materialized_rootfs_sha256}" \
     --argjson materialized_rootfs_size "${materialized_rootfs_size}" \
+    --arg materialized_root_uid "${materialized_root_uid}" \
+    --arg materialized_root_gid "${materialized_root_gid}" \
+    --arg materialized_root_mode "${materialized_root_mode}" \
     --arg tar_version "${tar_version}" \
     --arg guest_sha256 "${guest_sha256}" \
     --arg init_sha256 "${init_sha256}" \
@@ -475,6 +486,9 @@ jq -n \
             sorted_by_name: true,
             numeric_owner: true,
             mtime_epoch: ($source_date_epoch | tonumber),
+            root_uid: ($materialized_root_uid | tonumber),
+            root_gid: ($materialized_root_gid | tonumber),
+            root_mode: $materialized_root_mode,
             tar_version: $tar_version
         },
         ferrobox_injection: {

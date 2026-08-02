@@ -52,9 +52,10 @@ The hosted builder supplies the verified e2fsprogs 1.47.4 `mke2fs`, `e2fsck`,
 `dumpe2fs`, configuration, and source manifest through the corresponding
 `FERROBOX_*` build variables. It materializes the injected tree as a GNU tar
 with name ordering, numeric ownership, and a fixed modification time before
-passing that tar to `mke2fs -d`. Operators reproducing the OCI builder should
-run `scripts/build-e2fsprogs.sh` and supply the same five paths; schema-3 build
-evidence records their hashes.
+passing that tar to `mke2fs -d`. The archive root is explicitly `root:root`
+mode `0755`, allowing UID 1000 workloads to traverse the filesystem. Operators
+reproducing the OCI builder should run `scripts/build-e2fsprogs.sh` and supply
+the same five paths; schema-3 build evidence records their hashes.
 
 ## Jailer
 

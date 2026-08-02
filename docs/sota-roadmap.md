@@ -160,7 +160,13 @@ bytes after all exposed directory-input parameters were fixed. The current
 workflow builds signed, checksum-pinned e2fsprogs 1.47.4 with libarchive,
 normalizes the injected tree into a sorted fixed-time tar, imports that tar
 directly, and requires two complete builds to be byte-identical before KVM boot.
-This revised reproducibility gate remains pending until a hosted run passes.
+Run
+[30771721838](https://github.com/nya-a-cat/ferrobox/actions/runs/30771721838)
+passed that byte gate with equal SHA-256
+`f3580f2126bbbc3aa5b869be3bfabeba7746d3274956b58b1a54c5ca60ae0f2f`,
+then exposed the extraction root's `0700` mode during UID 1000 execution. The
+builder now fixes and records the archive root as `root:root 0755`. The complete
+reproducibility plus KVM gate remains pending until a hosted run passes.
 Private-registry authentication and a public image-selection API remain open.
 
 The four verified state-branching rows and the complete CLI snapshot surface

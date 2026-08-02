@@ -109,6 +109,15 @@ The workflow stopped before KVM at the byte-equality gate. Artifact `8840543144`
 retains both schema-2 records and the first differing-byte report. The pinned
 1.47.4 tar-input gate remains pending its first hosted result.
 
+[Run 30771721838](https://github.com/nya-a-cat/ferrobox/actions/runs/30771721838)
+passed signed-source verification, the focused tar smoke gate, and the complete
+OCI byte-equality gate at commit `92a61a7`. Both ext4 files have SHA-256
+`f3580f2126bbbc3aa5b869be3bfabeba7746d3274956b58b1a54c5ca60ae0f2f`.
+The real KVM flow then reported `guest spawn: Permission denied (os error 13)`
+for the UID 1000 Python command. Tar input had preserved the extraction staging
+root's mode. The revised gate fixes and records `root:root 0755`; its hosted
+lifecycle result remains pending.
+
 [Standard CI run 30769681624](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681624)
 passed formatting, tests, Clippy, builds, process/CLI/OpenAPI conformance, and
 the Firecracker/Jailer `1.15.1` host gate for the same commit.

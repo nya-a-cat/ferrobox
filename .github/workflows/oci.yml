@@ -186,6 +186,9 @@ jobs:
               .materialized_rootfs.sorted_by_name == true and
               .materialized_rootfs.numeric_owner == true and
               .materialized_rootfs.mtime_epoch > 0 and
+              .materialized_rootfs.root_uid == 0 and
+              .materialized_rootfs.root_gid == 0 and
+              .materialized_rootfs.root_mode == "0755" and
               .ferrobox_injection.command_uid == 1000 and
               .ferrobox_injection.command_gid == 1000 and
               .ext4.size >= 1073741824 and

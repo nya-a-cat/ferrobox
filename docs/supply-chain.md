@@ -146,13 +146,14 @@ read-only, and reads the imported fixture through the newly built `debugfs`.
 
 The rootfs builder turns the fully injected tree into a GNU tar with lexical
 name ordering, numeric UID/GID fields, and the selected source-date timestamp.
-It derives the filesystem UUID and directory hash seed from that tar identity,
-sets `SOURCE_DATE_EPOCH` and `E2FSPROGS_FAKE_TIME`, fixes `LC_ALL=C`, and disables
-lazy inode-table and journal initialization. `mke2fs -d` consumes the tar
-directly. The workflow performs two complete OCI pull, extraction, injection,
-tar, and ext4 builds; it requires byte equality and equal schema-3 deterministic
-records. Read-only `e2fsck` and the real KVM lifecycle remain mandatory after
-this gate. The controls follow the
+The archive root is fixed to UID/GID 0 and mode `0755`. It derives the
+filesystem UUID and directory hash seed from that tar identity, sets
+`SOURCE_DATE_EPOCH` and `E2FSPROGS_FAKE_TIME`, fixes `LC_ALL=C`, and disables lazy
+inode-table and journal initialization. `mke2fs -d` consumes the tar directly.
+The workflow performs two complete OCI pull, extraction, injection, tar, and
+ext4 builds; it requires byte equality and equal schema-3 deterministic records.
+Read-only `e2fsck` and the real KVM lifecycle remain mandatory after this gate.
+The controls follow the
 [Reproducible Builds system-image guidance](https://reproducible-builds.org/docs/system-images/),
 the upstream
 [mke2fs tar-input contract](https://github.com/tytso/e2fsprogs/blob/v1.47.4/misc/mke2fs.8.in),
