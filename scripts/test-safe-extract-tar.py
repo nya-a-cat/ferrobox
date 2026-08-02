@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -78,6 +79,57 @@ def main() -> None:
             archive.addfile(link)
         require_rejected(run(extractor, link_archive, root / "link"), "outside-link")
         checks.append("outside-link-rejected")
+
+        absolute_symlink_archive = root / "absolute-symlink.tar"
+        with tarfile.open(absolute_symlink_archive, "w") as archive:
+            add_bytes(archive, "usr/share/cert.pem", b"certificate\n")
+            link = tarfile.TarInfo("etc/ssl/cert.pem")
+            link.type = tarfile.SYMTYPE
+            link.linkname = "/usr/share/cert.pem"
+            archive.addfile(link)
+        absolute_symlink_destination = root / "absolute-symlink"
+        absolute_symlink = run(
+            extractor,
+            absolute_symlink_archive,
+            absolute_symlink_destination,
+        )
+        if absolute_symlink.returncode != 0:
+            raise AssertionError(absolute_symlink.stderr)
+        rewritten_symlink = absolute_symlink_destination / "etc/ssl/cert.pem"
+        if os.readlink(rewritten_symlink) != "../../usr/share/cert.pem":
+            raise AssertionError("absolute symlink was not rewritten within the rootfs")
+        if rewritten_symlink.read_bytes() != b"certificate\n":
+            raise AssertionError("rewritten absolute symlink changed its target")
+        symlink_evidence = json.loads(absolute_symlink.stdout)
+        if symlink_evidence["absolute_symbolic_links_rewritten"] != 1:
+            raise AssertionError("absolute symlink rewrite was not recorded")
+        checks.append("absolute-symlink-rooted")
+
+        absolute_hardlink_archive = root / "absolute-hardlink.tar"
+        with tarfile.open(absolute_hardlink_archive, "w") as archive:
+            add_bytes(archive, "usr/bin/tool", b"tool\n")
+            link = tarfile.TarInfo("usr/bin/tool-copy")
+            link.type = tarfile.LNKTYPE
+            link.linkname = "/usr/bin/tool"
+            archive.addfile(link)
+        absolute_hardlink_destination = root / "absolute-hardlink"
+        absolute_hardlink = run(
+            extractor,
+            absolute_hardlink_archive,
+            absolute_hardlink_destination,
+        )
+        if absolute_hardlink.returncode != 0:
+            raise AssertionError(absolute_hardlink.stderr)
+        hardlink = absolute_hardlink_destination / "usr/bin/tool-copy"
+        target = absolute_hardlink_destination / "usr/bin/tool"
+        if hardlink.read_bytes() != b"tool\n":
+            raise AssertionError("rewritten absolute hardlink changed its target")
+        if hardlink.stat().st_ino != target.stat().st_ino:
+            raise AssertionError("absolute hardlink was not preserved as a hardlink")
+        hardlink_evidence = json.loads(absolute_hardlink.stdout)
+        if hardlink_evidence["absolute_hard_links_rewritten"] != 1:
+            raise AssertionError("absolute hardlink rewrite was not recorded")
+        checks.append("absolute-hardlink-rooted")
 
         device_archive = root / "device.tar"
         with tarfile.open(device_archive, "w") as archive:

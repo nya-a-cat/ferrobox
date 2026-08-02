@@ -6,9 +6,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path, PurePosixPath
+import posixpath
 import shutil
 import tarfile
+from pathlib import Path, PurePosixPath
 
 
 def fail(message: str) -> None:
@@ -48,8 +49,10 @@ def inspect_members(
     directories = 0
     symbolic_links = 0
     hard_links = 0
+    absolute_symbolic_links_rewritten = 0
+    absolute_hard_links_rewritten = 0
 
-    for member in members:
+    for index, member in enumerate(members):
         name = normalized_name(member)
         if name in names:
             fail(f"archive repeats member path: {name!r}")
@@ -83,6 +86,21 @@ def inspect_members(
                 fail(f"archive link has an unsafe target: {name!r}")
             if len(link.encode("utf-8")) > 4096:
                 fail(f"archive link target exceeds 4096 bytes: {name!r}")
+            if any(ord(character) < 32 or ord(character) == 127 for character in link):
+                fail(f"archive link target contains a control character: {name!r}")
+            if PurePosixPath(link).is_absolute():
+                root_target = posixpath.normpath(link).lstrip("/") or "."
+                if member.issym():
+                    link = posixpath.relpath(
+                        root_target,
+                        start=posixpath.dirname(name) or ".",
+                    )
+                    absolute_symbolic_links_rewritten += 1
+                else:
+                    link = root_target
+                    absolute_hard_links_rewritten += 1
+                member = member.replace(linkname=link, deep=False)
+                members[index] = member
 
     return members, {
         "member_count": len(members),
@@ -90,6 +108,8 @@ def inspect_members(
         "directory_count": directories,
         "symbolic_link_count": symbolic_links,
         "hard_link_count": hard_links,
+        "absolute_symbolic_links_rewritten": absolute_symbolic_links_rewritten,
+        "absolute_hard_links_rewritten": absolute_hard_links_rewritten,
         "logical_file_bytes": total_bytes,
     }
 

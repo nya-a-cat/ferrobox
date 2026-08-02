@@ -67,7 +67,7 @@ jobs:
             >"${RUNNER_TEMP}/safe-extract-evidence.json"
           jq --exit-status '
             .schema_version == 1 and
-            (.checks | length) == 7
+            (.checks | length) == 9
           ' "${RUNNER_TEMP}/safe-extract-evidence.json" >/dev/null
 
       - name: Require nested KVM
@@ -146,6 +146,7 @@ jobs:
               .descriptor_bytes_verified == true and
               .flattened_rootfs.size > 0 and
               .flattened_rootfs.extraction.member_count > 0 and
+              .flattened_rootfs.extraction.absolute_symbolic_links_rewritten > 0 and
               .ferrobox_injection.command_uid == 1000 and
               .ferrobox_injection.command_gid == 1000 and
               .ext4.size >= 1073741824 and
