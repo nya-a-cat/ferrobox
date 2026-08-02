@@ -217,10 +217,15 @@ jobs:
             --github-sha "${GITHUB_SHA}" \
             >"${FERROBOX_DENSITY_OUTPUT}"
           jq --exit-status '
-            .schema_version == 1 and
+            .schema_version == 2 and
             .github_sha == env.GITHUB_SHA and
             .tiers_requested == [1, 5, 10, 25] and
             (.create_to_ready_us | length) == 25 and
+            .create_to_ready_p50_us > 0 and
+            .create_to_ready_p95_us >= .create_to_ready_p50_us and
+            .create_to_ready_p99_us >= .create_to_ready_p95_us and
+            .create_to_ready_total_us > 0 and
+            .create_to_ready_throughput_milli_ops_per_second > 0 and
             (.tiers | length) == 4 and
             all(.tiers[];
               .cgroup_count == .sandbox_count and
@@ -232,6 +237,10 @@ jobs:
               ((.process_names | index("firecracker")) != null)
             ) and
             .tiers[-1].host_used_delta_kib > 0 and
+            .tiers[-1].host_used_delta_per_sandbox_kib <= 65536 and
+            .tiers[-1].firecracker_pss_per_sandbox_kib <= 40960 and
+            .tiers[-1].firecracker_uss_per_sandbox_kib <= 40960 and
+            .tiers[-1].cgroup_memory_current_per_sandbox_kib <= 49152 and
             .cleanup.cgroup_count == 0
           ' "${FERROBOX_DENSITY_OUTPUT}" >/dev/null
           cat "${FERROBOX_DENSITY_OUTPUT}"

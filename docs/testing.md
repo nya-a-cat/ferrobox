@@ -137,6 +137,12 @@ cleanup state. Schema validation requires exact tier counts, live Firecracker
 processes, positive PSS/USS/controller totals, a positive 25-instance host
 delta, and zero cgroup leaves after deletion.
 
+Schema 2 also retains nearest-rank create-to-ready P50/P95/P99, sequential
+total time, and throughput. At the 25-instance tier, the first regression gate
+limits host delta to 64 MiB, PSS and USS to 40 MiB each, and cgroup current to
+48 MiB per sandbox. Run 30759783600 established the baseline and returned all
+25 cgroups to zero; its evidence is artifact `8837137618`.
+
 ## Completion rule
 
 Workflow presence is not evidence of success. Ferrobox remains incomplete until

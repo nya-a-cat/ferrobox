@@ -13,6 +13,11 @@ from urllib.parse import urlsplit
 DEFAULT_CGROUP_ROOT = Path("/sys/fs/cgroup/ferrobox")
 
 
+def percentile(sorted_samples: list[int], value: int) -> int:
+    rank = (len(sorted_samples) * value + 99) // 100
+    return sorted_samples[min(rank - 1, len(sorted_samples) - 1)]
+
+
 def api(
     endpoint,
     method: str,
@@ -238,10 +243,12 @@ def main() -> None:
 
     cleanup_leaves = wait_for_cgroups(arguments.cgroup_root, 0)
     cleanup_samples = available_samples_kib()
+    sorted_creation_us = sorted(creation_us)
+    creation_total_us = sum(creation_us)
     print(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "github_sha": arguments.github_sha,
                 "kernel_release": platform.release(),
                 "sandbox_spec": request_body,
@@ -249,6 +256,13 @@ def main() -> None:
                 "baseline": baseline,
                 "tiers": measurements,
                 "create_to_ready_us": creation_us,
+                "create_to_ready_p50_us": percentile(sorted_creation_us, 50),
+                "create_to_ready_p95_us": percentile(sorted_creation_us, 95),
+                "create_to_ready_p99_us": percentile(sorted_creation_us, 99),
+                "create_to_ready_total_us": creation_total_us,
+                "create_to_ready_throughput_milli_ops_per_second": (
+                    len(creation_us) * 1_000_000_000 // creation_total_us
+                ),
                 "cleanup": {
                     "cgroup_count": len(cleanup_leaves),
                     "host_mem_available_samples_kib": cleanup_samples,

@@ -398,6 +398,25 @@ zero. The measurement runs before container and alternate-VMM comparators can
 change the hosted runner's memory population. Results describe that GitHub
 runner and specification; cross-host ratios require a matched deployment.
 
+[Run 30759783600](https://github.com/nya-a-cat/ferrobox/actions/runs/30759783600)
+is the first retained density result. Artifact `8837137618` records these KiB
+per-sandbox values:
+
+| Live sandboxes | Host delta | RSS | PSS | USS | cgroup current |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 16,688.00 | 57,508.00 | 57,496.00 | 57,492.00 | 28,740.00 |
+| 5 | 5,192.80 | 59,928.00 | 29,250.00 | 21,431.20 | 29,876.00 |
+| 10 | 7,448.80 | 59,975.20 | 25,095.70 | 21,080.80 | 29,595.60 |
+| 25 | 13,123.04 | 60,689.76 | 23,242.64 | 21,635.36 | 30,323.04 |
+
+The 25-instance restore-to-ready samples measured P50/P95/P99 of
+187,773/266,812/271,738 microseconds. Host available-memory deltas include
+runner noise and page-cache changes. PSS, USS, and controller totals provide
+the stable process-level series. Initial 25-instance regression ceilings are
+64 MiB host delta, 40 MiB PSS, 40 MiB USS, and 48 MiB cgroup current per
+sandbox. These ceilings protect the observed density range while additional
+independent runs establish variance.
+
 ## Targets
 
 The optimization program tracks two different thresholds:
