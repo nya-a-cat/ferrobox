@@ -41,16 +41,55 @@ if [[ "${FERROBOX_INTERNET:-0}" == "1" ]]; then
     expected=$'42\ninternet=ok'
 fi
 output_file="$(mktemp)"
+network_diagnostics="${FERROBOX_NETWORK_DIAGNOSTICS:-}"
 cleanup() {
     rm -f -- "${output_file}"
 }
 trap cleanup EXIT
+
+collect_network_diagnostics() {
+    if [[ -z "${network_diagnostics}" ]]; then
+        return
+    fi
+    {
+        echo "captured_at=$(date --utc --iso-8601=seconds)"
+        echo "ip_forward=$(cat /proc/sys/net/ipv4/ip_forward)"
+        echo "host_resolv_conf"
+        cat /etc/resolv.conf
+        if [[ -f /run/systemd/resolve/resolv.conf ]]; then
+            echo "systemd_resolv_conf"
+            cat /run/systemd/resolve/resolv.conf
+        fi
+        echo "host_routes"
+        ip -4 route show
+        echo "host_addresses"
+        ip -brief -4 address show
+        echo "ferrobox_nft_tables"
+        nft list tables | grep 'ferrobox_' || true
+        while read -r family table; do
+            if [[ "${table}" == ferrobox_* ]]; then
+                nft list table "${family}" "${table}" || true
+            fi
+        done < <(nft list tables | awk '{print $2, $3}')
+        echo "network_namespaces"
+        ip netns list
+        while read -r namespace _; do
+            if [[ "${namespace}" == fb-* ]]; then
+                echo "namespace=${namespace}"
+                ip netns exec "${namespace}" ip -brief -4 address show || true
+                ip netns exec "${namespace}" ip -4 route show || true
+                ip netns exec "${namespace}" ip -details link show || true
+            fi
+        done < <(ip netns list)
+    } >"${network_diagnostics}" 2>&1
+}
 set +e
 timeout --kill-after=10s 120s \
     "${node_binary}" "${arguments[@]}" >"${output_file}"
 status="$?"
 set -e
 if [[ "${status}" -ne 0 ]]; then
+    collect_network_diagnostics
     echo "Firecracker KVM E2E command failed with status ${status}" >&2
     cat "${output_file}" >&2
     exit "${status}"

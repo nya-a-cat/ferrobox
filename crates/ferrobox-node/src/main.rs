@@ -395,6 +395,8 @@ async fn main() -> anyhow::Result<()> {
                                 "-c".to_owned(),
                                 concat!(
                                     "import socket, urllib.request; ",
+                                    "print('resolv.conf=' + open('/etc/resolv.conf').read().strip(), flush=True); ",
+                                    "print('route=' + open('/proc/net/route').read().strip(), flush=True); ",
                                     "assert urllib.request.urlopen('https://example.com', timeout=10).status == 200; ",
                                     "s=socket.socket(); s.settimeout(2); ",
                                     "blocked=False; ",
@@ -450,8 +452,9 @@ fn ensure_exit_success(result: &ExecResult) -> anyhow::Result<()> {
     match &result.termination {
         ExecTermination::Exited { exit_code: 0 } => Ok(()),
         _ => anyhow::bail!(
-            "guest command failed: {:?}: {}",
+            "guest command failed: {:?}: stdout={} stderr={}",
             result.termination,
+            String::from_utf8_lossy(&result.stdout),
             String::from_utf8_lossy(&result.stderr)
         ),
     }

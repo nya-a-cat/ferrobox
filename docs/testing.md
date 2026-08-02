@@ -80,6 +80,11 @@ The hosted `ctr` comparator uses Kata's documented single sandbox-cgroup mode.
 This avoids accumulating per-container cgroups on the nested-KVM runner. The
 exact derived Kata configuration is retained next to `containerd.log`.
 
+Internet-policy E2E has its own deferred gate. A failure retains the host
+resolver inputs, IPv4 forwarding state, namespace interfaces and routes, and
+project-scoped nftables tables in `network-diagnostics.txt`; final enforcement
+reports its outcome with every performance gate.
+
 The HTTP artifact also retains a five-request concurrent burst with each
 request's latency and total wall time. Sequential and concurrent P95 must both
 remain below 80 ms.

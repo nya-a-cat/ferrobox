@@ -526,6 +526,8 @@ jobs:
             "${RUNNER_TEMP}/gvisor-benchmark.json" >/dev/null
 
       - name: Run Firecracker internet-policy end-to-end
+        id: internet-policy-gate
+        continue-on-error: true
         env:
           FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
           FERROBOX_JAILER: /opt/ferrobox/bin/jailer
@@ -533,24 +535,28 @@ jobs:
           FERROBOX_ROOTFS: /opt/ferrobox/images/python.ext4
           FERROBOX_NODE_BINARY: target/debug/ferrobox-node
           FERROBOX_INTERNET: "1"
-        run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_NODE_BINARY,FERROBOX_INTERNET bash scripts/e2e-kvm.sh
+          FERROBOX_NETWORK_DIAGNOSTICS: ${{ runner.temp }}/network-diagnostics.txt
+        run: sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_NODE_BINARY,FERROBOX_INTERNET,FERROBOX_NETWORK_DIAGNOSTICS bash scripts/e2e-kvm.sh
 
       - name: Enforce performance gates
         if: always()
         env:
           KATA_BENCHMARK: ${{ steps.kata-benchmark.outcome }}
+          INTERNET_POLICY_GATE: ${{ steps.internet-policy-gate.outcome }}
           MICROVM_GATE: ${{ steps.microvm-performance-gate.outcome }}
           CONTAINER_GATE: ${{ steps.container-performance-gate.outcome }}
           FILE_WORKLOAD_GATE: ${{ steps.file-workload-performance-gate.outcome }}
           FILE_API_GATE: ${{ steps.file-api-performance-gate.outcome }}
         run: |
-          printf 'kata=%s microvm=%s container=%s file_workload=%s file_api=%s\n' \
+          printf 'kata=%s internet=%s microvm=%s container=%s file_workload=%s file_api=%s\n' \
             "${KATA_BENCHMARK}" \
+            "${INTERNET_POLICY_GATE}" \
             "${MICROVM_GATE}" \
             "${CONTAINER_GATE}" \
             "${FILE_WORKLOAD_GATE}" \
             "${FILE_API_GATE}"
           [[ "${KATA_BENCHMARK}" == success ]]
+          [[ "${INTERNET_POLICY_GATE}" == success ]]
           [[ "${MICROVM_GATE}" == success ]]
           [[ "${CONTAINER_GATE}" == success ]]
           [[ "${FILE_WORKLOAD_GATE}" == success ]]
@@ -581,6 +587,7 @@ jobs:
             ${{ runner.temp }}/kata-version.txt
             ${{ runner.temp }}/kata-static.sha256
             ${{ runner.temp }}/ferrobox-api.log
+            ${{ runner.temp }}/network-diagnostics.txt
             /mnt/ferrobox/runtime/kata/containerd.log
             /mnt/ferrobox/runtime/kata/configuration-qemu.toml
             /opt/ferrobox/images/python.ext4.manifest.json
