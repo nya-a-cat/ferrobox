@@ -522,24 +522,37 @@ jobs:
             .[0].schema_version == 11 and
             .[1].schema_version == 4 and
             .[2].schema_version == 2 and
-            .[3].schema_version == 1 and
+            .[2].runtime == "firecracker-direct" and
+            .[2].host_cpu_max == "100000 100000" and
+            .[3].schema_version == 2 and
+            .[3].runtime == "cloud-hypervisor" and
+            .[4].schema_version == 1 and
             (.[2].exec_true_us | length == 100) and
             (.[2].exec_true_cloned_client_us | length == 100) and
             (.[2].exec_python_us | length == 30) and
             (.[3].exec_true_us | length == 100) and
+            (.[3].exec_true_cloned_client_us | length == 100) and
             (.[3].exec_python_us | length == 30) and
-            .[0].pool_prepare_p95_us < .[2].ready_p95_us and
-            .[1].http_create_p95_us < .[2].ready_p95_us and
-            .[0].exec_true_p50_us < .[2].exec_true_p50_us and
-            .[0].pool_prepare_p95_us + .[0].exec_true_p95_us < .[3].cold_job_p95_us and
-            .[1].http_create_p95_us + .[0].exec_true_p95_us < .[3].cold_job_p95_us and
-            .[0].exec_true_p50_us < .[3].exec_true_p50_us and
-            .[0].exec_true_p95_us < .[3].exec_true_p95_us and
-            .[0].exec_python_p50_us < .[3].exec_python_p50_us and
-            .[0].exec_python_p95_us < .[3].exec_python_p95_us
+            .[0].pool_prepare_p95_us < .[3].ready_p95_us and
+            .[1].http_create_p95_us < .[3].ready_p95_us and
+            .[2].exec_true_cloned_client_p50_us < .[3].exec_true_cloned_client_p50_us and
+            .[2].exec_true_cloned_client_p95_us < .[3].exec_true_cloned_client_p95_us and
+            .[2].exec_python_p50_us < .[3].exec_python_p50_us and
+            .[2].exec_python_p95_us < .[3].exec_python_p95_us and
+            (.[0].exec_true_p50_us * 100) <= (.[2].exec_true_cloned_client_p50_us * 125) and
+            .[0].exec_true_p95_us <= 15000 and
+            (.[0].exec_python_p50_us * 100) <= (.[2].exec_python_p50_us * 110) and
+            (.[0].exec_python_p95_us * 100) <= (.[2].exec_python_p95_us * 110) and
+            .[0].pool_prepare_p95_us + .[0].exec_true_p95_us < .[4].cold_job_p95_us and
+            .[1].http_create_p95_us + .[0].exec_true_p95_us < .[4].cold_job_p95_us and
+            .[0].exec_true_p50_us < .[4].exec_true_p50_us and
+            .[0].exec_true_p95_us < .[4].exec_true_p95_us and
+            .[0].exec_python_p50_us < .[4].exec_python_p50_us and
+            .[0].exec_python_p95_us < .[4].exec_python_p95_us
           ' \
             "${RUNNER_TEMP}/ferrobox-benchmark.json" \
             "${RUNNER_TEMP}/ferrobox-http-benchmark.json" \
+            "${RUNNER_TEMP}/firecracker-direct-capped-benchmark.json" \
             "${RUNNER_TEMP}/cloud-hypervisor-benchmark.json" \
             "${RUNNER_TEMP}/kata-benchmark.json" >/dev/null
 

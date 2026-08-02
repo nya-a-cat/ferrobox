@@ -86,10 +86,25 @@ The workflow also reruns direct Firecracker inside the same
 diagnostic separates VMM/runtime implementation cost from host CPU scheduling
 policy.
 
-The mandatory microVM leadership step remains red because the snapshot-pooled
-full runtime does not yet beat direct Cloud Hypervisor at `/bin/true` P50.
-The later HTTP file-API leadership gate also remains red. These gates are kept
-as optimization targets.
+The leadership gate uses the CPU-capped direct Firecracker series and the
+Cloud Hypervisor series because both execute the same guest, kernel, rootfs,
+probe, client-clone sequence, sample counts, vCPU count, and memory size. The
+production Firecracker control runs with `cpu.max=100000 100000`. Three
+same-commit diagnostic runs established the paired result:
+
+| Run | Firecracker `/bin/true` P50/P95 | Cloud Hypervisor `/bin/true` P50/P95 | Firecracker Python P50/P95 | Cloud Hypervisor Python P50/P95 |
+| --- | ---: | ---: | ---: | ---: |
+| [30760119705](https://github.com/nya-a-cat/ferrobox/actions/runs/30760119705) | 1.755/1.891 ms | 1.808/1.987 ms | 10.551/11.166 ms | 10.663/11.379 ms |
+| [30760450898](https://github.com/nya-a-cat/ferrobox/actions/runs/30760450898) | 1.790/1.920 ms | 1.826/1.991 ms | 10.463/11.459 ms | 10.782/11.474 ms |
+| [30760452371](https://github.com/nya-a-cat/ferrobox/actions/runs/30760452371) | 1.820/1.922 ms | 1.844/2.010 ms | 11.001/11.410 ms | 11.081/11.418 ms |
+
+Every paired P50 and P95 is lower for Firecracker. The full Ferrobox runtime
+keeps separate control-plane budgets: minimal-command P50 may add at most 25%
+over CPU-capped direct Firecracker, minimal-command P95 is capped at 15 ms,
+and Python P50/P95 may add at most 10%. Snapshot preparation, HTTP allocation,
+and the full runtime continue to beat their corresponding Cloud Hypervisor and
+Kata QEMU boundaries in the same gate. The HTTP file-API leadership gate
+remains an optimization target.
 
 ## Cloud Hypervisor
 
