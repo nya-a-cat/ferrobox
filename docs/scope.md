@@ -29,6 +29,10 @@ recovery follow the MVP. Multi-region operation, billing, Kubernetes, GPU,
 browser desktops, shared persistent volumes, registries, and organization
 management are outside v0.1.
 
+The post-v0.1 direction is the verified capability union of Microsandbox,
+CubeSandbox, and OpenSandbox. The dependency order, conformance requirements,
+and SOTA evidence rules are maintained in [SOTA parity program](sota-roadmap.md).
+
 ## Evidence required before declaring v0.1 complete
 
 1. Formatting, linting, unit tests, locked workspace build, and a static-musl

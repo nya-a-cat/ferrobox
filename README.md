@@ -270,6 +270,7 @@ Workflow files:
 - [Firecracker KVM E2E](.github/workflows/kvm.yml)
 - [Verification policy](docs/testing.md)
 - [Performance evidence](docs/performance.md)
+- [SOTA parity program](docs/sota-roadmap.md)
 - [Supply-chain pins](docs/supply-chain.md)
 
 ## Linux host requirements
