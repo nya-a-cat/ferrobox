@@ -188,12 +188,15 @@ true_response="$(
 )"
 [[ "$(jq -r '.termination.kind' <<<"${true_response}")" == "exited" ]]
 
-api_call file-write 204 \
-    --request PUT \
-    --header "authorization: Bearer ${token}" \
-    --header 'content-type: application/json' \
-    --data '{"path":"/home/sandbox/oci.txt","content_base64":"ZmVycm9ib3gtb2NpCg==","overwrite":false}' \
-    "${api_url}/v1/sandboxes/${sandbox_id}/files" >/dev/null
+write_response="$(
+    api_call file-write 200 \
+        --request PUT \
+        --header "authorization: Bearer ${token}" \
+        --header 'content-type: application/json' \
+        --data '{"path":"/home/sandbox/oci.txt","content_base64":"ZmVycm9ib3gtb2NpCg==","overwrite":false}' \
+        "${api_url}/v1/sandboxes/${sandbox_id}/files"
+)"
+[[ "$(jq -r '.bytes_written' <<<"${write_response}")" == "13" ]]
 read_response="$(
     api_call file-read 200 \
         --header "authorization: Bearer ${token}" \
