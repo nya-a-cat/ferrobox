@@ -143,14 +143,16 @@ def validate_evidence(
         if not isinstance(kvm.get(key), bool):
             errors.append(f"{platform_id} KVM field {key} is not boolean")
     verification = evidence.get("verification", {})
+    check_outcomes = verification.get("checks", {})
     if (
         verification.get("backend") != "process"
         or verification.get("isolation") != "none"
         or verification.get("unsafe_process_opt_in") is not True
         or verification.get("complete") is not True
         or verification.get("errors") != []
-        or tuple(verification.get("checks", {})) != CHECKS
-        or set(verification.get("checks", {}).values()) != {"success"}
+        or not isinstance(check_outcomes, dict)
+        or set(check_outcomes) != set(CHECKS)
+        or set(check_outcomes.values()) != {"success"}
     ):
         errors.append(f"{platform_id} shared smoke contract failed")
     reject_sensitive_keys(evidence, platform_id, errors)
