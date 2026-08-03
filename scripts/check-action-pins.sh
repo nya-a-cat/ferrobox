@@ -8,19 +8,8 @@ if ((${#workflow_files[@]} == 0)); then
     exit 2
 fi
 
-mapfile -t action_refs < <(
-    sed -nE \
-        's/^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]+([^[:space:]#]+).*/\2/p' \
-        "${workflow_files[@]}" |
-        sort -u
-)
-
-if ((${#action_refs[@]} == 0)); then
-    echo "No GitHub Action references were found." >&2
-    exit 2
-fi
-
-for action_ref in "${action_refs[@]}"; do
+action_ref_count=0
+while IFS= read -r action_ref; do
     case "${action_ref}" in
         ./*) ;;
         *)
@@ -30,6 +19,17 @@ for action_ref in "${action_refs[@]}"; do
             fi
             ;;
     esac
-done
+    action_ref_count=$((action_ref_count + 1))
+done < <(
+    sed -nE \
+        's/^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]+([^[:space:]#]+).*/\2/p' \
+        "${workflow_files[@]}" |
+        sort -u
+)
 
-printf 'Verified %d unique GitHub Action commit pins.\n' "${#action_refs[@]}"
+if ((action_ref_count == 0)); then
+    echo "No GitHub Action references were found." >&2
+    exit 2
+fi
+
+printf 'Verified %d unique GitHub Action commit pins.\n' "${action_ref_count}"
