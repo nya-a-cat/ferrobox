@@ -37,7 +37,8 @@ or channel comment remains beside each pin. The current set is:
 
 Updates require an upstream release review, a new full SHA, and successful
 standard, snapshot, and KVM workflows. `scripts/check-action-pins.sh` rejects
-any external workflow reference that is not a full lowercase commit SHA.
+any external workflow reference that is not a full lowercase commit SHA. Its
+streaming reader is exercised on Ubuntu Bash and the macOS runner's Bash 3.2.
 
 ## Firecracker
 

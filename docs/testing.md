@@ -124,24 +124,24 @@ and retains the complete evidence through 2026-11-01.
 
 ## Host architecture CI
 
-`.github/workflows/architecture.yml` runs one shared native contract on the
-GitHub-hosted `ubuntu-24.04` x86_64 image and `ubuntu-24.04-arm` aarch64 image.
-Each leg generates the dependency lock, runs the complete workspace test and
-build, produces a native static musl guest, and completes the same Process/API
-plus CLI lifecycle smokes.
+`.github/workflows/architecture.yml` runs the shared Process/API and CLI
+lifecycle on GitHub-hosted Linux x86_64, Linux aarch64, and macOS Apple Silicon.
+Both Linux legs also run the complete workspace test/build and produce a native
+static musl guest. The macOS leg tests the five host-side crates and builds the
+native API and CLI binaries.
 
-Every leg retains its runner label, GitHub runner architecture, image identity,
-kernel, normalized CPU description, native Rust host, static guest ELF machine
-and SHA-256, and an observational `/dev/kvm` capability record. The evidence
-labels the exercised backend as the unsafe process backend with isolation
-`none`. Firecracker remains outside this portability smoke.
+Every leg retains its runner label, GitHub architecture, image identity, kernel,
+normalized CPU description, native Rust host, observational `/dev/kvm` state,
+and every step outcome. Linux evidence additionally binds the static guest ELF
+machine, size, and SHA-256. All three identify the exercised backend as the
+unsafe process backend with isolation `none`.
 
-The final convergence job downloads both records, requires the same repository,
-commit, ref, run, and smoke checks, validates both native ELF identities, and
-uploads one versioned `ferrobox-host-architecture-matrix` document. Every test
-step is
-allowed to finish diagnostically; its exact GitHub outcome is recorded and the
-leg fails after the evidence is written when any outcome is incomplete.
+The final convergence job downloads all three records, requires the same
+repository, commit, ref, run, and common smoke checks, validates each platform's
+build evidence, and uploads one versioned
+`ferrobox-host-architecture-matrix` document. Every test step is allowed to
+finish diagnostically; its exact GitHub outcome is recorded and the leg fails
+after the evidence is written when any outcome is incomplete.
 
 [Host architecture run 30781691279](https://github.com/nya-a-cat/ferrobox/actions/runs/30781691279)
 passed at commit `b456d08`. Both native legs completed all nine checks and the
@@ -165,8 +165,8 @@ The retained capability observation found no `/dev/kvm` device on the aarch64
 runner. The x86_64 runner exposed a character device whose initial unprivileged
 open returned errno 13; the separate Firecracker gate applies the documented
 runner permission setup before its KVM test. Linux aarch64 production microVM
-support, macOS Apple Silicon, and Windows/WSL2 remain open host-architecture
-gates. GitHub documents both Linux runner labels in its
+support, an Apple Silicon microVM backend, and Windows/WSL2 remain open host-
+architecture gates. GitHub documents all three exercised runner labels in its
 [hosted-runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
 The same workflow exercises the host-side crates and shared Process/API plus
@@ -174,8 +174,23 @@ CLI lifecycle on a `macos-15` M1 runner. Diagnostic run `30782286698` completed
 every functional check and isolated the Bash 4-only `mapfile` used by the action
 pin policy. Run `30782442876` passed after the pin checker moved to Bash 3.2
 compatible streaming input. The macOS leg is now being promoted into the
-machine-readable cross-runner convergence contract; its first formal result is
-pending. It carries no Apple Virtualization Framework hardware-isolation claim.
+machine-readable cross-runner convergence contract.
+
+[Host architecture run 30782762889](https://github.com/nya-a-cat/ferrobox/actions/runs/30782762889)
+passed the formal three-platform v2 contract at commit `9f0e8d1`. Its macOS leg
+records `macos15` image `20260727.0256.1`, Darwin `24.6.0`, three logical CPUs,
+`Apple M1 (Virtual)`, and Rust host `aarch64-apple-darwin`. The macOS evidence
+has SHA-256
+`c562c3ba00b2920996b8ec8886dde1791d0abed851c3c4359d1855ab245479df`;
+its hardware-virtualization observation and `/dev/kvm` fields are unavailable.
+The evidence therefore makes no macOS hardware-isolation claim.
+
+Aggregate artifact `8844232131` retains all three source records and the
+accepted v2 matrix with archive digest
+`sha256:f4bd711e659670967466caaa7a78075928534cf64e7b38814155c7b367b5c39b`.
+The macOS source artifact is `8844229804`, archive digest
+`sha256:342535585b10167fa3745c5ccc82a8eece5eae14eab635eb7f6024b8472cb7d8`.
+All four artifacts expire on 2026-11-01.
 
 ## OCI image KVM CI
 
