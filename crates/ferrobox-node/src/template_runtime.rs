@@ -58,9 +58,16 @@ impl TemplateRuntimeResolver {
                 "template kernel is incompatible with this runtime snapshot contract",
             ));
         }
-        if !artifact_matches(&record.locations.kernel, &record.descriptor.artifacts.kernel).await?
-            || !artifact_matches(&record.locations.rootfs, &record.descriptor.artifacts.rootfs)
-                .await?
+        if !artifact_matches(
+            &record.locations.kernel,
+            &record.descriptor.artifacts.kernel,
+        )
+        .await?
+            || !artifact_matches(
+                &record.locations.rootfs,
+                &record.descriptor.artifacts.rootfs,
+            )
+            .await?
         {
             return Err(RuntimeError::new(
                 RuntimeErrorKind::Unavailable,
@@ -74,10 +81,7 @@ impl TemplateRuntimeResolver {
     }
 }
 
-async fn artifact_matches(
-    path: &Path,
-    expected: &TemplateArtifact,
-) -> Result<bool, RuntimeError> {
+async fn artifact_matches(path: &Path, expected: &TemplateArtifact) -> Result<bool, RuntimeError> {
     let metadata = fs::metadata(path)
         .await
         .map_err(|_| template_artifact_unavailable())?;
@@ -150,8 +154,7 @@ mod tests {
             source_kind: "oci".to_owned(),
             source_reference: "docker.io/library/python@sha256:fixture".to_owned(),
             source_digest:
-                "sha256:1111111111111111111111111111111111111111111111111111111111111111"
-                    .to_owned(),
+                "sha256:1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
             target_architecture: std::env::consts::ARCH.to_owned(),
             kernel_path,
             rootfs_path,
@@ -216,8 +219,7 @@ mod tests {
         let built = catalog.build(request(&assets, "python-3-12")).unwrap();
         let resolver = TemplateRuntimeResolver::new(
             store,
-            "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                .to_owned(),
+            "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_owned(),
         );
 
         let error = resolver
