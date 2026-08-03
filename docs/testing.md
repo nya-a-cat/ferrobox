@@ -45,6 +45,16 @@ has archive digest
 and retains the initial, tampered, deleted, and rebuilt JSON records through
 2026-11-01.
 
+Run
+[30796705481](https://github.com/nya-a-cat/ferrobox/actions/runs/30796705481)
+passed the expanded twelve-check contract at commit `772f949`. It additionally
+proved alias/ID resolution equivalence, byte-stable repeated rendering,
+unchanged catalog contents, and shared resource-limit rejection. Artifact
+`8849163713` has archive digest
+`sha256:c13dff80c81b537195f36c1d769dd24f895303a1b3668b4570de2740f7575330`
+and expires on 2026-11-01. Its render record has SHA-256
+`d3ef766e4cca6a65772201de99fa04c413e562a6f9948fa169d7f59cda7f678b`.
+
 The CLI/Agent Skill E2E repeats the user-facing flow through the compiled
 `ferrobox` binary. It captures the one-time token, proves inspection and literal
 argv handling, round-trips and lists a host file, verifies the

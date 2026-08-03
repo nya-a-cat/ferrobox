@@ -7,8 +7,8 @@ verifies that the catalog record names the exact files used by the KVM
 lifecycle. The capability status is **Partial**: catalog lifecycle, integrity,
 public-OCI construction, exact runtime-artifact binding, and immutable-ID
 selection for direct Firecracker creates are verified. Deterministic effective
-request rendering is implemented and awaits its GitHub evidence run. Hosted
-Btrfs source-asset fs-verity and real-KVM compatibility are also verified.
+request rendering has a retained twelve-check GitHub proof. Hosted Btrfs
+source-asset fs-verity and real-KVM compatibility are also verified.
 Asynchronous build status, template-specific ready pools, other runtime
 providers, private-registry credential custody, distributed artifact delivery,
 and trusted fs-verity digest binding in the runtime identity contract remain
@@ -198,6 +198,21 @@ Artifact `8845497128` has archive digest
 and expires on 2026-11-01. It retains build, list, valid inspection, deliberate
 tamper inspection, alias-conflict stderr, deletion, same-identity rebuild, and
 final deletion evidence.
+
+[Standard CI run 30796705481](https://github.com/nya-a-cat/ferrobox/actions/runs/30796705481)
+passed the expanded twelve-check catalog contract at commit `772f949`. The
+alias and immutable-ID render paths produced the same effective request, a
+repeated alias render was byte-identical, the catalog tree digest stayed fixed,
+and a 64 MiB request failed the shared `SandboxSpec` memory limit. The retained
+render has SHA-256
+`d3ef766e4cca6a65772201de99fa04c413e562a6f9948fa169d7f59cda7f678b`
+and resolves `python-3-12` to
+`tpl-5f7f28630d7a32f54bd33965bbd37be172af5968a5353a47c3fca3068693`.
+Artifact `8849163713` has archive digest
+`sha256:c13dff80c81b537195f36c1d769dd24f895303a1b3668b4570de2740f7575330`
+and expires on 2026-11-01. Architecture run
+[30796705429](https://github.com/nya-a-cat/ferrobox/actions/runs/30796705429)
+passed the four-platform matrix for the same commit.
 
 [OCI KVM run 30787903798](https://github.com/nya-a-cat/ferrobox/actions/runs/30787903798)
 then passed the real public-image binding at commit `639666c`. The workflow

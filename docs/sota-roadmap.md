@@ -157,6 +157,13 @@ passed this seven-check lifecycle at commit `5f1519a`. Artifact `8845497128`
 retains the descriptor, provenance, successful inspection, deliberate rootfs
 tamper result, deletion result, and same-identity rebuild under archive digest
 `sha256:46ba9e64288e7d51015e1825805610b5fa5c1eae2a0aff838e796583e97c87aa`.
+[Standard CI run 30796705481](https://github.com/nya-a-cat/ferrobox/actions/runs/30796705481)
+expanded the gate to twelve checks at commit `772f949`. Alias and immutable-ID
+renders converge on one effective request, repeated output is byte-stable,
+catalog contents remain fixed, and invalid resource values fail the shared
+domain validation. Artifact `8849163713` retains the render records under
+archive digest
+`sha256:c13dff80c81b537195f36c1d769dd24f895303a1b3668b4570de2740f7575330`.
 [OCI KVM run 30787903798](https://github.com/nya-a-cat/ferrobox/actions/runs/30787903798)
 then bound a digest-pinned public OCI image, byte-reproducible ext4 rootfs, and
 the exact runtime kernel/rootfs paths to content-derived template ID
