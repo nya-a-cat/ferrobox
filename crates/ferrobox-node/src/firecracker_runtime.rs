@@ -36,9 +36,7 @@ use crate::{
     network::{NetworkLease, NetworkManager},
     rootfs::{clone_readonly_asset, clone_rootfs, verify_regular_file},
     snapshot::{SnapshotArtifact, SnapshotStageRequest, SnapshotStore},
-    template_runtime::{
-        ResolvedRuntimeTemplate, RuntimeTemplateAssets, TemplateRuntimeResolver,
-    },
+    template_runtime::{ResolvedRuntimeTemplate, RuntimeTemplateAssets, TemplateRuntimeResolver},
     vsock::GuestConnector,
 };
 
