@@ -574,6 +574,9 @@ jobs:
                 .runtime_selection.locations_distinct == true and
                 .browser.process_uid == 1000 and
                 .browser.chromium_version == $browser_version and
+                .browser.full_chromium_version == $browser_version and
+                .browser.execution_engine == "chromium-headless-shell" and
+                .browser.headless_mode == "playwright-default-shell" and
                 .browser.sandbox_bypass_flag_present == false and
                 .browser.network_enabled == false and
                 (.browser.dom.source_fixture_sha256 | test("^[0-9a-f]{64}$")) and

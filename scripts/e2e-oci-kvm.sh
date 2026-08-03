@@ -379,6 +379,8 @@ python_version=""
 browser_process_uid=""
 chromium_path=""
 chromium_version=""
+headless_shell_path=""
+headless_shell_version=""
 dom_marker=""
 browser_fixture_sha256=""
 screenshot_sha256=""
@@ -450,7 +452,7 @@ else
         argv: [
             "/bin/sh",
             "-c",
-            "for browser in /ms-playwright/chromium-*/chrome-linux/chrome /ms-playwright/chromium-*/chrome-linux64/chrome; do if [ -x \"$browser\" ]; then printf \"%s\\n\" \"$browser\"; exit 0; fi; done; exit 1"
+            "full=\"\"; for browser in /ms-playwright/chromium-*/chrome-linux/chrome /ms-playwright/chromium-*/chrome-linux64/chrome; do if [ -x \"$browser\" ]; then full=\"$browser\"; break; fi; done; shell=\"\"; for browser in /ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell; do if [ -x \"$browser\" ]; then shell=\"$browser\"; break; fi; done; [ -n \"$full\" ] && [ -n \"$shell\" ] || exit 1; printf \"%s\\n%s\\n\" \"$full\" \"$shell\""
         ],
         cwd: "/home/sandbox",
         environment: {},
@@ -465,8 +467,14 @@ else
             "${api_url}/v1/sandboxes/${sandbox_id}/commands"
     )"
     require_zero_exit browser-discover "${discover_response}"
-    chromium_path="$(jq -er '.stdout | sub("\\n$"; "")' <<<"${discover_response}")"
+    chromium_path="$(jq -er '.stdout | split("\\n") | map(select(length > 0)) | .[0]' \
+        <<<"${discover_response}")"
+    headless_shell_path="$(jq -er \
+        '.stdout | split("\\n") | map(select(length > 0)) | .[1]' \
+        <<<"${discover_response}")"
     [[ "${chromium_path}" == /ms-playwright/chromium-*/chrome-linux*/chrome ]]
+    [[ "${headless_shell_path}" == \
+        /ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell ]]
 
     version_payload="$(jq -n --arg chromium "${chromium_path}" '{
         argv: [$chromium, "--version"],
@@ -487,6 +495,26 @@ else
         '.stdout | capture("(?<version>[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+)").version' \
         <<<"${version_response}")"
     [[ "${chromium_version}" == "${browser_expected_version}" ]]
+
+    headless_version_payload="$(jq -n --arg chromium "${headless_shell_path}" '{
+        argv: [$chromium, "--version"],
+        cwd: "/home/sandbox",
+        environment: {},
+        timeout_seconds: 30,
+        max_output_bytes: 4096
+    }')"
+    headless_version_response="$(
+        api_call browser-headless-version 200 \
+            --header "authorization: Bearer ${token}" \
+            --header 'content-type: application/json' \
+            --data "${headless_version_payload}" \
+            "${api_url}/v1/sandboxes/${sandbox_id}/commands"
+    )"
+    require_zero_exit browser-headless-version "${headless_version_response}"
+    headless_shell_version="$(jq -er \
+        '.stdout | capture("(?<version>[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+)").version' \
+        <<<"${headless_version_response}")"
+    [[ "${headless_shell_version}" == "${browser_expected_version}" ]]
     exec_payload="${version_payload}"
 
     test -f "${browser_fixture}"
@@ -521,12 +549,14 @@ else
         done
     }
 
-    dom_payload="$(jq -n --arg chromium "${chromium_path}" '{
+    dom_payload="$(jq -n --arg chromium "${headless_shell_path}" '{
         argv: [
             $chromium,
-            "--headless=new",
             "--disable-gpu",
             "--disable-dev-shm-usage",
+            "--disable-background-networking",
+            "--disable-component-update",
+            "--disable-features=OptimizationHints",
             "--hide-scrollbars",
             "--no-first-run",
             "--no-default-browser-check",
@@ -563,14 +593,16 @@ else
         local payload
         local response
         payload="$(jq -n \
-            --arg chromium "${chromium_path}" \
+            --arg chromium "${headless_shell_path}" \
             --arg profile_dir "${profile_dir}" \
             --arg screenshot_path "${screenshot_path}" '{
                 argv: [
                     $chromium,
-                    "--headless=new",
                     "--disable-gpu",
                     "--disable-dev-shm-usage",
+                    "--disable-background-networking",
+                    "--disable-component-update",
+                    "--disable-features=OptimizationHints",
                     "--hide-scrollbars",
                     "--no-first-run",
                     "--no-default-browser-check",
@@ -835,6 +867,8 @@ else
         --arg sandbox_id "${completed_id}" \
         --arg chromium_path "${chromium_path}" \
         --arg chromium_version "${chromium_version}" \
+        --arg headless_shell_path "${headless_shell_path}" \
+        --arg headless_shell_version "${headless_shell_version}" \
         --arg dom_marker "${dom_marker}" \
         --arg browser_fixture_sha256 "${browser_fixture_sha256}" \
         --arg screenshot_sha256 "${screenshot_sha256}" \
@@ -882,9 +916,12 @@ else
             sandbox_id: $sandbox_id,
             browser: {
                 process_uid: $browser_process_uid,
-                executable: $chromium_path,
-                chromium_version: $chromium_version,
-                headless_mode: "new",
+                executable: $headless_shell_path,
+                chromium_version: $headless_shell_version,
+                full_chromium_executable: $chromium_path,
+                full_chromium_version: $chromium_version,
+                execution_engine: "chromium-headless-shell",
+                headless_mode: "playwright-default-shell",
                 sandbox_bypass_flag_present: $sandbox_bypass_flag_present,
                 network_enabled: false,
                 dom: {
@@ -933,6 +970,6 @@ else
                 "network-resource-cleanup"
             ]
         }' >"${output}"
-    printf 'Browser KVM E2E passed for sandbox %s (Chromium %s)\n' \
-        "${completed_id}" "${chromium_version}"
+    printf 'Browser KVM E2E passed for sandbox %s (Chromium %s, Playwright headless shell %s)\n' \
+        "${completed_id}" "${chromium_version}" "${headless_shell_version}"
 fi
