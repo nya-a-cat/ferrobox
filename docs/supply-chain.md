@@ -152,13 +152,54 @@ under archive digest
 This integrity loop currently reads the complete 44 MiB kernel and 1 GiB rootfs
 for every direct create. The pre-resolver OCI KVM API step completed in four
 seconds in run `30787903798`; resolver runs `30789482876` and `30789867561`
-completed the same step in 39 and 27 seconds. The next performance gate targets
-authenticated constant-time measurement with
-[Linux fs-verity](https://www.kernel.org/doc/html/latest/filesystems/fsverity.html),
-whose design was presented at the
-[2018 USENIX Linux FAST Summit](https://www.usenix.org/conference/linuxfastsummit18/presentation/tso).
-Whole-file SHA-256 remains the fallback until that gate has implementation and
-hosted-KVM evidence.
+completed the same step in 39 and 27 seconds.
+
+### Hosted fs-verity source-asset gate
+
+[Linux fs-verity](https://www.kernel.org/doc/html/latest/filesystems/fsverity.html)
+stores a per-file Merkle tree, verifies data as pages are read, and exposes a
+constant-time measurement ioctl. Its digest has separate semantics from a
+traditional whole-file SHA-256, and ordinary copies do not retain verity
+metadata. The page-on-read design was presented in Theodore Ts'o's
+[2018 USENIX Linux FAST Summit talk](https://www.usenix.org/conference/linuxfastsummit18/presentation/tso).
+
+Ferrobox builds
+[fsverity-utils 1.7](https://kernel.googlesource.com/pub/scm/fs/fsverity/fsverity-utils/+/refs/tags/v1.7)
+from a release archive whose checksum is signed by kernel.org. The build pins
+archive SHA-256
+`5778dac5b935bd15f4ec0d17c33b8651217b319d62e8e0432b84f02731b013b2`,
+checksum signer fingerprint
+`B8868C80BA62A1FFFAF5FDA9632D3A06589DA6B1`, release commit
+`96d12bd0d34a034d6e0b85512422f0d6df3c7c4a`, and Git tree
+`849ba951347671baf7691000e94dfcdffb36fe56`. Safe extraction, exact tree
+matching, upstream portable checks, version, libcrypto linkage, and the built
+binary digest are retained in the CI artifact.
+
+[OCI KVM run 30793770602](https://github.com/nya-a-cat/ferrobox/actions/runs/30793770602)
+passed at commit `705f0ed` on Linux `6.17.0-1020-azure`. The gate first matched
+the traditional catalog SHA-256 values, then enabled fs-verity on both Btrfs
+source files. Kernel and rootfs verity digests were
+`sha256:346294cd981e5f4bc7af2d4d68f47a3987ccd421af0d1e44d4717403275ce2fa`
+and
+`sha256:43a04b8f68916525a67b9595ad6e8dfb02a7421db1e0738f9f5bb23362bf1f14`.
+Across 31 measurements per file, P95 latency including process invocation was
+1,022 microseconds for the kernel and 1,046 microseconds for the 1 GiB rootfs.
+Offline rootfs digest construction took 1,039,321 microseconds and enablement
+took 896,110 microseconds. Both files rejected writable opens. A rootfs reflink
+retained the catalog SHA-256 and returned failure from `fsverity measure`, which
+proves that clone metadata follows the documented copy boundary. The API then
+remeasured both protected source paths, selected the immutable template ID, and
+completed all sixteen real Firecracker checks.
+
+Artifact `8848166249` has archive digest
+`sha256:ca006cf19ad009a5574421d242f43562840e2cdf0b682466b873ca11880a6ba0`
+and expires on 2026-11-01. It retains the signed-tool manifest, signature status,
+upstream checks, both integrity records, OCI provenance, and KVM result.
+
+Current runtime enforcement remains whole-file SHA-256. Constant-time runtime
+enforcement requires a trusted expected fs-verity digest bound to the template
+identity plus an explicit policy for filesystems without fs-verity. That change
+updates the schema-1 identity contract and remains a separate approval gate.
 
 ## OCI root filesystem pipeline
 

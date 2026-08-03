@@ -74,7 +74,9 @@ The [template catalog](docs/templates.md) records reusable kernel/rootfs inputs
 under stable content-derived identities. The hosted OCI gate binds a
 digest-pinned public image to reproducible rootfs bytes, selects it through the
 existing HTTP `template` field, and boots the catalog's exact KVM kernel/rootfs
-inputs after integrity verification.
+inputs after integrity verification. Its Btrfs source assets also pass a hosted
+fs-verity gate covering signed tooling, kernel measurement, write rejection,
+reflink semantics, and real Firecracker launch.
 
 ## Current capabilities
 

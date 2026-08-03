@@ -237,7 +237,8 @@ nested-KVM runner. It requires a digest-qualified `linux/amd64` image, verifies
 the index, selected manifest, config, layer digests and sizes, builds a hardened
 flattened rootfs, injects the static guest and init, creates an ext4 image, runs
 read-only `e2fsck`, registers the exact kernel/rootfs pair in the immutable
-template catalog, and boots the result through the real HTTP/Firecracker path.
+template catalog, enables and measures fs-verity on the Btrfs source assets, and
+boots the result through the real HTTP/Firecracker path.
 
 The rootfs stage performs two independent builds from the digest-qualified
 registry reference. It builds the signed, checksum-pinned e2fsprogs 1.47.4
@@ -254,7 +255,9 @@ that catalog assets override an invalid configured fallback, then verifies UID
 1000 Python execution, literal argv execution, file write/read/root-directory
 listing, paused-command rejection, resume followed by a fresh guest command,
 delete/stale-handle behavior, audit credential redaction, and final
-process/network cleanup. A failure records only its stage, HTTP status, error
+process/network cleanup. Before launch it reruns constant-time fs-verity
+measurement on both protected source paths and compares the results with the
+retained offline digests. A failure records only its stage, HTTP status, error
 code, and message.
 
 Runs
@@ -338,6 +341,25 @@ and expires on 2026-11-01. Standard CI run
 and four-platform architecture run
 [30789867548](https://github.com/nya-a-cat/ferrobox/actions/runs/30789867548)
 passed for the same commit.
+
+[Run 30793770602](https://github.com/nya-a-cat/ferrobox/actions/runs/30793770602)
+passed the sixteen-check fs-verity/KVM contract at commit `705f0ed`. The signed
+fsverity-utils 1.7 source matched upstream Git tree
+`849ba951347671baf7691000e94dfcdffb36fe56`, the installed binary and upstream
+checks shared the same fixed build flags, and both source assets were on Btrfs.
+The 44,279,576-byte kernel measured at 920/1,022 microseconds P50/P95; the
+1,073,741,824-byte rootfs measured at 936/1,046 microseconds. Every one of 31
+measurements per asset matched its offline digest, writable opens returned
+`EPERM`, and a byte-identical rootfs reflink dropped verity metadata. The API
+remeasured the protected source paths before boot and produced sandbox
+`019fc68b-8469-7ea2-b94c-f1a781a02613` with `oci-python=3.11.15`. Artifact
+`8848166249` has archive digest
+`sha256:ca006cf19ad009a5574421d242f43562840e2cdf0b682466b873ca11880a6ba0`
+and expires on 2026-11-01. Standard CI run
+[30793770601](https://github.com/nya-a-cat/ferrobox/actions/runs/30793770601)
+and four-platform architecture run
+[30793770628](https://github.com/nya-a-cat/ferrobox/actions/runs/30793770628)
+also passed at the code head.
 
 [Standard CI run 30769681624](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681624)
 passed formatting, tests, Clippy, builds, process/CLI/OpenAPI conformance, and

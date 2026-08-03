@@ -6,9 +6,11 @@ byte-reproducible rootfs, registers the resulting kernel/rootfs pair, and
 verifies that the catalog record names the exact files used by the KVM
 lifecycle. The capability status is **Partial**: catalog lifecycle, integrity,
 public-OCI construction, exact runtime-artifact binding, and immutable-ID
-selection for direct Firecracker creates are verified. Asynchronous build
+selection for direct Firecracker creates are verified. Hosted Btrfs source-asset
+fs-verity and real-KVM compatibility are also verified. Asynchronous build
 status, template-specific ready pools, other runtime providers, private-registry
-credential custody, and distributed artifact delivery remain open gates.
+credential custody, distributed artifact delivery, and trusted fs-verity digest
+binding in the runtime identity contract remain open gates.
 
 ## Upstream semantics carried forward
 
@@ -158,8 +160,13 @@ fail with `501 unsupported`; corrupt, unreadable, or tampered records fail with
   revalidates the descriptor and artifact bytes before Firecracker launch.
 - Dynamic templates share the configured kernel digest so restored snapshots
   and direct-created guests stay inside one kernel compatibility contract.
-- Full SHA-256 over a 1 GiB rootfs is currently on the create path. Constant-time
-  authenticated measurement remains an explicit performance gate.
+- The hosted Btrfs gate enables fs-verity on the catalog kernel/rootfs, matches
+  offline digests to repeated kernel measurements, rejects writes, and boots the
+  same source paths through Firecracker. A reflink clone retains identical bytes
+  and drops fs-verity metadata, matching the Linux copy contract.
+- Full SHA-256 over a 1 GiB rootfs remains on the direct-create path. Runtime use
+  of constant-time measurement requires a trusted expected fs-verity digest in
+  the template identity contract and a defined unsupported-filesystem policy.
 - Active-use deletion checks and node-replica cleanup enter with multi-node
   distribution.
 
@@ -217,3 +224,19 @@ all seven generated SDK consumers for the same commit. Host architecture run
 [30789867548](https://github.com/nya-a-cat/ferrobox/actions/runs/30789867548)
 passed the Linux x86_64, Linux aarch64, macOS Apple Silicon, and Windows ARM64
 matrix.
+
+[OCI KVM run 30793770602](https://github.com/nya-a-cat/ferrobox/actions/runs/30793770602)
+passed the sixteen-check source-integrity and runtime-selection contract at
+commit `705f0ed`. The workflow built fsverity-utils 1.7 from a release archive
+whose checksum is signed by kernel.org, matched its extracted Git tree to
+`849ba951347671baf7691000e94dfcdffb36fe56`, and passed upstream `make check`
+under the same fixed build flags as the installed binary. On GitHub Btrfs, the
+kernel and 1 GiB rootfs produced fs-verity digests
+`sha256:346294cd981e5f4bc7af2d4d68f47a3987ccd421af0d1e44d4717403275ce2fa`
+and
+`sha256:43a04b8f68916525a67b9595ad6e8dfb02a7421db1e0738f9f5bb23362bf1f14`.
+Their 31-sample measurement P95 values were 1,022 and 1,046 microseconds. The
+API remeasured both source paths immediately before launch and booted Python
+3.11.15 through the exact immutable ID. Artifact `8848166249` has archive digest
+`sha256:ca006cf19ad009a5574421d242f43562840e2cdf0b682466b873ca11880a6ba0`
+and expires on 2026-11-01.

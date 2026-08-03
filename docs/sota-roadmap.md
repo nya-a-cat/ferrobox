@@ -84,7 +84,7 @@ Status meanings:
 | Runtime abstraction | Embedded/local runtime plus server and Docker/Kubernetes providers | Partial | Each provider passes one shared lifecycle conformance suite |
 | OCI images | Pull and run pinned public/private OCI images | Partial | Public digest-pinned image boots and executes on GitHub; private-registry custody and API image selection pass their contracts |
 | Host architecture | Linux x86_64, Linux aarch64, macOS Apple Silicon, Windows/WSL2 where supported | Partial | Platform matrix reports the exact isolation backend and passes the shared smoke contract |
-| Templates | Build, list, version, inspect, and delete reusable templates | Partial | Immutable identity and provenance survive create/delete cycles, then every supported runtime resolves the selected record |
+| Templates | Build, list, version, inspect, and delete reusable templates | Partial | Immutable identity, provenance, and trusted constant-time asset measurement survive lifecycle, then every supported runtime resolves the selected record |
 | Ready pools | Bounded pre-provisioning with safe replenishment | Verified | Allocation, concurrent claim, replenishment, TTL, and leak gates pass |
 | Lifecycle | Create, inspect, set TTL, pause, resume, hibernate, delete | Partial | State-transition contract passes for every runtime provider |
 | User snapshots | Named, inspectable, portable snapshots | Verified | Create/list/get/delete and integrity verification pass |
@@ -165,10 +165,15 @@ passed. Run
 [30789867561](https://github.com/nya-a-cat/ferrobox/actions/runs/30789867561)
 then selected that identity through the HTTP API, rejected an unknown identity,
 overrode a deliberately invalid configured fallback rootfs, and passed fifteen
-real KVM checks. The row remains Partial with asynchronous build status,
-template-specific ready pools, other runtime providers, request preview,
-active-use deletion policy, private-registry credential custody, multi-node
-artifact distribution, and constant-time artifact verification still open.
+real KVM checks. Run
+[30793770602](https://github.com/nya-a-cat/ferrobox/actions/runs/30793770602)
+then enabled fs-verity on the exact Btrfs source assets, matched 31 kernel
+measurements per file to offline digests, enforced write rejection, verified
+reflink semantics, and booted the same immutable ID through real KVM. The row
+remains Partial with asynchronous build status, template-specific ready pools,
+other runtime providers, request preview, active-use deletion policy,
+private-registry credential custody, multi-node artifact distribution, and
+trusted fs-verity digest binding in the runtime identity contract still open.
 
 The implemented eighteen-operation HTTP surface now has one checked-in OpenAPI
 3.1 contract. Standard CI validates it with a digest-pinned official generator,
@@ -251,6 +256,13 @@ proved template-ID API selection and direct Firecracker launch. Its deliberately
 invalid 45-byte fallback rootfs made accidental legacy selection unable to
 boot. Artifact `8846706558` has archive digest
 `sha256:419b7d98006bfa6307591c773ee2961e847f0d38a63ec04447cffb751bb3b353`.
+Run
+[30793770602](https://github.com/nya-a-cat/ferrobox/actions/runs/30793770602)
+added the signed-tool and Btrfs fs-verity gate, retained constant-time
+measurement P95 values of 1,022/1,046 microseconds for kernel/rootfs, and passed
+the expanded sixteen-check API/KVM lifecycle. Artifact `8848166249` has archive
+digest
+`sha256:ca006cf19ad009a5574421d242f43562840e2cdf0b682466b873ca11880a6ba0`.
 Private-registry authentication, credential custody, template-specific pools,
 and other-provider resolution remain open.
 
