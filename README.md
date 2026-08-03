@@ -71,8 +71,10 @@ UID/GID 1000.
 See [Architecture](docs/architecture.md) for lifecycle, trust boundaries, and
 protocol details.
 The [template catalog](docs/templates.md) records reusable kernel/rootfs inputs
-under stable content-derived identities while OCI construction and runtime
-resolution advance through their separate parity gates.
+under stable content-derived identities. The hosted OCI gate binds a
+digest-pinned public image to reproducible rootfs bytes and the exact KVM
+kernel/rootfs inputs. Catalog-ID API/runtime resolution remains a separate
+parity gate.
 
 ## Current capabilities
 

@@ -1,9 +1,13 @@
 # Immutable template catalog
 
-Ferrobox currently provides an immutable host-side catalog for already-built
-Firecracker kernel and ext4 rootfs inputs. The capability status is **Partial**:
-catalog lifecycle and integrity are verified, while OCI construction and
-runtime resolution remain open gates.
+Ferrobox provides an immutable host-side catalog for Firecracker kernel and
+ext4 rootfs inputs. The hosted public-OCI workflow now constructs a
+byte-reproducible rootfs, registers the resulting kernel/rootfs pair, and
+verifies that the catalog record names the exact files used by the KVM
+lifecycle. The capability status is **Partial**: catalog lifecycle, integrity,
+public-OCI construction, and exact runtime-artifact binding are verified.
+Catalog-ID API/runtime resolution, asynchronous build status, private-registry
+credential custody, and distributed artifact delivery remain open gates.
 
 ## Upstream semantics carried forward
 
@@ -112,9 +116,10 @@ verification before returning `ready`.
   operator and unwritable by the sandbox runtime UID.
 - External artifact changes become visible through `inspect` as digest and size
   mismatches.
-- Runtime creation still uses its configured kernel/rootfs and the existing
-  `python`/`oci-python` selection. Catalog resolution requires an approved
-  runtime/API contract change.
+- Runtime creation uses its configured kernel/rootfs and the existing
+  `python`/`oci-python` selection. The OCI KVM gate verifies that those exact
+  configured files match the inspected template record. Catalog-ID resolution
+  requires an approved runtime/API contract change.
 - Active-use checks and node-replica cleanup enter with runtime resolution and
   multi-node distribution.
 
@@ -133,3 +138,23 @@ Artifact `8845497128` has archive digest
 and expires on 2026-11-01. It retains build, list, valid inspection, deliberate
 tamper inspection, alias-conflict stderr, deletion, same-identity rebuild, and
 final deletion evidence.
+
+[OCI KVM run 30787903798](https://github.com/nya-a-cat/ferrobox/actions/runs/30787903798)
+then passed the real public-image binding at commit `639666c`. The workflow
+materialized the digest-pinned Python image twice, produced byte-identical ext4
+SHA-256
+`3ed9c8fc9e746916bee5cf72681b30f0f61d70b142e039e016164dec4a2c8c14`,
+and registered the same descriptor below two independent catalog locations.
+Both records derived template ID
+`tpl-2a4a8bfe7412552c0ec6dcaf7cc2dc258dfccacef05c162149bc80827071`
+and full specification digest
+`sha256:2a4a8bfe7412552c0ec6dcaf7cc2dc258dfccacef05c162149bc808270717abf`.
+
+The retained runtime record points to `/mnt/ferrobox-oci/images/vmlinux` and
+`/mnt/ferrobox-oci/images/oci-python.ext4`. The KVM gate rehashed both paths,
+matched kernel SHA-256
+`e20e46d0c36c55c0d1014eb20576171b3f3d922260d9f792017aeff53af3d4f2`
+and the ext4 SHA-256 above, then passed all twelve lifecycle checks with Python
+3.11.15 running as UID 1000. Artifact `8845975100` has archive digest
+`sha256:681fe9dde6d9f2c34bc54dc906e277f57ad96149820347351f2695b5e760ed0c`
+and expires on 2026-11-01.

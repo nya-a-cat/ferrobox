@@ -236,7 +236,8 @@ claim.
 nested-KVM runner. It requires a digest-qualified `linux/amd64` image, verifies
 the index, selected manifest, config, layer digests and sizes, builds a hardened
 flattened rootfs, injects the static guest and init, creates an ext4 image, runs
-read-only `e2fsck`, and boots the result through the real HTTP/Firecracker path.
+read-only `e2fsck`, registers the exact kernel/rootfs pair in the immutable
+template catalog, and boots the result through the real HTTP/Firecracker path.
 
 The rootfs stage performs two independent builds from the digest-qualified
 registry reference. It builds the signed, checksum-pinned e2fsprogs 1.47.4
@@ -298,6 +299,25 @@ UID 1000 Python 3.11.15, argv execution, file operations, pause/reject/resume,
 stale-handle rejection, redaction, and process/network cleanup. Artifact
 `8840831703` has archive digest
 `sha256:04e63c6419489d2c7bcfd34ea4b6211fcdb9648ea3fadbd06230ef9bc0794615`.
+
+[Run 30787903798](https://github.com/nya-a-cat/ferrobox/actions/runs/30787903798)
+passed the extended twelve-check contract at commit `639666c`. It registered
+the digest-pinned OCI descriptor once from build-stage files and once from the
+actual runtime files. Both locations produced template ID
+`tpl-2a4a8bfe7412552c0ec6dcaf7cc2dc258dfccacef05c162149bc80827071`
+and full specification digest
+`sha256:2a4a8bfe7412552c0ec6dcaf7cc2dc258dfccacef05c162149bc808270717abf`.
+The runtime inspection verified kernel SHA-256
+`e20e46d0c36c55c0d1014eb20576171b3f3d922260d9f792017aeff53af3d4f2`
+and rootfs SHA-256
+`3ed9c8fc9e746916bee5cf72681b30f0f61d70b142e039e016164dec4a2c8c14`
+against `/mnt/ferrobox-oci/images/vmlinux` and
+`/mnt/ferrobox-oci/images/oci-python.ext4` before boot. The guest then reported
+Python 3.11.15 and completed every prior lifecycle assertion plus
+`content-derived-template-identity` and `template-runtime-artifact-match`.
+Artifact `8845975100` has archive digest
+`sha256:681fe9dde6d9f2c34bc54dc906e277f57ad96149820347351f2695b5e760ed0c`
+and expires on 2026-11-01.
 
 [Standard CI run 30769681624](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681624)
 passed formatting, tests, Clippy, builds, process/CLI/OpenAPI conformance, and

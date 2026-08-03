@@ -156,9 +156,14 @@ passed this seven-check lifecycle at commit `5f1519a`. Artifact `8845497128`
 retains the descriptor, provenance, successful inspection, deliberate rootfs
 tamper result, deletion result, and same-identity rebuild under archive digest
 `sha256:46ba9e64288e7d51015e1825805610b5fa5c1eae2a0aff838e796583e97c87aa`.
-The row remains Partial while OCI-to-rootfs construction, asynchronous build
-status, runtime catalog resolution, request preview, active-use deletion
-policy, and multi-node artifact distribution remain open.
+[OCI KVM run 30787903798](https://github.com/nya-a-cat/ferrobox/actions/runs/30787903798)
+then bound a digest-pinned public OCI image, byte-reproducible ext4 rootfs, and
+the exact runtime kernel/rootfs paths to content-derived template ID
+`tpl-2a4a8bfe7412552c0ec6dcaf7cc2dc258dfccacef05c162149bc80827071`.
+Both path-independent registrations converged and all twelve real KVM checks
+passed. The row remains Partial with asynchronous build status, runtime catalog
+resolution, request preview, active-use deletion policy, private-registry
+credential custody, and multi-node artifact distribution still open.
 
 The implemented eighteen-operation HTTP surface now has one checked-in OpenAPI
 3.1 contract. Standard CI validates it with a digest-pinned official generator,
@@ -228,7 +233,14 @@ verified two byte-identical ext4 builds with SHA-256
 read-only `e2fsck`, the ten-check real KVM lifecycle, and final resource cleanup.
 Artifact `8840831703` has archive digest
 `sha256:04e63c6419489d2c7bcfd34ea4b6211fcdb9648ea3fadbd06230ef9bc0794615`.
-Private-registry authentication and a public image-selection API remain open.
+Run
+[30787903798](https://github.com/nya-a-cat/ferrobox/actions/runs/30787903798)
+retained that ext4 digest, derived stable template identity across two file
+locations, matched the catalog kernel/rootfs descriptors against the exact KVM
+inputs, and passed the extended twelve-check lifecycle. Artifact `8845975100`
+has archive digest
+`sha256:681fe9dde6d9f2c34bc54dc906e277f57ad96149820347351f2695b5e760ed0c`.
+Private-registry authentication and template-ID API selection remain open.
 
 The four verified state-branching rows and the complete CLI snapshot surface
 are backed by

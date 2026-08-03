@@ -124,6 +124,19 @@ metadata-only deletion, and deterministic identity after rebuild. Artifact
 and expires on 2026-11-01. Registry credentials, remote pulls, and build-system
 secrets stay outside this catalog contract.
 
+OCI KVM run
+[30787903798](https://github.com/nya-a-cat/ferrobox/actions/runs/30787903798)
+binds the resolved public platform manifest to template ID
+`tpl-2a4a8bfe7412552c0ec6dcaf7cc2dc258dfccacef05c162149bc80827071`
+and full specification digest
+`sha256:2a4a8bfe7412552c0ec6dcaf7cc2dc258dfccacef05c162149bc808270717abf`.
+Registration below independent build and runtime paths converged on that same
+identity. Inspection then rehashed the exact kernel and rootfs paths passed to
+the KVM lifecycle. Artifact `8845975100` preserves both catalog records, the
+runtime inspection, aggregate binding, OCI provenance, reproducibility record,
+and twelve-check KVM result under archive digest
+`sha256:681fe9dde6d9f2c34bc54dc906e277f57ad96149820347351f2695b5e760ed0c`.
+
 ## OCI root filesystem pipeline
 
 The hosted OCI gate fixes the public Python conformance image to repository
@@ -189,6 +202,13 @@ builds both produced SHA-256
 and then passed the real ten-check KVM lifecycle. Artifact `8840831703` has
 archive digest
 `sha256:04e63c6419489d2c7bcfd34ea4b6211fcdb9648ea3fadbd06230ef9bc0794615`.
+
+Run `30787903798` preserved the same reproducible ext4 identity and extended
+the KVM gate to twelve checks. The new checks require a content-derived
+template identity and exact equality between catalog artifact descriptors and
+the files used for boot. The kernel is 44,279,576 bytes with SHA-256
+`e20e46d0c36c55c0d1014eb20576171b3f3d922260d9f792017aeff53af3d4f2`;
+the rootfs is 1,073,741,824 bytes with the ext4 SHA-256 above.
 
 ## SBOM generator
 

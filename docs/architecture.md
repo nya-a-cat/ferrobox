@@ -118,6 +118,13 @@ removes the catalog record and leaves the referenced inputs in place. The
 complete format, CLI, security assumptions, and open runtime resolver gate are
 specified in [Immutable template catalog](templates.md).
 
+The hosted OCI workflow registers one descriptor from build-stage locations
+and again from the actual KVM runtime locations. Equal identities prove path
+independence. The KVM lifecycle loads the runtime record, rehashes the exact
+configured kernel/rootfs files, and requires their descriptor digests before
+boot. The API continues to select the configured `oci-python` runtime entry;
+resolution from a public `tpl-...` identifier remains open.
+
 ## Network modes
 
 `Disabled` creates no guest data interface. `Internet` creates a dedicated
