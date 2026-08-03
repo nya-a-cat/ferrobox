@@ -490,15 +490,17 @@ jobs:
               .image_reference == $image and
               .platform == "linux/amd64" and
               (.template_id | test("^tpl-[0-9a-f]{60}$")) and
+              .template_alias == "oci-python" and
               (.template_spec_digest | test("^sha256:[0-9a-f]{64}$")) and
               .template_source_reference == $image and
               .template_source_digest == .manifest_digest and
               .runtime_integrity.contract_version == "ferrobox-fsverity-evidence-v1" and
               .runtime_integrity.source_assets_fsverity_enabled == true and
-              .runtime_selection.requested_template_id == .template_id and
+              .runtime_selection.requested_template_alias == .template_alias and
+              .runtime_selection.resolved_template_id == .template_id and
               .runtime_selection.locations_distinct == true and
               .runtime_selection.configured_rootfs_size_bytes < 4096 and
-              (.checks | length) == 16 and
+              (.checks | length) == 18 and
               (.python_version | startswith("oci-python="))
             ' "${RUNNER_TEMP}/oci-kvm-e2e.json" >/dev/null
 

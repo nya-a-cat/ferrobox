@@ -84,7 +84,7 @@ Status meanings:
 | Runtime abstraction | Embedded/local runtime plus server and Docker/Kubernetes providers | Partial | Each provider passes one shared lifecycle conformance suite |
 | OCI images | Pull and run pinned public/private OCI images | Partial | Public digest-pinned image boots and executes on GitHub; private-registry custody and API image selection pass their contracts |
 | Host architecture | Linux x86_64, Linux aarch64, macOS Apple Silicon, Windows/WSL2 where supported | Partial | Platform matrix reports the exact isolation backend and passes the shared smoke contract |
-| Templates | Build, list, version, inspect, render, and delete reusable templates | Partial | Immutable identity, provenance, deterministic effective-request rendering, and trusted constant-time asset measurement survive lifecycle, then every supported runtime resolves the selected record |
+| Templates | Build, list, version, inspect, render, alias-select, and delete reusable templates | Partial | Immutable identity, provenance, alias canonicalization, deterministic effective-request rendering, and trusted constant-time asset measurement survive lifecycle, then every supported runtime resolves the selected record |
 | Ready pools | Bounded pre-provisioning with safe replenishment | Verified | Allocation, concurrent claim, replenishment, TTL, and leak gates pass |
 | Lifecycle | Create, inspect, set TTL, pause, resume, hibernate, delete | Partial | State-transition contract passes for every runtime provider |
 | User snapshots | Named, inspectable, portable snapshots | Verified | Create/list/get/delete and integrity verification pass |
@@ -179,9 +179,9 @@ then enabled fs-verity on the exact Btrfs source assets, matched 31 kernel
 measurements per file to offline digests, enforced write rejection, verified
 reflink semantics, and booted the same immutable ID through real KVM. The row
 remains Partial with asynchronous build status, template-specific ready pools,
-other runtime providers, request preview, active-use deletion policy,
-private-registry credential custody, multi-node artifact distribution, and
-trusted fs-verity digest binding in the runtime identity contract still open.
+other runtime providers, active-use deletion policy, private-registry
+credential custody, multi-node artifact distribution, and trusted fs-verity
+digest binding in the runtime identity contract still open.
 
 The implemented eighteen-operation HTTP surface now has one checked-in OpenAPI
 3.1 contract. Standard CI validates it with a digest-pinned official generator,

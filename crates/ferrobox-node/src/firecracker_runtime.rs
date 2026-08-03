@@ -36,7 +36,9 @@ use crate::{
     network::{NetworkLease, NetworkManager},
     rootfs::{clone_readonly_asset, clone_rootfs, verify_regular_file},
     snapshot::{SnapshotArtifact, SnapshotStageRequest, SnapshotStore},
-    template_runtime::{RuntimeTemplateAssets, TemplateRuntimeResolver},
+    template_runtime::{
+        ResolvedRuntimeTemplate, RuntimeTemplateAssets, TemplateRuntimeResolver,
+    },
     vsock::GuestConnector,
 };
 
@@ -247,21 +249,24 @@ impl FirecrackerRuntime {
         self.ready_pool.lock().await.len()
     }
 
-    async fn resolve_template_assets(
+    async fn resolve_template(
         &self,
-        template_id: &str,
-    ) -> Result<RuntimeTemplateAssets, RuntimeError> {
-        if template_id.starts_with("tpl-") {
-            return self
-                .template_resolver
-                .as_ref()
-                .ok_or_else(|| RuntimeError::invalid("template catalog is not configured"))?
-                .resolve(template_id)
-                .await;
+        template_reference: &str,
+    ) -> Result<ResolvedRuntimeTemplate, RuntimeError> {
+        if template_reference != "python"
+            && let Some(resolver) = &self.template_resolver
+        {
+            return resolver.resolve(template_reference).await;
         }
-        Ok(RuntimeTemplateAssets {
-            kernel: self.config.kernel_image.clone(),
-            rootfs: self.config.rootfs_template.clone(),
+        if template_reference.starts_with("tpl-") {
+            return Err(RuntimeError::invalid("template catalog is not configured"));
+        }
+        Ok(ResolvedRuntimeTemplate {
+            template_id: template_reference.to_owned(),
+            assets: RuntimeTemplateAssets {
+                kernel: self.config.kernel_image.clone(),
+                rootfs: self.config.rootfs_template.clone(),
+            },
         })
     }
 
@@ -1011,10 +1016,20 @@ impl FirecrackerRuntime {
         ))
     }
 
-    async fn create_fresh(&self, spec: SandboxSpec) -> Result<SandboxHandle, RuntimeError> {
+    async fn create_fresh(&self, mut spec: SandboxSpec) -> Result<SandboxHandle, RuntimeError> {
         spec.validate()
             .map_err(|error| RuntimeError::invalid(error.to_string()))?;
-        let assets = self.resolve_template_assets(&spec.template_id).await?;
+        let requested_template = spec.template_id.clone();
+        let resolved_template = self.resolve_template(&requested_template).await?;
+        spec.template_id = resolved_template.template_id;
+        if requested_template != spec.template_id {
+            tracing::info!(
+                requested_template = %requested_template,
+                resolved_template_id = %spec.template_id,
+                "resolved immutable template alias"
+            );
+        }
+        let assets = resolved_template.assets;
         let snapshot_compatible = spec.template_id == "python"
             && spec.cpu_count == 1
             && spec.memory_mb == 512

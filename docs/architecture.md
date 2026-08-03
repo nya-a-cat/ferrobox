@@ -123,17 +123,18 @@ specified in [Immutable template catalog](templates.md).
 
 The hosted OCI workflow registers one descriptor from build-stage locations
 and again from the actual KVM runtime locations. Equal identities prove path
-independence. When the existing API `template` field contains an exact
-`tpl-...` identity, `ferrobox-node` validates the record, host platform, and
-configured kernel compatibility, then rehashes the catalog's exact kernel and
-rootfs before cloning those assets into the jail. An unknown identity fails
-before any VM launch.
+independence. When the existing API `template` field contains an immutable
+catalog alias or exact `tpl-...` identity, `ferrobox-node` resolves the record,
+canonicalizes the sandbox specification to the content ID, validates host
+platform and configured-kernel compatibility, then rehashes the catalog's exact
+kernel and rootfs before cloning those assets into the jail. An unknown alias
+or identity fails before any VM launch.
 
-Catalog-ID requests use direct cold boot. Only the legacy `python` template can
-claim the configured ready pool or prepared boot snapshot. User snapshots keep
-their captured rootfs and restore with the configured compatible kernel; the
-dynamic-template kernel equality gate keeps both paths in the same snapshot
-compatibility domain.
+Catalog alias and ID requests use direct cold boot. Only the reserved legacy
+`python` template can claim the configured ready pool or prepared boot snapshot.
+User snapshots keep their captured rootfs and canonical template ID, then
+restore with the configured compatible kernel; the dynamic-template kernel
+equality gate keeps both paths in the same snapshot compatibility domain.
 
 ## Network modes
 

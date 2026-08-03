@@ -128,6 +128,7 @@ manifest_digest="$(jq -er '.manifest.digest' "${rootfs_evidence}")"
 [[ "${platform}" == "linux/amd64" ]]
 
 template_id="$(jq -er '.record.template_id' "${template_record}")"
+template_alias="$(jq -er '.record.alias' "${template_record}")"
 template_spec_digest="$(jq -er '.record.spec_digest' "${template_record}")"
 template_source_reference="$(jq -er '.record.descriptor.source.reference' "${template_record}")"
 template_source_digest="$(jq -er '.record.descriptor.source.digest' "${template_record}")"
@@ -138,6 +139,7 @@ template_rootfs_location="$(jq -er '.record.locations.rootfs' "${template_record
 jq --exit-status '.record.status == "ready" and .verification.valid == true' \
     "${template_record}" >/dev/null
 [[ "${template_id}" =~ ^tpl-[0-9a-f]{60}$ ]]
+[[ "${template_alias}" == "oci-python" ]]
 [[ "${template_spec_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]
 [[ "${template_source_reference}" == "${source_reference}" ]]
 [[ "${template_source_digest}" == "${manifest_digest}" ]]
@@ -238,7 +240,23 @@ missing_response="$(
 )"
 jq --exit-status '.error.code == "not_found"' <<<"${missing_response}" >/dev/null
 
-create_payload="$(jq -n --arg template "${template_id}" '{
+missing_alias="missing-catalog-alias"
+missing_alias_payload="$(jq -n --arg template "${missing_alias}" '{
+    template: $template,
+    cpu_count: 1,
+    memory_mb: 512,
+    timeout_seconds: 120,
+    network: {internet_access: false}
+}')"
+missing_alias_response="$(
+    api_call missing-template-alias 404 \
+        --header 'content-type: application/json' \
+        --data "${missing_alias_payload}" \
+        "${api_url}/v1/sandboxes"
+)"
+jq --exit-status '.error.code == "not_found"' <<<"${missing_alias_response}" >/dev/null
+
+create_payload="$(jq -n --arg template "${template_alias}" '{
     template: $template,
     cpu_count: 1,
     memory_mb: 512,
@@ -347,8 +365,11 @@ deleted_status="$(
 )"
 [[ "${deleted_status}" == "404" ]]
 ! grep --fixed-strings --quiet "${token}" "${work_dir}/audit/events.jsonl"
-grep --fixed-strings --quiet "${template_id}" "${work_dir}/audit/events.jsonl"
+grep --fixed-strings --quiet "${template_alias}" "${work_dir}/audit/events.jsonl"
 grep --fixed-strings --quiet '"operation":"delete"' "${work_dir}/audit/events.jsonl"
+grep --fixed-strings --quiet 'resolved immutable template alias' "${work_dir}/api.log"
+grep --fixed-strings --quiet "requested_template=${template_alias}" "${work_dir}/api.log"
+grep --fixed-strings --quiet "resolved_template_id=${template_id}" "${work_dir}/api.log"
 
 completed_id="${sandbox_id}"
 sandbox_id=""
@@ -371,6 +392,7 @@ jq -n \
     --arg source_digest "${source_digest}" \
     --arg manifest_digest "${manifest_digest}" \
     --arg template_id "${template_id}" \
+    --arg template_alias "${template_alias}" \
     --arg template_spec_digest "${template_spec_digest}" \
     --arg template_source_reference "${template_source_reference}" \
     --arg template_source_digest "${template_source_digest}" \
@@ -395,6 +417,7 @@ jq -n \
         source_digest: $source_digest,
         manifest_digest: $manifest_digest,
         template_id: $template_id,
+        template_alias: $template_alias,
         template_spec_digest: $template_spec_digest,
         template_source_reference: $template_source_reference,
         template_source_digest: $template_source_digest,
@@ -407,7 +430,8 @@ jq -n \
             rootfs_measure_p95_us: $fsverity_rootfs_p95_us
         },
         runtime_selection: {
-            requested_template_id: $template_id,
+            requested_template_alias: $template_alias,
+            resolved_template_id: $template_id,
             configured_kernel: $configured_kernel_location,
             configured_rootfs: $configured_rootfs_location,
             configured_rootfs_digest: $configured_rootfs_digest,
@@ -425,8 +449,10 @@ jq -n \
             "digest-bound-rootfs",
             "content-derived-template-identity",
             "template-runtime-artifact-match",
-            "unknown-template-rejected",
-            "api-template-id-resolution",
+            "unknown-template-id-rejected",
+            "unknown-template-alias-rejected",
+            "api-template-alias-resolution",
+            "alias-canonicalized-to-content-id",
             "catalog-assets-override-configured-fallback",
             "fs-verity-source-assets",
             "microvm-ready",

@@ -264,9 +264,10 @@ schema-3 deterministic fields. The retained
 `oci-rootfs-reproducibility.json` records both SHA-256 values, `cmp` status, and
 the complete ext4 identity used by the KVM test.
 
-The API flow selects the immutable template ID, rejects an unknown ID, proves
-that catalog assets override an invalid configured fallback, then verifies UID
-1000 Python execution, literal argv execution, file write/read/root-directory
+The API flow selects an immutable template alias, proves its canonical content
+ID in the runtime log, rejects unknown aliases and IDs, and proves that catalog
+assets override an invalid configured fallback. It then verifies UID 1000
+Python execution, literal argv execution, file write/read/root-directory
 listing, paused-command rejection, resume followed by a fresh guest command,
 delete/stale-handle behavior, audit credential redaction, and final
 process/network cleanup. Before launch it reruns constant-time fs-verity

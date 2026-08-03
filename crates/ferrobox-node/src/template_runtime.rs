@@ -11,6 +11,12 @@ pub(crate) struct RuntimeTemplateAssets {
     pub rootfs: PathBuf,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ResolvedRuntimeTemplate {
+    pub template_id: String,
+    pub assets: RuntimeTemplateAssets,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct TemplateRuntimeResolver {
     catalog: TemplateCatalog,
@@ -29,17 +35,17 @@ impl TemplateRuntimeResolver {
 
     pub(crate) async fn resolve(
         &self,
-        template_id: &str,
-    ) -> Result<RuntimeTemplateAssets, RuntimeError> {
-        let requested_id = template_id.to_owned();
+        template_reference: &str,
+    ) -> Result<ResolvedRuntimeTemplate, RuntimeError> {
+        let requested_reference = template_reference.to_owned();
         let record = self
             .catalog
-            .record(&requested_id)
-            .map_err(|error| map_catalog_error(&requested_id, error))?;
+            .record(&requested_reference)
+            .map_err(|error| map_catalog_error(&requested_reference, error))?;
 
-        if record.template_id != requested_id {
+        if requested_reference.starts_with("tpl-") && record.template_id != requested_reference {
             return Err(RuntimeError::invalid(
-                "runtime template selection requires a content-derived template ID",
+                "tpl-prefixed runtime template selection requires a content-derived template ID",
             ));
         }
         let platform = &record.descriptor.platform;
@@ -74,9 +80,12 @@ impl TemplateRuntimeResolver {
                 "template artifact verification failed",
             ));
         }
-        Ok(RuntimeTemplateAssets {
-            kernel: record.locations.kernel,
-            rootfs: record.locations.rootfs,
+        Ok(ResolvedRuntimeTemplate {
+            template_id: record.template_id,
+            assets: RuntimeTemplateAssets {
+                kernel: record.locations.kernel,
+                rootfs: record.locations.rootfs,
+            },
         })
     }
 }
@@ -162,7 +171,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn resolves_verified_content_id_and_rejects_alias_selection() {
+    async fn resolves_alias_and_content_id_to_the_same_immutable_template() {
         let temporary = tempdir().unwrap();
         let assets = temporary.path().join("assets");
         let store = temporary.path().join("catalog");
@@ -174,11 +183,31 @@ mod tests {
             built.record.descriptor.artifacts.kernel.digest.clone(),
         );
 
-        let resolved = resolver.resolve(&built.record.template_id).await.unwrap();
-        assert_eq!(resolved.kernel, built.record.locations.kernel);
-        assert_eq!(resolved.rootfs, built.record.locations.rootfs);
+        let by_id = resolver.resolve(&built.record.template_id).await.unwrap();
+        let by_alias = resolver.resolve("python-3-12").await.unwrap();
+        assert_eq!(by_id, by_alias);
+        assert_eq!(by_alias.template_id, built.record.template_id);
+        assert_eq!(by_alias.assets.kernel, built.record.locations.kernel);
+        assert_eq!(by_alias.assets.rootfs, built.record.locations.rootfs);
 
-        let error = resolver.resolve("python-3-12").await.unwrap_err();
+        let missing_alias = resolver.resolve("missing-alias").await.unwrap_err();
+        assert_eq!(missing_alias.kind(), RuntimeErrorKind::NotFound);
+    }
+
+    #[tokio::test]
+    async fn reserves_tpl_prefix_for_content_ids() {
+        let temporary = tempdir().unwrap();
+        let assets = temporary.path().join("assets");
+        let store = temporary.path().join("catalog");
+        fs::create_dir(&assets).unwrap();
+        let catalog = TemplateCatalog::new(&store);
+        let built = catalog.build(request(&assets, "tpl-shadow")).unwrap();
+        let resolver = TemplateRuntimeResolver::new(
+            store,
+            built.record.descriptor.artifacts.kernel.digest.clone(),
+        );
+
+        let error = resolver.resolve("tpl-shadow").await.unwrap_err();
         assert_eq!(error.kind(), RuntimeErrorKind::InvalidInput);
     }
 

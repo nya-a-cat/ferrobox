@@ -29,12 +29,15 @@ The response contains `sandbox_id`, `node_id`, `state`, `token`, and token
 expiry. The token is shown once and stored only as a SHA-256 digest.
 
 With the Firecracker backend and an operator-owned `--template-store`, the
-`template` value may be an exact 64-character content ID such as
+`template` value may be an immutable catalog alias such as `oci-python` or its
+exact 64-character content ID
 `tpl-2a4a8bfe7412552c0ec6dcaf7cc2dc258dfccacef05c162149bc80827071`.
-The runtime validates the catalog record, platform, compatible kernel, and both
-artifact hashes before launch. Unknown IDs return `404 not_found`, incompatible
-records return `501 unsupported`, and unreadable or modified records return
-`503 unavailable`. Catalog aliases remain administrative CLI references.
+The runtime resolves aliases to the content ID before launch, then validates
+the catalog record, platform, compatible kernel, and both artifact hashes.
+Unknown aliases and IDs return `404 not_found`, incompatible records return
+`501 unsupported`, and unreadable or modified records return `503 unavailable`.
+The reserved `python` name continues to select the configured legacy image and
+ready pool.
 
 ## Execute
 

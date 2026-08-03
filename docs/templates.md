@@ -8,7 +8,8 @@ lifecycle. The capability status is **Partial**: catalog lifecycle, integrity,
 public-OCI construction, exact runtime-artifact binding, and immutable-ID
 selection for direct Firecracker creates are verified. Deterministic effective
 request rendering has a retained twelve-check GitHub proof. Hosted Btrfs
-source-asset fs-verity and real-KVM compatibility are also verified.
+source-asset fs-verity and real-KVM compatibility are also verified. Direct
+creation by immutable alias is implemented and awaits its GitHub KVM evidence.
 Asynchronous build status, template-specific ready pools, other runtime
 providers, private-registry credential custody, distributed artifact delivery,
 and trusted fs-verity digest binding in the runtime identity contract remain
@@ -131,12 +132,12 @@ ferrobox-api --backend firecracker \
 ```
 
 The standalone node accepts the same `--template-store` option or
-`FERROBOX_TEMPLATE_STORE`. A create request selects the immutable record through
-the existing field:
+`FERROBOX_TEMPLATE_STORE`. A create request selects the immutable record by
+alias through the existing field:
 
 ```json
 {
-  "template": "tpl-2a4a8bfe7412552c0ec6dcaf7cc2dc258dfccacef05c162149bc80827071",
+  "template": "oci-python",
   "cpu_count": 1,
   "memory_mb": 512,
   "timeout_seconds": 300,
@@ -144,19 +145,20 @@ the existing field:
 }
 ```
 
-For a `tpl-...` request, the node loads the exact content-derived ID, validates
-the descriptor and host architecture, requires the recorded kernel digest to
-equal the configured Firecracker/snapshot kernel digest, then streams the
-kernel and rootfs through SHA-256 before cloning them into the jail. Catalog
-aliases are reserved for build/list/inspect/render/delete administration.
-Existing legacy template names continue to select the configured
-kernel/rootfs.
+For an alias request, the node loads the immutable record and replaces the
+sandbox specification's alias with its content-derived ID. Exact `tpl-...`
+requests take the same path. The node validates the descriptor and host
+architecture, requires the recorded kernel digest to equal the configured
+Firecracker/snapshot kernel digest, then streams the kernel and rootfs through
+SHA-256 before cloning them into the jail. With a catalog configured, unknown
+aliases and IDs fail closed. The reserved `python` name continues to select the
+configured legacy kernel/rootfs and ready pool.
 
-Immutable-ID creates currently take the direct cold-boot path. The legacy
-`python` snapshot template and ready pool cannot satisfy a catalog-ID request.
-Unknown IDs fail with `404 not_found`; incompatible platform or kernel records
-fail with `501 unsupported`; corrupt, unreadable, or tampered records fail with
-`503 unavailable` using sanitized messages.
+Catalog alias and immutable-ID creates currently take the direct cold-boot
+path. The legacy `python` snapshot template and ready pool cannot satisfy a
+catalog request. Unknown references fail with `404 not_found`; incompatible
+platform or kernel records fail with `501 unsupported`; corrupt, unreadable, or
+tampered records fail with `503 unavailable` using sanitized messages.
 
 ## Security and provenance boundary
 
@@ -169,8 +171,9 @@ fail with `501 unsupported`; corrupt, unreadable, or tampered records fail with
   mismatches.
 - `render` reads and validates catalog metadata, performs zero artifact hashing,
   and exposes that deferred boundary in its output.
-- Runtime selection accepts only the content-derived ID. Each direct create
-  revalidates the descriptor and artifact bytes before Firecracker launch.
+- Runtime selection canonicalizes every catalog alias to the content-derived
+  ID. Each direct create revalidates the descriptor and artifact bytes before
+  Firecracker launch.
 - Dynamic templates share the configured kernel digest so restored snapshots
   and direct-created guests stay inside one kernel compatibility contract.
 - The hosted Btrfs gate enables fs-verity on the catalog kernel/rootfs, matches
