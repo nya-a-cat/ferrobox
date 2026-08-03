@@ -61,7 +61,8 @@ exec_response="$(
         )" \
         "${api_url}/v1/sandboxes/${sandbox_id}/commands"
 )"
-[[ "$(jq -r '.stdout' <<<"${exec_response}")" == "42" ]]
+exec_stdout="$(jq -r '.stdout' <<<"${exec_response}")"
+[[ "${exec_stdout%$'\r'}" == "42" ]]
 [[ "$(jq -r '.termination.kind' <<<"${exec_response}")" == "exited" ]]
 
 literal='$(touch /tmp/ferrobox-injected);'
@@ -77,7 +78,8 @@ literal_response="$(
         )" \
         "${api_url}/v1/sandboxes/${sandbox_id}/commands"
 )"
-[[ "$(jq -r '.stdout' <<<"${literal_response}")" == "${literal}" ]]
+literal_stdout="$(jq -r '.stdout' <<<"${literal_response}")"
+[[ "${literal_stdout%$'\r'}" == "${literal}" ]]
 [[ ! -e /tmp/ferrobox-injected ]]
 
 curl --fail --silent \

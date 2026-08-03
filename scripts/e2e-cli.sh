@@ -73,7 +73,8 @@ exec_response="$(
     FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
         exec "${sandbox_id}" -- "${test_python}" -c 'print(42)'
 )"
-[[ "$(jq -r '.stdout' <<<"${exec_response}")" == "42" ]]
+exec_stdout="$(jq -r '.stdout' <<<"${exec_response}")"
+[[ "${exec_stdout%$'\r'}" == "42" ]]
 [[ "$(jq -r '.termination.kind' <<<"${exec_response}")" == "exited" ]]
 
 literal='$(touch /tmp/ferrobox-cli-injected);'
@@ -82,7 +83,8 @@ literal_response="$(
         exec "${sandbox_id}" -- "${test_python}" -c \
         'import sys; print(sys.argv[1])' "${literal}"
 )"
-[[ "$(jq -r '.stdout' <<<"${literal_response}")" == "${literal}" ]]
+literal_stdout="$(jq -r '.stdout' <<<"${literal_response}")"
+[[ "${literal_stdout%$'\r'}" == "${literal}" ]]
 [[ ! -e /tmp/ferrobox-cli-injected ]]
 
 printf 'ferrobox-cli\n' >"${runtime_root}/input.txt"
