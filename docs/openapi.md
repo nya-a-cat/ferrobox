@@ -53,10 +53,12 @@ Standard CI uses three independent checks:
    request bodies, path parameters, error responses, credential scopes, and
    sensitive fields, recalculates the projection from the retained overlay,
    then hashes each generated source tree.
-3. Generated C#, Go, Java, Kotlin, Python, Rust, and TypeScript clients share
-   one loopback-only API process. Every client completes create, inspect, typed
-   command execution, lossless output, file roundtrip, delete, stale-handle
-   rejection, and audit credential-redaction checks.
+3. CI builds one versioned native package for each generated C#, Go, Java,
+   Kotlin, Python, Rust, and TypeScript client. A separate consumer installs
+   that package, then all seven consumers share one loopback-only API process
+   and complete create, inspect, typed command execution, lossless output, file
+   roundtrip, delete, stale-handle rejection, and audit credential-redaction
+   checks.
 
 Each CI run generates all seven client trees twice in separate runner-temporary
 directories and requires a recursive byte comparison before and after runtime
@@ -78,9 +80,40 @@ canonical BOM-free UTF-8. Python uses a fixed
 Platform provider at `2.22.2`, records its JAR SHA-256, then tests offline;
 Kotlin resolves every resolvable generated-project configuration while writing
 a strict Gradle lock, then builds and runs offline; Rust fetches a generated
-`Cargo.lock` then runs offline; TypeScript uses an exact pnpm package graph and
-runs the compiled CommonJS output under Node. The process backend supplies
-deterministic API behavior and carries no workload-isolation claim.
+`Cargo.lock` then runs offline; TypeScript uses exact package and consumer pnpm
+graphs and runs the compiled CommonJS output under Node. The package manifest
+binds every package SHA-256 to its consumer lifecycle record. The process
+backend supplies deterministic API behavior and carries no workload-isolation
+claim.
+
+## Versioned package contract
+
+`openapi/ferrobox-sdk-packages.json` is the checked-in schema-1 identity
+contract for the generated `0.1.0` packages:
+
+| Language | Package identity | GitHub package form |
+| --- | --- | --- |
+| C# | `Ferrobox.Client` | NuGet `.nupkg` |
+| Go | `github.com/nya-a-cat/ferrobox/sdk/go` | deterministic Go module proxy ZIP |
+| Java | `io.github.nyaacat.ferrobox:ferrobox-java-client` | Maven JAR and POM |
+| Kotlin | `io.github.nyaacat.ferrobox:ferrobox-kotlin-client` | Maven repository with JAR, sources, module, POM, and checksums |
+| Python | `ferrobox-client` / `ferrobox_client` | wheel |
+| Rust | `ferrobox-client` / `ferrobox_client` | Cargo `.crate` |
+| TypeScript | `@nya-a-cat/ferrobox` | npm `.tgz` |
+
+Each consumer crosses the package boundary used by its ecosystem. C# compares
+the packed NuGet bytes with the global-package cache entry. Go resolves only
+through the generated `file://` module proxy. Java and Kotlin resolve from
+runner-local Maven repositories. Python installs the wheel into a clean uv
+virtual environment. Rust extracts the `.crate` before the consumer build.
+TypeScript installs the generated tarball through a frozen pnpm graph.
+
+`scripts/check-openapi-sdk-packages.py` parses every package container, checks
+its embedded name, version, and compiled entrypoint or marker class, rejects
+unsafe ZIP paths, and records size plus SHA-256. The result links each package
+to the SHA-256 of the seven-check lifecycle record produced by its installed
+consumer. CI writes only runner-temporary package repositories and uploads them
+as evidence. No external registry receives a package in this gate.
 
 ## Pinned tooling
 
@@ -183,10 +216,48 @@ toolchain record. Its archive digest is
 `sha256:78a7ce80c5f3e3d6a177d81744e0b09580119d76569ac8e6c6435d556ca3331f`,
 and it expires on 2026-11-01.
 
+[Standard CI run 30779954220](https://github.com/nya-a-cat/ferrobox/actions/runs/30779954220)
+at commit `8bf9a62` passed the versioned package gate. Its seven independent
+consumers installed the NuGet package, Go module ZIP, Java Maven artifact,
+Kotlin Maven artifact, Python wheel, Cargo crate, and npm tarball before running
+the same lifecycle. The aggregate matrix records seven package smokes, seven
+distinct UUIDv7 sandboxes, 35 sanitized audit events, seven successful creates,
+seven successful deletes, and the dependency records for both package builds
+and consumers. The package-contract SHA-256 is
+`8444a4e5f0d6209e7d95f6eea73419c78f26a182f5bc5df2f7c15a889c347cea`;
+the package-manifest SHA-256 is
+`c0b873f372b4e0906c4951eb01f0500d827576e16f9501ff795d43c3d1034236`.
+
+| Package | SHA-256 |
+| --- | --- |
+| `Ferrobox.Client.0.1.0.nupkg` | `8dc9de2b2fa6eae568ba3b61544e884ebd25088fcdf94a675a3368f076691ca4` |
+| Go module `v0.1.0.zip` | `fb512f606502c36dcba99b4c096906efbe6506f546ebfd2cf7d84a9e6a1a4e05` |
+| `ferrobox-java-client-0.1.0.jar` | `e8c55ea535f67910db05a6872ffbdfd8b51b92b78313b8564adc303ec7f9a575` |
+| `ferrobox-kotlin-client-0.1.0.jar` | `2befff8f19239e4a8ba89987756d1e8f1cb932fd2594605d31250965f724e97e` |
+| `ferrobox_client-0.1.0-py3-none-any.whl` | `619cc1a5c86381075f302e9c1e2c2f180c6c7a25e007eb7201f7606a13b243a1` |
+| `ferrobox-client-0.1.0.crate` | `9fb7cd376ba22a9098ad105cf5dbdf78823f4b4e3bf1618eee0ab86b19fd4a1a` |
+| `nya-a-cat-ferrobox-0.1.0.tgz` | `6faf22d052fdeca580a0b8853eb089243a988ad71337dea4e7fe9e21d054e08a` |
+
+Artifact `8843358862` retains the packages, package contract and manifest,
+generated roots, projection, locks, runtime records, aggregate matrix, audit
+log, and toolchain record. Its archive digest is
+`sha256:202af788f8ad5a41f9276ea53c9fb6ca95183f0cb0bf137ad524bb07f41f44a2`,
+and it expires on 2026-11-01. The current stable generated-tree hashes are C#
+`8bbc5d6a95af7687fbd24befb0fca2508625a525dee92a43a8e1eee848802b5f`,
+Go `211711093fe9f88e49ea1ec5bb085e3507c58bc5f55503fb7d41053aee198c49`,
+Java `d6093bf23312501efd33b9da5d8209dad19555edaab0ae3370a4f5fc68b26d52`,
+Kotlin `e29f62a32e7997ca59dd50e675e9b2ece30d09e0b990595a4e55acd03b55ab96`,
+Python `ee8b26b656b14a46e6cded2b52cec5ab7c3bba80665e4bb60705e8bc94ba12b9`,
+Rust `2e3cc3eb37a1aec158ac85798628b0034b30c16e21c036f8af87eeac528d27b9`,
+and TypeScript Fetch
+`e90f5f6714b7dfe752d90e2d56ea85adf9694f2fce1606965406cefc9a3c8c38`.
+
 ## Current parity boundary
 
 The generated trees are retained conformance outputs, and their seven-language
-runtime gate is Verified. Stable versioned packages remain open work.
-Diagnostics, authenticated ingress, and richer egress-policy endpoints remain
-outside the current HTTP surface, so the broader OpenAPI and SDK roadmap rows
-remain Partial.
+runtime and versioned-package gates are Verified. The SDK roadmap row now meets
+its acceptance gate. Diagnostics, authenticated ingress, and richer
+egress-policy endpoints remain outside the current HTTP surface, so the broader
+OpenAPI row remains Partial. External registry publication, keyless signing,
+and consumer-side signature verification remain under the release-integrity
+row and need an approved credential and GitHub permission contract.

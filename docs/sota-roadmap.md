@@ -104,7 +104,7 @@ Status meanings:
 | Service exposure | Authenticated HTTP/WebSocket/TCP endpoints and port discovery | Missing | Route isolation, token rotation, WebSocket, expiry, and SSRF tests pass |
 | E2B compatibility | E2B lifecycle, command, file, and code-interpreter behavior | Missing | Pinned E2B SDK conformance suite passes without application changes beyond endpoint/auth |
 | OpenAPI contracts | Versioned lifecycle, execution, diagnostics, ingress, and egress specs | Partial | Generated clients and server contract tests share one checked-in specification |
-| SDKs | Rust, Python, TypeScript, Go, Java/Kotlin, and C# surfaces | Partial | Language matrix passes one remote GitHub scenario and versioned packages pass install smoke tests |
+| SDKs | Rust, Python, TypeScript, Go, Java/Kotlin, and C# surfaces | Verified | Language matrix passes one remote GitHub scenario and versioned packages pass install smoke tests |
 | CLI, MCP, skills | Human CLI, MCP server, and agent-facing skill package | Partial | Each surface completes create/exec/file/delete against the same API |
 | Browser/desktop | Chromium/Playwright, VNC desktop, and VS Code Web templates | Missing | Browser and desktop smoke tests use authenticated exposed endpoints |
 | GPU | Explicit GPU allocation and isolation policy | Missing | Provider contract reports device identity, quota, cleanup, and unsupported modes |
@@ -128,7 +128,7 @@ Snapshot KVM workflow enforces its separate conformance path.
 The implemented eighteen-operation HTTP surface now has one checked-in OpenAPI
 3.1 contract. Standard CI validates it with a digest-pinned official generator,
 emits seven language source trees, compares it with the Axum route set, and
-drives a generated Python client through the existing API. Runs
+drives seven generated package consumers through the existing API. Runs
 [30766020434](https://github.com/nya-a-cat/ferrobox/actions/runs/30766020434)
 and
 [30766116507](https://github.com/nya-a-cat/ferrobox/actions/runs/30766116507)
@@ -150,10 +150,14 @@ and dependency corrections passed in
 at commit `86bb3cc`. All seven generated clients completed the same seven-check
 scenario through one API process, produced distinct UUIDv7 sandboxes, retained
 complete dependency evidence, and preserved byte-identical source trees. The
-generated-source runtime matrix is Verified. The OpenAPI row remains Partial
-because diagnostics, ingress, and richer egress specifications are outstanding.
-The SDK row remains Partial until stable versioned packages pass consumer
-installation smoke tests.
+generated-source runtime matrix is Verified. Run
+[30779954220](https://github.com/nya-a-cat/ferrobox/actions/runs/30779954220)
+at commit `8bf9a62` built stable `0.1.0` packages for C#, Go, Java, Kotlin,
+Python, Rust, and TypeScript, installed each package in a separate consumer,
+passed the shared lifecycle, linked all package hashes to the consumer records,
+and preserved byte-identical generated sources. The SDK row is Verified under
+its declared acceptance gate. The OpenAPI row remains Partial because
+diagnostics, ingress, and richer egress specifications are outstanding.
 
 OCI image parity now has a verified public-image slice. Runs
 [30769681608](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681608),

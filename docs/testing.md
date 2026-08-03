@@ -20,8 +20,9 @@ resource usage low and results reproducible.
 - full-commit GitHub Action pin verification across every workflow;
 - OpenAPI 3.1 validation, exact Axum route matching, and seven generated SDK
   source trees;
-- generated C#, Go, Java, Kotlin, Python, Rust, and TypeScript SDKs completing
-  the same create/inspect/exec/file/delete closed loop through one API process.
+- versioned C#, Go, Java, Kotlin, Python, Rust, and TypeScript packages, with
+  independent consumers completing the same create/inspect/exec/file/delete
+  closed loop through one API process.
 
 The process E2E checks `print(42)`, argv literal handling, file round-trip,
 path traversal rejection, deletion, and token redaction from audit records.
@@ -50,6 +51,7 @@ clients. The gate recalculates that projection from the retained overlay and
 records both SHA-256 values. It retains a structural evidence document, seven
 sanitized runtime documents, one aggregate matrix, the shared sanitized audit
 log, dependency manifests, a toolchain record, the generator manifest, the
+package contract and package hashes, all seven native package artifacts, the
 overlay, the projected document, and all seven generated source trees. It
 compares both generated trees again after runtime to prove that harness builds
 did not alter the source evidence. Each independently calculated projection
@@ -107,6 +109,18 @@ post-runtime check. Artifact `8842515354` has archive digest
 `sha256:78a7ce80c5f3e3d6a177d81744e0b09580119d76569ac8e6c6435d556ca3331f`
 and retains the source, runtime, lock, projection, audit, and toolchain evidence
 through 2026-11-01.
+
+[Standard CI run 30779954220](https://github.com/nya-a-cat/ferrobox/actions/runs/30779954220)
+at commit `8bf9a62` passed the package-consumer extension of this gate. Seven
+versioned `0.1.0` packages were built in their native ecosystem formats and
+installed by separate consumers before the common lifecycle ran. The matrix
+binds all seven package hashes to all seven sanitized consumer records and
+retains build plus consumer dependency state. It reports seven distinct UUIDv7
+sandboxes, 35 audit events, seven successful creates, and seven successful
+deletes. Both generated roots remained byte-identical after packaging and
+execution. Artifact `8843358862` has archive digest
+`sha256:202af788f8ad5a41f9276ea53c9fb6ca95183f0cb0bf137ad524bb07f41f44a2`
+and retains the complete evidence through 2026-11-01.
 
 ## OCI image KVM CI
 

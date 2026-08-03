@@ -229,8 +229,19 @@ Gradle's [release checksum reference](https://gradle.org/release-checksums/).
 Before TypeScript installation, CI queries npm metadata for exact pnpm
 10.15.1, TypeScript 5.9.3, and `@types/node` 22.18.3 packages. It requires the
 expected name, version, license, source repository, executable entrypoints,
-and registry `sha512` integrity, then creates and consumes one frozen pnpm lock.
-The metadata and GitHub runner toolchain versions are retained with the matrix.
+and registry `sha512` integrity, then creates separate frozen package-build and
+consumer pnpm locks. The metadata and GitHub runner toolchain versions are
+retained with the matrix.
+
+The checked-in `openapi/ferrobox-sdk-packages.json` fixes seven package
+identities and version `0.1.0`. Standard CI materializes a NuGet package, a
+deterministic Go module proxy entry, Java and Kotlin Maven artifacts, a Python
+wheel, a Cargo crate, and an npm tarball. Each artifact is consumed through its
+native package boundary before the lifecycle test. The package validator parses
+embedded metadata and compiled entrypoints, records size and SHA-256, and binds
+the artifact to the consumer evidence SHA-256. All repositories and package
+files live under the runner's temporary evidence root. This gate uses no
+registry credential and performs no external publication.
 
 Standard CI runs
 [30766020434](https://github.com/nya-a-cat/ferrobox/actions/runs/30766020434)
@@ -256,6 +267,17 @@ All seven dependency record sets passed the aggregate check, and the pristine
 generated roots remained byte-identical after execution. Artifact `8842515354`
 has archive digest
 `sha256:78a7ce80c5f3e3d6a177d81744e0b09580119d76569ac8e6c6435d556ca3331f`
+and expires on 2026-11-01.
+
+[Standard CI run 30779954220](https://github.com/nya-a-cat/ferrobox/actions/runs/30779954220)
+verified the package chain at commit `8bf9a62`. The package contract has SHA-256
+`8444a4e5f0d6209e7d95f6eea73419c78f26a182f5bc5df2f7c15a889c347cea`,
+and the seven-entry package evidence manifest has SHA-256
+`c0b873f372b4e0906c4951eb01f0500d827576e16f9501ff795d43c3d1034236`.
+The aggregate gate accepted seven parsed package identities, seven consumer
+smokes, complete build and consumer dependency records, and seven linked
+lifecycle records. Artifact `8843358862` has archive digest
+`sha256:202af788f8ad5a41f9276ea53c9fb6ca95183f0cb0bf137ad524bb07f41f44a2`
 and expires on 2026-11-01.
 
 ## E2E provenance schema v1
