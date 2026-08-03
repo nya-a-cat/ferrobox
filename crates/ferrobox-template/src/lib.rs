@@ -268,8 +268,12 @@ impl TemplateCatalog {
         Ok(summaries)
     }
 
+    pub fn record(&self, reference: &str) -> Result<TemplateRecord, TemplateCatalogError> {
+        self.resolve(reference).map(|(_, record)| record)
+    }
+
     pub fn inspect(&self, reference: &str) -> Result<TemplateInspection, TemplateCatalogError> {
-        let (_, record) = self.resolve(reference)?;
+        let record = self.record(reference)?;
         let kernel = verify_artifact(
             &record.locations.kernel,
             &record.descriptor.artifacts.kernel,

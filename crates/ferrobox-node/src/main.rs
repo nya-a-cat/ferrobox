@@ -96,6 +96,8 @@ struct RuntimeArgs {
     kernel: PathBuf,
     #[arg(long, env = "FERROBOX_ROOTFS")]
     rootfs: PathBuf,
+    #[arg(long, env = "FERROBOX_TEMPLATE_STORE")]
+    template_store: Option<PathBuf>,
     #[arg(long, env = "FERROBOX_SNAPSHOT_ROOT")]
     snapshot_root: Option<PathBuf>,
     #[arg(
@@ -123,6 +125,7 @@ impl RuntimeArgs {
             jailer_binary: self.jailer.clone(),
             kernel_image: self.kernel.clone(),
             rootfs_template: self.rootfs.clone(),
+            template_store: self.template_store.clone(),
             snapshot_root: self.snapshot_root.clone(),
             chroot_base: self.chroot_base.clone(),
             runtime_root: self.runtime_root.clone(),

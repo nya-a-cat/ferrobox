@@ -32,6 +32,8 @@ struct Cli {
     #[arg(long)]
     rootfs: Option<PathBuf>,
     #[arg(long)]
+    template_store: Option<PathBuf>,
+    #[arg(long)]
     snapshot_root: Option<PathBuf>,
     #[arg(long, default_value_t = 0)]
     ready_pool_size: usize,
@@ -70,6 +72,7 @@ async fn main() -> anyhow::Result<()> {
                     jailer_binary: required(arguments.jailer, "--jailer")?,
                     kernel_image: required(arguments.kernel, "--kernel")?,
                     rootfs_template: required(arguments.rootfs, "--rootfs")?,
+                    template_store: arguments.template_store,
                     snapshot_root: arguments.snapshot_root,
                     chroot_base: arguments.chroot_base,
                     runtime_root: arguments.runtime_root,

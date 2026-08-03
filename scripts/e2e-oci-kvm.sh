@@ -10,6 +10,7 @@ firecracker="${FERROBOX_FIRECRACKER:?FERROBOX_FIRECRACKER is required}"
 jailer="${FERROBOX_JAILER:?FERROBOX_JAILER is required}"
 kernel="${FERROBOX_KERNEL:?FERROBOX_KERNEL is required}"
 rootfs="${FERROBOX_ROOTFS:?FERROBOX_ROOTFS is required}"
+template_store="${FERROBOX_TEMPLATE_STORE:?FERROBOX_TEMPLATE_STORE is required}"
 chroot_base="${FERROBOX_CHROOT_BASE:?FERROBOX_CHROOT_BASE is required}"
 runtime_root="${FERROBOX_RUNTIME_ROOT:?FERROBOX_RUNTIME_ROOT is required}"
 rootfs_evidence="${FERROBOX_OCI_ROOTFS_EVIDENCE:?FERROBOX_OCI_ROOTFS_EVIDENCE is required}"
@@ -111,6 +112,7 @@ done
 for path in "${kernel}" "${rootfs}" "${rootfs_evidence}" "${template_record}"; do
     test -f "${path}"
 done
+test -d "${template_store}"
 test -c /dev/kvm
 test -r /dev/kvm
 test -w /dev/kvm
@@ -137,10 +139,19 @@ jq --exit-status '.record.status == "ready" and .verification.valid == true' \
 [[ "${template_spec_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]
 [[ "${template_source_reference}" == "${source_reference}" ]]
 [[ "${template_source_digest}" == "${manifest_digest}" ]]
-[[ "${template_kernel_location}" == "$(realpath "${kernel}")" ]]
-[[ "${template_rootfs_location}" == "$(realpath "${rootfs}")" ]]
+configured_kernel_location="$(realpath "${kernel}")"
+configured_rootfs_location="$(realpath "${rootfs}")"
+configured_rootfs_size="$(stat --format='%s' "${rootfs}")"
+configured_rootfs_digest="sha256:$(sha256sum "${rootfs}" | awk '{print $1}')"
+test -f "${template_kernel_location}"
+test -f "${template_rootfs_location}"
+[[ "${template_kernel_location}" != "${configured_kernel_location}" ]]
+[[ "${template_rootfs_location}" != "${configured_rootfs_location}" ]]
+[[ "${configured_rootfs_size}" -lt 4096 ]]
 [[ "${template_kernel_digest}" == "sha256:$(sha256sum "${kernel}" | awk '{print $1}')" ]]
-[[ "${template_rootfs_digest}" == "sha256:$(sha256sum "${rootfs}" | awk '{print $1}')" ]]
+[[ "${template_kernel_digest}" == "sha256:$(sha256sum "${template_kernel_location}" | awk '{print $1}')" ]]
+[[ "${template_rootfs_digest}" == "sha256:$(sha256sum "${template_rootfs_location}" | awk '{print $1}')" ]]
+[[ "${template_rootfs_digest}" != "${configured_rootfs_digest}" ]]
 
 before_pids="$(pgrep -x firecracker || true)"
 "${api_binary}" \
@@ -151,6 +162,7 @@ before_pids="$(pgrep -x firecracker || true)"
     --jailer "${jailer}" \
     --kernel "${kernel}" \
     --rootfs "${rootfs}" \
+    --template-store "${template_store}" \
     --chroot-base "${chroot_base}" \
     --runtime-root "${runtime_root}" \
     >"${work_dir}/api.log" 2>&1 &
@@ -167,10 +179,35 @@ for _ in $(seq 1 200); do
 done
 curl --fail --silent "${api_url}/healthz" >/dev/null
 
+missing_template_id="tpl-$(printf '0%.0s' {1..60})"
+[[ "${missing_template_id}" != "${template_id}" ]]
+missing_payload="$(jq -n --arg template "${missing_template_id}" '{
+    template: $template,
+    cpu_count: 1,
+    memory_mb: 512,
+    timeout_seconds: 120,
+    network: {internet_access: false}
+}')"
+missing_response="$(
+    api_call missing-template 404 \
+        --header 'content-type: application/json' \
+        --data "${missing_payload}" \
+        "${api_url}/v1/sandboxes"
+)"
+jq --exit-status '.error.code == "not_found"' <<<"${missing_response}" >/dev/null
+
+create_payload="$(jq -n --arg template "${template_id}" '{
+    template: $template,
+    cpu_count: 1,
+    memory_mb: 512,
+    timeout_seconds: 120,
+    network: {internet_access: false}
+}')"
+
 create_response="$(
     api_call create 201 \
         --header 'content-type: application/json' \
-        --data '{"template":"oci-python","cpu_count":1,"memory_mb":512,"timeout_seconds":120,"network":{"internet_access":false}}' \
+        --data "${create_payload}" \
         "${api_url}/v1/sandboxes"
 )"
 sandbox_id="$(jq -er '.sandbox_id' <<<"${create_response}")"
@@ -268,6 +305,7 @@ deleted_status="$(
 )"
 [[ "${deleted_status}" == "404" ]]
 ! grep --fixed-strings --quiet "${token}" "${work_dir}/audit/events.jsonl"
+grep --fixed-strings --quiet "${template_id}" "${work_dir}/audit/events.jsonl"
 grep --fixed-strings --quiet '"operation":"delete"' "${work_dir}/audit/events.jsonl"
 
 completed_id="${sandbox_id}"
@@ -294,6 +332,12 @@ jq -n \
     --arg template_spec_digest "${template_spec_digest}" \
     --arg template_source_reference "${template_source_reference}" \
     --arg template_source_digest "${template_source_digest}" \
+    --arg configured_kernel_location "${configured_kernel_location}" \
+    --arg configured_rootfs_location "${configured_rootfs_location}" \
+    --arg configured_rootfs_digest "${configured_rootfs_digest}" \
+    --arg template_kernel_location "${template_kernel_location}" \
+    --arg template_rootfs_location "${template_rootfs_location}" \
+    --argjson configured_rootfs_size "${configured_rootfs_size}" \
     --arg sandbox_id "${completed_id}" \
     --arg python_version "${python_version}" \
     '{
@@ -307,12 +351,28 @@ jq -n \
         template_spec_digest: $template_spec_digest,
         template_source_reference: $template_source_reference,
         template_source_digest: $template_source_digest,
+        runtime_selection: {
+            requested_template_id: $template_id,
+            configured_kernel: $configured_kernel_location,
+            configured_rootfs: $configured_rootfs_location,
+            configured_rootfs_digest: $configured_rootfs_digest,
+            configured_rootfs_size_bytes: $configured_rootfs_size,
+            resolved_kernel: $template_kernel_location,
+            resolved_rootfs: $template_rootfs_location,
+            locations_distinct: (
+                $configured_kernel_location != $template_kernel_location and
+                $configured_rootfs_location != $template_rootfs_location
+            )
+        },
         sandbox_id: $sandbox_id,
         python_version: $python_version,
         checks: [
             "digest-bound-rootfs",
             "content-derived-template-identity",
             "template-runtime-artifact-match",
+            "unknown-template-rejected",
+            "api-template-id-resolution",
+            "catalog-assets-override-configured-fallback",
             "microvm-ready",
             "uid-1000-python",
             "argv-execution",

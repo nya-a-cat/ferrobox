@@ -150,6 +150,10 @@ impl SnapshotStore {
         })
     }
 
+    pub(crate) fn kernel_sha256(&self) -> &str {
+        &self.kernel_sha256
+    }
+
     pub(crate) async fn stage(
         &self,
         request: SnapshotStageRequest<'_>,

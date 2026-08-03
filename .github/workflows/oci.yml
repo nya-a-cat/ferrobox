@@ -385,8 +385,9 @@ jobs:
         env:
           FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
           FERROBOX_JAILER: /opt/ferrobox/bin/jailer
-          FERROBOX_KERNEL: /mnt/ferrobox-oci/images/vmlinux
-          FERROBOX_ROOTFS: /mnt/ferrobox-oci/images/oci-python.ext4
+          FERROBOX_KERNEL: ${{ runner.temp }}/vmlinux
+          FERROBOX_ROOTFS: ${{ runner.temp }}/invalid-default-rootfs.ext4
+          FERROBOX_TEMPLATE_STORE: ${{ runner.temp }}/oci-template-runtime-store
           FERROBOX_CHROOT_BASE: /mnt/ferrobox-oci/jailer
           FERROBOX_RUNTIME_ROOT: /mnt/ferrobox-oci/runtime
           FERROBOX_API_BINARY: target/debug/ferrobox-api
@@ -394,7 +395,8 @@ jobs:
           FERROBOX_OCI_TEMPLATE_RECORD: ${{ runner.temp }}/oci-template-runtime-build.json
           FERROBOX_OCI_E2E_OUTPUT: ${{ runner.temp }}/oci-kvm-e2e.json
         run: |
-          sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_CHROOT_BASE,FERROBOX_RUNTIME_ROOT,FERROBOX_API_BINARY,FERROBOX_OCI_ROOTFS_EVIDENCE,FERROBOX_OCI_TEMPLATE_RECORD,FERROBOX_OCI_E2E_OUTPUT,GITHUB_SHA \
+          printf 'catalog selection must replace this fallback\n' >"${FERROBOX_ROOTFS}"
+          sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_TEMPLATE_STORE,FERROBOX_CHROOT_BASE,FERROBOX_RUNTIME_ROOT,FERROBOX_API_BINARY,FERROBOX_OCI_ROOTFS_EVIDENCE,FERROBOX_OCI_TEMPLATE_RECORD,FERROBOX_OCI_E2E_OUTPUT,GITHUB_SHA \
             bash scripts/e2e-oci-kvm.sh
           jq --exit-status \
             --arg sha "${GITHUB_SHA}" \
@@ -407,7 +409,10 @@ jobs:
               (.template_spec_digest | test("^sha256:[0-9a-f]{64}$")) and
               .template_source_reference == $image and
               .template_source_digest == .manifest_digest and
-              (.checks | length) == 12 and
+              .runtime_selection.requested_template_id == .template_id and
+              .runtime_selection.locations_distinct == true and
+              .runtime_selection.configured_rootfs_size_bytes < 4096 and
+              (.checks | length) == 15 and
               (.python_version | startswith("oci-python="))
             ' "${RUNNER_TEMP}/oci-kvm-e2e.json" >/dev/null
 

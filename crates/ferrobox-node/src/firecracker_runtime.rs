@@ -36,6 +36,7 @@ use crate::{
     network::{NetworkLease, NetworkManager},
     rootfs::{clone_readonly_asset, clone_rootfs, verify_regular_file},
     snapshot::{SnapshotArtifact, SnapshotStageRequest, SnapshotStore},
+    template_runtime::{RuntimeTemplateAssets, TemplateRuntimeResolver},
     vsock::GuestConnector,
 };
 
@@ -50,6 +51,7 @@ pub struct FirecrackerRuntimeConfig {
     pub jailer_binary: PathBuf,
     pub kernel_image: PathBuf,
     pub rootfs_template: PathBuf,
+    pub template_store: Option<PathBuf>,
     pub snapshot_root: Option<PathBuf>,
     pub chroot_base: PathBuf,
     pub runtime_root: PathBuf,
@@ -83,6 +85,13 @@ impl FirecrackerRuntimeConfig {
             return Err(RuntimeError::invalid("runtime paths must be absolute"));
         }
         if self
+            .template_store
+            .as_ref()
+            .is_some_and(|path| !path.is_absolute())
+        {
+            return Err(RuntimeError::invalid("template store must be absolute"));
+        }
+        if self
             .snapshot_root
             .as_ref()
             .is_some_and(|path| !path.is_absolute())
@@ -109,6 +118,7 @@ pub struct FirecrackerRuntime {
     config: FirecrackerRuntimeConfig,
     network: NetworkManager,
     snapshot_store: SnapshotStore,
+    template_resolver: Option<TemplateRuntimeResolver>,
     sandboxes: RwLock<HashMap<SandboxId, Arc<Mutex<FirecrackerSandbox>>>>,
     snapshots: RwLock<HashMap<SnapshotId, Arc<Mutex<SnapshotArtifact>>>>,
     ready_pool: Mutex<Vec<SandboxHandle>>,
@@ -169,10 +179,17 @@ impl FirecrackerRuntime {
             &config.kernel_image,
         )
         .await?;
+        let template_resolver = config.template_store.as_ref().map(|root| {
+            TemplateRuntimeResolver::new(
+                root.clone(),
+                format!("sha256:{}", snapshot_store.kernel_sha256()),
+            )
+        });
         Ok(Self {
             config,
             network: NetworkManager,
             snapshot_store,
+            template_resolver,
             sandboxes: RwLock::new(HashMap::new()),
             snapshots: RwLock::new(HashMap::new()),
             ready_pool: Mutex::new(Vec::new()),
@@ -228,6 +245,24 @@ impl FirecrackerRuntime {
 
     pub async fn ready_pool_len(&self) -> usize {
         self.ready_pool.lock().await.len()
+    }
+
+    async fn resolve_template_assets(
+        &self,
+        template_id: &str,
+    ) -> Result<RuntimeTemplateAssets, RuntimeError> {
+        if template_id.starts_with("tpl-") {
+            return self
+                .template_resolver
+                .as_ref()
+                .ok_or_else(|| RuntimeError::invalid("template catalog is not configured"))?
+                .resolve(template_id)
+                .await;
+        }
+        Ok(RuntimeTemplateAssets {
+            kernel: self.config.kernel_image.clone(),
+            rootfs: self.config.rootfs_template.clone(),
+        })
     }
 
     pub async fn firecracker_rss_kib(&self) -> Result<u64, RuntimeError> {
@@ -979,7 +1014,9 @@ impl FirecrackerRuntime {
     async fn create_fresh(&self, spec: SandboxSpec) -> Result<SandboxHandle, RuntimeError> {
         spec.validate()
             .map_err(|error| RuntimeError::invalid(error.to_string()))?;
-        let snapshot_compatible = spec.cpu_count == 1
+        let assets = self.resolve_template_assets(&spec.template_id).await?;
+        let snapshot_compatible = spec.template_id == "python"
+            && spec.cpu_count == 1
             && spec.memory_mb == 512
             && spec.network == ferrobox_core::NetworkMode::Disabled;
         let restore = if snapshot_compatible && self.snapshot_available().await {
@@ -997,7 +1034,7 @@ impl FirecrackerRuntime {
         };
         let capture_template =
             snapshot_compatible && self.config.snapshot_root.is_some() && restore.is_none();
-        self.launch(spec, SandboxId::new(), restore, capture_template)
+        self.launch(spec, SandboxId::new(), assets, restore, capture_template)
             .await
     }
 
@@ -1012,9 +1049,14 @@ impl FirecrackerRuntime {
             rootfs_path: artifact.rootfs_path(),
             captured_guest_token: Some(captured_guest_token),
         };
+        let assets = RuntimeTemplateAssets {
+            kernel: self.config.kernel_image.clone(),
+            rootfs: self.config.rootfs_template.clone(),
+        };
         self.launch(
             artifact.spec().clone(),
             SandboxId::new(),
+            assets,
             Some(restore),
             false,
         )
@@ -1025,12 +1067,15 @@ impl FirecrackerRuntime {
         &self,
         spec: SandboxSpec,
         id: SandboxId,
+        assets: RuntimeTemplateAssets,
         restore: Option<RestoreAssets>,
         capture_template: bool,
     ) -> Result<SandboxHandle, RuntimeError> {
         let jailer_id = id.clone();
         let chroot_root = self.jail_root(&id)?;
-        let result = self.launch_inner(spec, id, restore, capture_template).await;
+        let result = self
+            .launch_inner(spec, id, assets, restore, capture_template)
+            .await;
         if result.is_err() {
             if let Err(cleanup_error) = self.cleanup_chroot(&chroot_root).await {
                 tracing::warn!(
@@ -1054,6 +1099,7 @@ impl FirecrackerRuntime {
         &self,
         spec: SandboxSpec,
         id: SandboxId,
+        assets: RuntimeTemplateAssets,
         restore: Option<RestoreAssets>,
         capture_template: bool,
     ) -> Result<SandboxHandle, RuntimeError> {
@@ -1077,11 +1123,11 @@ impl FirecrackerRuntime {
         fs::create_dir_all(&jail_snapshot_path)
             .await
             .map_err(|error| RuntimeError::internal(format!("create snapshot dir: {error}")))?;
-        clone_readonly_asset(&self.config.kernel_image, &kernel_path)
+        clone_readonly_asset(&assets.kernel, &kernel_path)
             .await
             .map_err(|error| RuntimeError::internal(format!("clone kernel: {error}")))?;
         let rootfs_source = restore.as_ref().map_or_else(
-            || self.config.rootfs_template.clone(),
+            || assets.rootfs.clone(),
             |assets| assets.rootfs_path.clone(),
         );
         clone_rootfs(&rootfs_source, &rootfs_path)
