@@ -13,6 +13,7 @@ rootfs="${FERROBOX_ROOTFS:?FERROBOX_ROOTFS is required}"
 chroot_base="${FERROBOX_CHROOT_BASE:?FERROBOX_CHROOT_BASE is required}"
 runtime_root="${FERROBOX_RUNTIME_ROOT:?FERROBOX_RUNTIME_ROOT is required}"
 rootfs_evidence="${FERROBOX_OCI_ROOTFS_EVIDENCE:?FERROBOX_OCI_ROOTFS_EVIDENCE is required}"
+template_record="${FERROBOX_OCI_TEMPLATE_RECORD:?FERROBOX_OCI_TEMPLATE_RECORD is required}"
 output="${FERROBOX_OCI_E2E_OUTPUT:?FERROBOX_OCI_E2E_OUTPUT is required}"
 api_binary="${FERROBOX_API_BINARY:-target/debug/ferrobox-api}"
 api_url="${FERROBOX_API_URL:-http://127.0.0.1:18084}"
@@ -107,7 +108,7 @@ api_call() {
 for path in "${firecracker}" "${jailer}" "${api_binary}"; do
     test -x "${path}"
 done
-for path in "${kernel}" "${rootfs}" "${rootfs_evidence}"; do
+for path in "${kernel}" "${rootfs}" "${rootfs_evidence}" "${template_record}"; do
     test -f "${path}"
 done
 test -c /dev/kvm
@@ -121,6 +122,25 @@ source_digest="$(jq -er '.source.digest' "${rootfs_evidence}")"
 manifest_digest="$(jq -er '.manifest.digest' "${rootfs_evidence}")"
 [[ "${source_reference}" == *"@${source_digest}" ]]
 [[ "${platform}" == "linux/amd64" ]]
+
+template_id="$(jq -er '.record.template_id' "${template_record}")"
+template_spec_digest="$(jq -er '.record.spec_digest' "${template_record}")"
+template_source_reference="$(jq -er '.record.descriptor.source.reference' "${template_record}")"
+template_source_digest="$(jq -er '.record.descriptor.source.digest' "${template_record}")"
+template_kernel_digest="$(jq -er '.record.descriptor.artifacts.kernel.digest' "${template_record}")"
+template_rootfs_digest="$(jq -er '.record.descriptor.artifacts.rootfs.digest' "${template_record}")"
+template_kernel_location="$(jq -er '.record.locations.kernel' "${template_record}")"
+template_rootfs_location="$(jq -er '.record.locations.rootfs' "${template_record}")"
+jq --exit-status '.record.status == "ready" and .verification.valid == true' \
+    "${template_record}" >/dev/null
+[[ "${template_id}" =~ ^tpl-[0-9a-f]{60}$ ]]
+[[ "${template_spec_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]
+[[ "${template_source_reference}" == "${source_reference}" ]]
+[[ "${template_source_digest}" == "${manifest_digest}" ]]
+[[ "${template_kernel_location}" == "$(realpath "${kernel}")" ]]
+[[ "${template_rootfs_location}" == "$(realpath "${rootfs}")" ]]
+[[ "${template_kernel_digest}" == "sha256:$(sha256sum "${kernel}" | awk '{print $1}')" ]]
+[[ "${template_rootfs_digest}" == "sha256:$(sha256sum "${rootfs}" | awk '{print $1}')" ]]
 
 before_pids="$(pgrep -x firecracker || true)"
 "${api_binary}" \
@@ -270,6 +290,10 @@ jq -n \
     --arg platform "${platform}" \
     --arg source_digest "${source_digest}" \
     --arg manifest_digest "${manifest_digest}" \
+    --arg template_id "${template_id}" \
+    --arg template_spec_digest "${template_spec_digest}" \
+    --arg template_source_reference "${template_source_reference}" \
+    --arg template_source_digest "${template_source_digest}" \
     --arg sandbox_id "${completed_id}" \
     --arg python_version "${python_version}" \
     '{
@@ -279,10 +303,16 @@ jq -n \
         platform: $platform,
         source_digest: $source_digest,
         manifest_digest: $manifest_digest,
+        template_id: $template_id,
+        template_spec_digest: $template_spec_digest,
+        template_source_reference: $template_source_reference,
+        template_source_digest: $template_source_digest,
         sandbox_id: $sandbox_id,
         python_version: $python_version,
         checks: [
             "digest-bound-rootfs",
+            "content-derived-template-identity",
+            "template-runtime-artifact-match",
             "microvm-ready",
             "uid-1000-python",
             "argv-execution",

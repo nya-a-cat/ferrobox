@@ -8,10 +8,12 @@ on:
       - Cargo.toml
       - rust-toolchain.toml
       - crates/ferrobox-api/**
+      - crates/ferrobox-cli/**
       - crates/ferrobox-core/**
       - crates/ferrobox-guest/**
       - crates/ferrobox-node/**
       - crates/ferrobox-protocol/**
+      - crates/ferrobox-template/**
       - scripts/build-e2fsprogs.sh
       - scripts/build-oci-rootfs.sh
       - scripts/e2e-oci-kvm.sh
@@ -84,10 +86,10 @@ jobs:
           test -r /dev/kvm
           test -w /dev/kvm
 
-      - name: Build API and static guest
+      - name: Build API, CLI and static guest
         run: |
           cargo generate-lockfile
-          cargo build -p ferrobox-api --locked
+          cargo build -p ferrobox-api -p ferrobox-cli --locked
           cargo build -p ferrobox-guest \
             --release \
             --target x86_64-unknown-linux-musl \
@@ -275,6 +277,110 @@ jobs:
               sudo tee /sys/fs/cgroup/cgroup.subtree_control >/dev/null || true
           fi
 
+      - name: Bind reproducible OCI artifacts to immutable template identity
+        run: |
+          set -euo pipefail
+          source_digest="$(jq -er '.manifest.digest' \
+            "${RUNNER_TEMP}/oci-rootfs-evidence/oci-rootfs-evidence.json")"
+          kernel_sha256="$(sed -n 's/^kernel_sha256=//p' \
+            "${RUNNER_TEMP}/oci-kernel.manifest")"
+          [[ "${source_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "${kernel_sha256}" =~ ^[0-9a-f]{64}$ ]]
+
+          target/debug/ferrobox template \
+            --store "${RUNNER_TEMP}/oci-template-build-store" \
+            build \
+            --name python \
+            --version 3.11-slim-bookworm \
+            --alias oci-python \
+            --source-kind oci \
+            --source-reference "${FERROBOX_OCI_IMAGE}" \
+            --source-digest "${source_digest}" \
+            --target-arch amd64 \
+            --kernel "${RUNNER_TEMP}/vmlinux" \
+            --rootfs "${RUNNER_TEMP}/oci-python.ext4" \
+            >"${RUNNER_TEMP}/oci-template-build.json"
+
+          target/debug/ferrobox template \
+            --store "${RUNNER_TEMP}/oci-template-runtime-store" \
+            build \
+            --name python \
+            --version 3.11-slim-bookworm \
+            --alias oci-python \
+            --source-kind oci \
+            --source-reference "${FERROBOX_OCI_IMAGE}" \
+            --source-digest "${source_digest}" \
+            --target-arch amd64 \
+            --kernel /mnt/ferrobox-oci/images/vmlinux \
+            --rootfs /mnt/ferrobox-oci/images/oci-python.ext4 \
+            >"${RUNNER_TEMP}/oci-template-runtime-build.json"
+
+          template_id="$(jq -er '.record.template_id' \
+            "${RUNNER_TEMP}/oci-template-runtime-build.json")"
+          target/debug/ferrobox template \
+            --store "${RUNNER_TEMP}/oci-template-runtime-store" \
+            inspect "${template_id}" \
+            >"${RUNNER_TEMP}/oci-template-runtime-inspect.json"
+
+          jq -n \
+            --arg repository "${GITHUB_REPOSITORY}" \
+            --arg commit "${GITHUB_SHA}" \
+            --arg run_id "${GITHUB_RUN_ID}" \
+            --arg image "${FERROBOX_OCI_IMAGE}" \
+            --arg source_digest "${source_digest}" \
+            --arg kernel_sha256 "${kernel_sha256}" \
+            --slurpfile build "${RUNNER_TEMP}/oci-template-build.json" \
+            --slurpfile runtime "${RUNNER_TEMP}/oci-template-runtime-build.json" \
+            --slurpfile inspect "${RUNNER_TEMP}/oci-template-runtime-inspect.json" \
+            --slurpfile rootfs "${RUNNER_TEMP}/oci-rootfs-evidence/oci-rootfs-evidence.json" '
+              {
+                schema_version: 1,
+                contract_version: "ferrobox-oci-template-evidence-v1",
+                repository: $repository,
+                commit: $commit,
+                run_id: $run_id,
+                template_id: $runtime[0].record.template_id,
+                spec_digest: $runtime[0].record.spec_digest,
+                source: $runtime[0].record.descriptor.source,
+                platform: $runtime[0].record.descriptor.platform,
+                artifacts: $runtime[0].record.descriptor.artifacts,
+                runtime_locations: $runtime[0].record.locations,
+                deterministic_identity_across_locations: (
+                  $build[0].record.template_id == $runtime[0].record.template_id and
+                  $build[0].record.spec_digest == $runtime[0].record.spec_digest and
+                  $build[0].record.locations != $runtime[0].record.locations
+                ),
+                runtime_artifacts_verified: $inspect[0].verification.valid,
+                checks: [
+                  "digest-pinned-source",
+                  "path-independent-template-identity",
+                  "runtime-locator-inspection",
+                  "kernel-digest-match",
+                  "rootfs-digest-match"
+                ]
+              }
+              | select(
+                  .schema_version == 1 and
+                  .source.reference == $image and
+                  .source.digest == $source_digest and
+                  (.template_id | test("^tpl-[0-9a-f]{60}$")) and
+                  (.spec_digest | test("^sha256:[0-9a-f]{64}$")) and
+                  .platform.operating_system == "linux" and
+                  .platform.architecture == "x86_64" and
+                  .platform.runtime == "firecracker" and
+                  .artifacts.kernel.digest == ("sha256:" + $kernel_sha256) and
+                  .artifacts.rootfs.digest == ("sha256:" + $rootfs[0].ext4.sha256) and
+                  .artifacts.rootfs.size_bytes == $rootfs[0].ext4.size and
+                  .runtime_locations.kernel == "/mnt/ferrobox-oci/images/vmlinux" and
+                  .runtime_locations.rootfs == "/mnt/ferrobox-oci/images/oci-python.ext4" and
+                  .deterministic_identity_across_locations == true and
+                  .runtime_artifacts_verified == true and
+                  (.checks | length) == 5
+                )
+            ' >"${RUNNER_TEMP}/oci-template-evidence.json"
+          jq --exit-status '.contract_version == "ferrobox-oci-template-evidence-v1"' \
+            "${RUNNER_TEMP}/oci-template-evidence.json" >/dev/null
+
       - name: Run OCI-derived Firecracker API end-to-end
         env:
           FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
@@ -285,9 +391,10 @@ jobs:
           FERROBOX_RUNTIME_ROOT: /mnt/ferrobox-oci/runtime
           FERROBOX_API_BINARY: target/debug/ferrobox-api
           FERROBOX_OCI_ROOTFS_EVIDENCE: ${{ runner.temp }}/oci-rootfs-evidence/oci-rootfs-evidence.json
+          FERROBOX_OCI_TEMPLATE_RECORD: ${{ runner.temp }}/oci-template-runtime-build.json
           FERROBOX_OCI_E2E_OUTPUT: ${{ runner.temp }}/oci-kvm-e2e.json
         run: |
-          sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_CHROOT_BASE,FERROBOX_RUNTIME_ROOT,FERROBOX_API_BINARY,FERROBOX_OCI_ROOTFS_EVIDENCE,FERROBOX_OCI_E2E_OUTPUT,GITHUB_SHA \
+          sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_CHROOT_BASE,FERROBOX_RUNTIME_ROOT,FERROBOX_API_BINARY,FERROBOX_OCI_ROOTFS_EVIDENCE,FERROBOX_OCI_TEMPLATE_RECORD,FERROBOX_OCI_E2E_OUTPUT,GITHUB_SHA \
             bash scripts/e2e-oci-kvm.sh
           jq --exit-status \
             --arg sha "${GITHUB_SHA}" \
@@ -296,7 +403,11 @@ jobs:
               .github_sha == $sha and
               .image_reference == $image and
               .platform == "linux/amd64" and
-              (.checks | length) == 10 and
+              (.template_id | test("^tpl-[0-9a-f]{60}$")) and
+              (.template_spec_digest | test("^sha256:[0-9a-f]{64}$")) and
+              .template_source_reference == $image and
+              .template_source_digest == .manifest_digest and
+              (.checks | length) == 12 and
               (.python_version | startswith("oci-python="))
             ' "${RUNNER_TEMP}/oci-kvm-e2e.json" >/dev/null
 
@@ -329,6 +440,10 @@ jobs:
             ${{ runner.temp }}/oci-rootfs-evidence
             ${{ runner.temp }}/oci-rootfs-rebuild-evidence
             ${{ runner.temp }}/oci-rootfs-reproducibility.json
+            ${{ runner.temp }}/oci-template-build.json
+            ${{ runner.temp }}/oci-template-runtime-build.json
+            ${{ runner.temp }}/oci-template-runtime-inspect.json
+            ${{ runner.temp }}/oci-template-evidence.json
             ${{ runner.temp }}/oci-kvm-api-failure.json
             ${{ runner.temp }}/oci-kvm-e2e.json
 
