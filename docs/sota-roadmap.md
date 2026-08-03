@@ -139,10 +139,16 @@ generated clients, with per-language dependency locks and sanitized aggregate
 evidence. Its first attempt,
 [run 30774266980](https://github.com/nya-a-cat/ferrobox/actions/runs/30774266980),
 passed Go, Python, TypeScript, and generated-source immutability while isolating
-C#, Java, Kotlin, and Rust codegen/cache blockers. A wire-compatible named
-discriminator/default/cache correction is awaiting its GitHub rerun. The
-OpenAPI and SDK rows remain Partial. Stable language packages, diagnostics,
-ingress, and richer egress endpoints are outstanding.
+C#, Java, Kotlin, and Rust codegen/cache blockers.
+[Run 30774849266](https://github.com/nya-a-cat/ferrobox/actions/runs/30774849266)
+removed the Java and Rust source-generation failures, repeated the three passing
+clients, and preserved generated-source immutability. It narrowed the remaining
+set to C#/Rust tagged-union runtime deserialization, Java's dynamic offline
+Surefire provider, and Kotlin external-runtime prefetch. The next gate uses a
+strictly audited code-generation projection, explicit provider digest evidence,
+and corrected Gradle configuration resolution. The OpenAPI and SDK rows remain
+Partial pending one seven-language passing run. Stable language packages,
+diagnostics, ingress, and richer egress endpoints are outstanding.
 
 OCI image parity now has a verified public-image slice. Runs
 [30769681608](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681608),

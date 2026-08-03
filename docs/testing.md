@@ -43,14 +43,17 @@ passed formatting, Clippy, the Skill gate, and the extended CLI lifecycle E2E
 at commit `4b3daae`. Its state sequence was running, paused, rejected execution
 with HTTP 409, resumed, running, then deleted.
 
-The OpenAPI gate uses `openapi/ferrobox-v1.json` as the common input for the
-official generator, the exact source-route comparison, and seven black-box
-generated clients. It retains a structural evidence document, seven sanitized
-runtime documents, one aggregate matrix, the shared sanitized audit log,
-dependency manifests, a toolchain record, the generator manifest, and all seven
-generated source trees. It compares both generated trees again after runtime
-to prove that harness builds did not alter the source evidence. See
-[`openapi.md`](openapi.md) for the credential and supply-chain boundary.
+The OpenAPI gate uses `openapi/ferrobox-v1.json` as the authoritative input for
+validation and exact source-route comparison. A reviewed deterministic merge
+patch derives the code-generation view consumed by seven black-box generated
+clients. The gate recalculates that projection from the retained overlay and
+records both SHA-256 values. It retains a structural evidence document, seven
+sanitized runtime documents, one aggregate matrix, the shared sanitized audit
+log, dependency manifests, a toolchain record, the generator manifest, the
+overlay, the projected document, and all seven generated source trees. It
+compares both generated trees again after runtime to prove that harness builds
+did not alter the source evidence. See [`openapi.md`](openapi.md) for the
+credential and supply-chain boundary.
 
 [Standard CI run 30766020434](https://github.com/nya-a-cat/ferrobox/actions/runs/30766020434)
 and independent
@@ -77,7 +80,20 @@ gate. C# reached the API then failed its anonymous-union converter; Java and
 Rust rejected invalid generated source; Kotlin wrote a lock but lacked cached
 runtime JARs for offline execution. The follow-up keeps the wire contract and
 uses named discriminated variants, a typed inline `cwd` default, and explicit
-Gradle runtime-classpath prefetch. Its passing result is pending.
+Gradle runtime-classpath prefetch.
+
+[Diagnostic run 30774849266](https://github.com/nya-a-cat/ferrobox/actions/runs/30774849266)
+at commit `2f0540d` again completed Go, Python, and TypeScript and passed both
+deterministic-generation and post-runtime immutability gates. C# and Rust now
+compiled and reached runtime deserialization, exposing target-specific handling
+of the strict tagged union. Java compiled and stopped at its offline Surefire
+provider lookup. Kotlin's prefetch resolved the local unbuilt classes directory
+alongside external dependencies. Artifact `8841711323`, archive digest
+`sha256:d9cd88cef12f2aacbc3012f29359a2c6802956257cfe0833f24ba895f37a7293`,
+retains the diagnostic evidence through 2026-11-01. The next run uses an audited
+flat code-generation projection, explicit Surefire provider prefetch with a
+retained JAR digest, and Kotlin external-runtime resolution. A passing result is
+pending.
 
 ## OCI image KVM CI
 

@@ -1,0 +1,37 @@
+{
+  "components": {
+    "schemas": {
+      "ExecTermination": {
+        "oneOf": null,
+        "discriminator": null,
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "exited",
+              "signaled",
+              "timed_out",
+              "output_limit_exceeded"
+            ]
+          },
+          "exit_code": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Present only when kind is exited."
+          },
+          "signal": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Present only when kind is signaled."
+          }
+        },
+        "description": "Code-generation projection of the strict command-termination union."
+      }
+    }
+  }
+}

@@ -26,22 +26,32 @@ requires a new reviewed contract and migration note.
 
 Command termination keeps the existing tagged JSON objects and gives every
 variant a named schema, a singleton `kind` enum, and an explicit discriminator
-mapping. This is equivalent to the prior anonymous `oneOf`/`const` validation
-while giving all seven generators stable model names. The optional `cwd`
-property keeps its `/home/sandbox` default and repeats the `SandboxPath` string
-constraints inline so Java receives a valid quoted string initializer. Neither
-representation changes an accepted request or emitted response.
+mapping. The authoritative contract accepts exactly the four tagged variants.
+OpenAPI Generator v7.22.0 misgenerates this strict union in its C# and Rust
+targets. `openapi/ferrobox-codegen-overlay.json` is a reviewed RFC 7396 merge
+patch used only for SDK generation. It projects `ExecTermination` into a closed
+object with one required four-value `kind` enum plus optional `exit_code` and
+`signal` fields. `scripts/openapi_codegen_projection.py` refuses authoritative
+contract drift, overlay drift, and an unexpected projected shape. The strict
+contract remains the HTTP validation boundary, and the emitted JSON shape is
+unchanged.
+
+The optional `cwd` property keeps its `/home/sandbox` default and repeats the
+`SandboxPath` string constraints inline so Java receives a valid quoted string
+initializer. This representation preserves the accepted request set.
 
 ## GitHub conformance
 
 Standard CI uses three independent checks:
 
-1. OpenAPI Generator validates the document and emits C#, Go, Java, Kotlin,
-   Python, Rust, and TypeScript Fetch source trees from the same input.
+1. OpenAPI Generator validates the authoritative document. The deterministic
+   projector derives the reviewed code-generation view and emits C#, Go, Java,
+   Kotlin, Python, Rust, and TypeScript Fetch source trees from it.
 2. `scripts/check-openapi.py` compares the specification with the exact Axum
    route/method set, resolves every local reference, checks operation IDs,
    request bodies, path parameters, error responses, credential scopes, and
-   sensitive fields, then hashes each generated source tree.
+   sensitive fields, recalculates the projection from the retained overlay,
+   then hashes each generated source tree.
 3. Generated C#, Go, Java, Kotlin, Python, Rust, and TypeScript clients share
    one loopback-only API process. Every client completes create, inspect, typed
    command execution, lossless output, file roundtrip, delete, stale-handle
@@ -51,19 +61,22 @@ Each CI run generates all seven client trees twice in separate runner-temporary
 directories and requires a recursive byte comparison before and after runtime
 conformance. The C# project GUID is fixed. Every runtime operates on a temporary
 copy, so dependency resolution, harness sources, build products, and caches do
-not mutate either generated tree. Hidden generator metadata is included in the
-artifact after a path-name review.
+not mutate either generated tree. The retained hidden metadata includes the
+exact merge patch and projected OpenAPI document; structural evidence records
+their SHA-256 values. Hidden generator metadata is included in the artifact
+after a path-name review.
 
 The retained SDK matrix contains one sanitized schema-1 record per language,
 the seven distinct UUIDv7 sandbox identities, the shared audit-log hash, and
 the SHA-256 of each dependency manifest or lock. Python uses a fixed
 `exclude-newer` cutoff. C# uses NuGet locked mode; Go uses its checked-in
-`go.sum`; Java resolves online then tests offline; Kotlin resolves its complete
-runtime classpath while writing a strict Gradle lock, then builds and runs
-offline; Rust fetches a generated `Cargo.lock` then runs offline; TypeScript
-uses an exact pnpm package graph and runs the compiled CommonJS output under
-Node. The process backend supplies deterministic API behavior and carries no
-workload-isolation claim.
+`go.sum`; Java resolves online, explicitly prefetches the Surefire JUnit
+Platform provider at `2.22.2`, records its JAR SHA-256, then tests offline;
+Kotlin resolves its external runtime configuration while writing a strict
+Gradle lock, then builds and runs offline; Rust fetches a generated
+`Cargo.lock` then runs offline; TypeScript uses an exact pnpm package graph and
+runs the compiled CommonJS output under Node. The process backend supplies
+deterministic API behavior and carries no workload-isolation claim.
 
 ## Pinned tooling
 
@@ -120,8 +133,22 @@ and Rust, an unquoted Java default attached through `allOf`, and Kotlin runtime
 artifacts that the dependency-report task had not downloaded. Artifact
 `8841521780` retains the partial evidence with archive digest
 `sha256:3d4a7b610cb95caaca4e3860fe822e8112be0adf3689fe3f5a7a1e1c5535f64f`.
-The named discriminator, inline typed default, and runtime-classpath prefetch
-are pending the next GitHub verification run.
+The named variants and inline typed default removed the original Java and Rust
+source-generation failures in
+[run 30774849266](https://github.com/nya-a-cat/ferrobox/actions/runs/30774849266)
+at commit `2f0540d`. Go, Python, and TypeScript again completed the scenario, and
+the generated trees remained byte-identical. C# and Rust compiled, then exposed
+two target-specific discriminator deserialization defects. Java compiled and
+reached its offline test phase, where Maven lacked the dynamically selected
+Surefire JUnit Platform provider. Kotlin's prefetch included the unbuilt local
+classes directory. Artifact `8841711323` retains this narrowed diagnostic with
+archive digest
+`sha256:d9cd88cef12f2aacbc3012f29359a2c6802956257cfe0833f24ba895f37a7293`;
+it expires on 2026-11-01.
+
+The current follow-up uses the audited flat code-generation projection,
+explicit Surefire provider prefetch with digest evidence, and the external
+Kotlin runtime configuration. Its passing GitHub result is pending.
 
 ## Current parity boundary
 

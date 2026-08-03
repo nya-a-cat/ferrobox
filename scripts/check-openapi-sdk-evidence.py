@@ -27,7 +27,11 @@ LOCK_FILES = {
         "csharp-harness.packages.lock.json",
     ),
     "go": ("go.sum",),
-    "java": ("java-pom.xml", "java-dependency-tree.txt"),
+    "java": (
+        "java-pom.xml",
+        "java-dependency-tree.txt",
+        "java-surefire-provider.sha256",
+    ),
     "kotlin": ("kotlin-gradle.lockfile", "kotlin-gradle-wrapper.properties"),
     "python": ("python-uv.lock",),
     "rust": ("rust-Cargo.lock",),

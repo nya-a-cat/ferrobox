@@ -28,6 +28,9 @@ cleanup() {
         kill "${api_pid}" 2>/dev/null || true
         wait "${api_pid}" 2>/dev/null || true
     fi
+    if [[ -d "${work_dir}/go-mod-cache" ]]; then
+        chmod -R u+w -- "${work_dir}/go-mod-cache"
+    fi
     rm -rf -- "${work_dir}"
     return "${status}"
 }
@@ -125,6 +128,17 @@ run_java() {
         cd "${client}"
         mvn --batch-mode --no-transfer-progress --strict-checksums \
             -Dmaven.repo.local="${maven_repository}" dependency:go-offline
+        mvn --batch-mode --no-transfer-progress --strict-checksums \
+            -Dmaven.repo.local="${maven_repository}" \
+            org.apache.maven.plugins:maven-dependency-plugin:3.6.1:get \
+            -Dartifact=org.apache.maven.surefire:surefire-junit-platform:2.22.2 \
+            -Dtransitive=true
+        provider_path="${maven_repository}/org/apache/maven/surefire/surefire-junit-platform/2.22.2/surefire-junit-platform-2.22.2.jar"
+        test -f "${provider_path}"
+        printf 'artifact=%s\nsha256=%s\n' \
+            'org.apache.maven.surefire:surefire-junit-platform:2.22.2' \
+            "$(sha256sum "${provider_path}" | cut -d' ' -f1)" \
+            >"${locks_dir}/java-surefire-provider.sha256"
         mvn --batch-mode --no-transfer-progress --offline \
             -Dmaven.repo.local="${maven_repository}" \
             -DoutputFile="${locks_dir}/java-dependency-tree.txt" dependency:tree

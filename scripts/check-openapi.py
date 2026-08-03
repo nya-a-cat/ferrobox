@@ -10,6 +10,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from openapi_codegen_projection import project_document
+
 
 EXPECTED_OPERATIONS = {
     ("get", "/healthz"): ("health", "none"),
@@ -261,6 +263,48 @@ def hash_client_tree(root: Path) -> dict[str, dict[str, Any]]:
     return result
 
 
+def check_codegen_projection(
+    root: Path, authoritative: dict[str, Any]
+) -> dict[str, Any]:
+    if not root.is_dir():
+        fail(f"generated client root does not exist: {root}")
+    expected_files = {
+        ".ferrobox-codegen-openapi.json",
+        ".ferrobox-codegen-overlay.json",
+    }
+    actual_files = {path.name for path in root.iterdir() if path.is_file()}
+    if actual_files != expected_files:
+        fail(
+            "generated-root metadata drift: "
+            f"missing={sorted(expected_files - actual_files)}, "
+            f"extra={sorted(actual_files - expected_files)}"
+        )
+
+    overlay_path = root / ".ferrobox-codegen-overlay.json"
+    projection_path = root / ".ferrobox-codegen-openapi.json"
+    overlay_raw = overlay_path.read_bytes()
+    projection_raw = projection_path.read_bytes()
+    try:
+        overlay = json.loads(overlay_raw)
+        projection = json.loads(projection_raw)
+    except json.JSONDecodeError as error:
+        fail(f"invalid generated-root projection metadata: {error}")
+    if not isinstance(overlay, dict) or not isinstance(projection, dict):
+        fail("generated-root projection metadata must contain JSON objects")
+
+    expected_projection = project_document(authoritative, overlay)
+    if projection != expected_projection:
+        fail("retained code-generation projection does not match its merge patch")
+    kinds = projection["components"]["schemas"]["ExecTermination"]["properties"][
+        "kind"
+    ]["enum"]
+    return {
+        "overlay_sha256": hashlib.sha256(overlay_raw).hexdigest(),
+        "projection_sha256": hashlib.sha256(projection_raw).hexdigest(),
+        "termination_kinds": kinds,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("spec", type=Path)
@@ -288,6 +332,7 @@ def main() -> None:
             f"extra={sorted(source_operations - set(EXPECTED_OPERATIONS))}"
         )
     schema_count = check_schemas(document)
+    codegen_projection = check_codegen_projection(arguments.generated_root, document)
     generated_clients = hash_client_tree(arguments.generated_root)
     scopes = {"none": 0, "sandbox": 0, "snapshot": 0}
     for _, scope in EXPECTED_OPERATIONS.values():
@@ -302,6 +347,7 @@ def main() -> None:
         "operation_ids": operation_ids,
         "schema_count": schema_count,
         "credential_scopes": scopes,
+        "codegen_projection": codegen_projection,
         "generated_clients": generated_clients,
     }
     arguments.output.write_text(
