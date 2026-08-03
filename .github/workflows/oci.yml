@@ -120,7 +120,7 @@ jobs:
             >"${RUNNER_TEMP}/safe-extract-evidence.json"
           jq --exit-status '
             .schema_version == 1 and
-            (.checks | length) == 9
+            (.checks | length) == 11
           ' "${RUNNER_TEMP}/safe-extract-evidence.json" >/dev/null
 
       - name: Require nested KVM

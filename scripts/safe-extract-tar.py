@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import posixpath
+import re
 import shutil
 import tarfile
 from pathlib import Path, PurePosixPath
@@ -16,9 +17,16 @@ def fail(message: str) -> None:
     raise ValueError(message)
 
 
+SYSTEMD_HEX_ESCAPE = re.compile(r"\\x[0-9a-fA-F]{2}")
+
+
+def has_unsafe_backslash(value: str) -> bool:
+    return "\\" in SYSTEMD_HEX_ESCAPE.sub("", value)
+
+
 def normalized_name(member: tarfile.TarInfo) -> str:
     name = member.name
-    if not name or "\x00" in name or "\\" in name:
+    if not name or "\x00" in name or has_unsafe_backslash(name):
         fail(f"unsafe archive member name: {name!r}")
     if len(name.encode("utf-8")) > 4096:
         fail("archive member name exceeds 4096 bytes")
@@ -82,7 +90,7 @@ def inspect_members(
 
         if member.issym() or member.islnk():
             link = member.linkname
-            if not link or "\x00" in link or "\\" in link:
+            if not link or "\x00" in link or has_unsafe_backslash(link):
                 fail(f"archive link has an unsafe target: {name!r}")
             if len(link.encode("utf-8")) > 4096:
                 fail(f"archive link target exceeds 4096 bytes: {name!r}")
@@ -115,6 +123,8 @@ def inspect_members(
 
 
 def extract(arguments: argparse.Namespace) -> dict[str, int | str]:
+    if os.name != "posix":
+        fail("archive extraction requires POSIX path semantics")
     archive_path = arguments.archive.resolve(strict=True)
     if not archive_path.is_file() or archive_path.is_symlink():
         fail("archive must be a regular, non-symlink file")

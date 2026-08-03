@@ -51,6 +51,32 @@ def main() -> None:
             raise AssertionError("safe fixture contents changed")
         checks.append("safe-file")
 
+        systemd_escape_archive = root / "systemd-escape.tar"
+        systemd_escape_name = "usr/lib/systemd/system/system-systemd\\x2dcryptsetup.slice"
+        with tarfile.open(systemd_escape_archive, "w") as archive:
+            add_bytes(archive, systemd_escape_name, b"systemd slice\n")
+        systemd_escape_destination = root / "systemd-escape"
+        systemd_escape = run(
+            extractor,
+            systemd_escape_archive,
+            systemd_escape_destination,
+        )
+        if systemd_escape.returncode != 0:
+            raise AssertionError(systemd_escape.stderr)
+        systemd_escape_file = systemd_escape_destination / systemd_escape_name
+        if systemd_escape_file.read_bytes() != b"systemd slice\n":
+            raise AssertionError("systemd hex-escaped filename changed")
+        checks.append("systemd-hex-escape-accepted")
+
+        unsafe_backslash_archive = root / "unsafe-backslash.tar"
+        with tarfile.open(unsafe_backslash_archive, "w") as archive:
+            add_bytes(archive, "..\\escape", b"escape")
+        require_rejected(
+            run(extractor, unsafe_backslash_archive, root / "unsafe-backslash"),
+            "unsafe-backslash",
+        )
+        checks.append("unsafe-backslash-rejected")
+
         traversal_archive = root / "traversal.tar"
         with tarfile.open(traversal_archive, "w") as archive:
             add_bytes(archive, "../escape", b"escape")
