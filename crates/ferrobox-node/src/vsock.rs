@@ -4,11 +4,15 @@ use ferrobox_protocol::guest::v1::guest_service_client::GuestServiceClient;
 #[cfg(unix)]
 use hyper_util::rt::TokioIo;
 use thiserror::Error;
+#[cfg(unix)]
 use tokio::{
     io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader},
     net::UnixStream,
 };
-use tonic::transport::{Channel, Endpoint};
+use tonic::transport::Channel;
+#[cfg(unix)]
+use tonic::transport::Endpoint;
+#[cfg(unix)]
 use tower::service_fn;
 
 const MAX_HANDSHAKE_LINE: usize = 128;
