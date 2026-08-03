@@ -147,14 +147,15 @@ rm -rf -- "${source_root}/.git"
 
 export LC_ALL=C
 export SOURCE_DATE_EPOCH="${release_epoch}"
+build_cflags="-O2 -g0 -ffile-prefix-map=${staging}=/usr/src/fsverity-utils -fdebug-prefix-map=${staging}=/usr/src/fsverity-utils"
 (
     cd -- "${source_root}"
     make \
         --jobs=2 \
         V=1 \
-        CFLAGS="-O2 -g0 -ffile-prefix-map=${staging}=/usr/src/fsverity-utils -fdebug-prefix-map=${staging}=/usr/src/fsverity-utils" \
+        CFLAGS="${build_cflags}" \
         >"${staging}/build.log" 2>&1
-    make V=1 check >"${staging}/check.log" 2>&1
+    make V=1 CFLAGS="${build_cflags}" check >"${staging}/check.log" 2>&1
 )
 
 install -d -m 0755 "${destination}/bin"
