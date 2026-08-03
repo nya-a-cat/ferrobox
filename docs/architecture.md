@@ -115,8 +115,11 @@ Artifact paths are host-local locators outside the identity calculation. Equal
 bytes and descriptors therefore converge on the same template identity across
 directories. `inspect` recalculates both artifact hashes and sizes. `delete`
 removes the catalog record and leaves the referenced inputs in place. The
-complete format, CLI, runtime selection, and security assumptions are specified
-in [Immutable template catalog](templates.md).
+`render` path resolves an alias or ID, validates the shared sandbox resource
+contract, and produces the exact create JSON with the immutable ID. It is a
+read-only planning operation; artifact measurement remains in the create path.
+The complete format, CLI, runtime selection, and security assumptions are
+specified in [Immutable template catalog](templates.md).
 
 The hosted OCI workflow registers one descriptor from build-stage locations
 and again from the actual KVM runtime locations. Equal identities prove path

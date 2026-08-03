@@ -6,11 +6,13 @@ byte-reproducible rootfs, registers the resulting kernel/rootfs pair, and
 verifies that the catalog record names the exact files used by the KVM
 lifecycle. The capability status is **Partial**: catalog lifecycle, integrity,
 public-OCI construction, exact runtime-artifact binding, and immutable-ID
-selection for direct Firecracker creates are verified. Hosted Btrfs source-asset
-fs-verity and real-KVM compatibility are also verified. Asynchronous build
-status, template-specific ready pools, other runtime providers, private-registry
-credential custody, distributed artifact delivery, and trusted fs-verity digest
-binding in the runtime identity contract remain open gates.
+selection for direct Firecracker creates are verified. Deterministic effective
+request rendering is implemented and awaits its GitHub evidence run. Hosted
+Btrfs source-asset fs-verity and real-KVM compatibility are also verified.
+Asynchronous build status, template-specific ready pools, other runtime
+providers, private-registry credential custody, distributed artifact delivery,
+and trusted fs-verity digest binding in the runtime identity contract remain
+open gates.
 
 ## Upstream semantics carried forward
 
@@ -104,11 +106,19 @@ List, inspect by alias or ID, and delete:
 ferrobox template list
 ferrobox template inspect python-3-12
 ferrobox template inspect tpl-<60-hex-characters>
+ferrobox template render python-3-12 \
+  --cpu 2 --memory-mb 1024 --ttl 600 --internet
 ferrobox template delete python-3-12
 ```
 
 Every command emits machine-readable JSON. `build` performs a complete artifact
-verification before returning `ready`.
+verification before returning `ready`. `render` validates the existing catalog
+record, resolves either input form to the immutable `tpl-...` ID, applies the
+same `SandboxSpec` limits and request serializer as `ferrobox create`, and emits
+the exact effective HTTP payload. Repeating the same render is byte-stable and
+leaves catalog state unchanged. The result includes
+`artifact_verification: "deferred_to_create"`; direct creation still performs
+the artifact integrity check immediately before launch.
 
 ## Runtime selection
 
@@ -138,8 +148,9 @@ For a `tpl-...` request, the node loads the exact content-derived ID, validates
 the descriptor and host architecture, requires the recorded kernel digest to
 equal the configured Firecracker/snapshot kernel digest, then streams the
 kernel and rootfs through SHA-256 before cloning them into the jail. Catalog
-aliases are reserved for build/list/inspect/delete administration. Existing
-legacy template names continue to select the configured kernel/rootfs.
+aliases are reserved for build/list/inspect/render/delete administration.
+Existing legacy template names continue to select the configured
+kernel/rootfs.
 
 Immutable-ID creates currently take the direct cold-boot path. The legacy
 `python` snapshot template and ready pool cannot satisfy a catalog-ID request.
@@ -156,6 +167,8 @@ fail with `501 unsupported`; corrupt, unreadable, or tampered records fail with
   operator and unwritable by the sandbox runtime UID.
 - External artifact changes become visible through `inspect` as digest and size
   mismatches.
+- `render` reads and validates catalog metadata, performs zero artifact hashing,
+  and exposes that deferred boundary in its output.
 - Runtime selection accepts only the content-derived ID. Each direct create
   revalidates the descriptor and artifact bytes before Firecracker launch.
 - Dynamic templates share the configured kernel digest so restored snapshots

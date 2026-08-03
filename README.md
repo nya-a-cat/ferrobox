@@ -76,7 +76,9 @@ digest-pinned public image to reproducible rootfs bytes, selects it through the
 existing HTTP `template` field, and boots the catalog's exact KVM kernel/rootfs
 inputs after integrity verification. Its Btrfs source assets also pass a hosted
 fs-verity gate covering signed tooling, kernel measurement, write rejection,
-reflink semantics, and real Firecracker launch.
+reflink semantics, and real Firecracker launch. `ferrobox template render`
+resolves an alias to that immutable identity and emits the validated effective
+create payload without mutating catalog state.
 
 ## Current capabilities
 
@@ -90,7 +92,7 @@ reflink semantics, and real Firecracker launch.
 | Control plane | Per-sandbox tokens stored as SHA-256 digests |
 | Network | Disabled by default; restricted public egress mode |
 | Startup | Firecracker snapshot restore and configurable ready pool |
-| Templates | Immutable build/list/inspect/delete catalog plus content-ID selection for direct Firecracker creates |
+| Templates | Immutable build/list/inspect/render/delete catalog plus content-ID selection for direct Firecracker creates |
 | Observability | Structured lifecycle and workload audit events |
 | Agent surface | Rust CLI, first-party Agent Skill, and OpenAPI 3.1 contract |
 | Testing | Process/API E2E and hosted nested-KVM E2E workflows |

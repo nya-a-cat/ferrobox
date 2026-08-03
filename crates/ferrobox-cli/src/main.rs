@@ -3,9 +3,15 @@ use std::path::PathBuf;
 use anyhow::Context as _;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use clap::{Parser, Subcommand};
+use ferrobox_core::{NetworkMode, SandboxSpec};
 use ferrobox_template::{BuildTemplateRequest, TemplateCatalog};
 use reqwest::{Client, Method, Response};
 use serde_json::{Value, json};
+
+const DEFAULT_CPU_COUNT: u8 = 1;
+const DEFAULT_MEMORY_MB: u32 = 512;
+const DEFAULT_TIMEOUT_SECONDS: u64 = 300;
+const TEMPLATE_RENDER_CONTRACT: &str = "ferrobox-template-render-v1";
 
 #[derive(Debug, Parser)]
 #[command(name = "ferrobox", version)]
@@ -25,11 +31,11 @@ enum Command {
     Create {
         #[arg(long, default_value = "python")]
         template: String,
-        #[arg(long, default_value_t = 1)]
+        #[arg(long, default_value_t = DEFAULT_CPU_COUNT)]
         cpu: u8,
-        #[arg(long, default_value_t = 512)]
+        #[arg(long, default_value_t = DEFAULT_MEMORY_MB)]
         memory_mb: u32,
-        #[arg(long, default_value_t = 300)]
+        #[arg(long, default_value_t = DEFAULT_TIMEOUT_SECONDS)]
         ttl: u64,
         #[arg(long)]
         internet: bool,
@@ -131,6 +137,17 @@ enum TemplateCommand {
     Inspect {
         template: String,
     },
+    Render {
+        template: String,
+        #[arg(long, default_value_t = DEFAULT_CPU_COUNT)]
+        cpu: u8,
+        #[arg(long, default_value_t = DEFAULT_MEMORY_MB)]
+        memory_mb: u32,
+        #[arg(long, default_value_t = DEFAULT_TIMEOUT_SECONDS)]
+        ttl: u64,
+        #[arg(long)]
+        internet: bool,
+    },
     Delete {
         template: String,
     },
@@ -206,15 +223,17 @@ async fn main() -> anyhow::Result<()> {
             ttl,
             internet,
         } => {
+            let spec = SandboxSpec {
+                template_id: template,
+                cpu_count: cpu,
+                memory_mb,
+                timeout_seconds: ttl,
+                network: network_mode(internet),
+            };
+            spec.validate().context("invalid sandbox request")?;
             let response = client
                 .post(format!("{base}/v1/sandboxes"))
-                .json(&json!({
-                    "template": template,
-                    "cpu_count": cpu,
-                    "memory_mb": memory_mb,
-                    "timeout_seconds": ttl,
-                    "network": { "internet_access": internet }
-                }))
+                .json(&sandbox_request_json(&spec))
                 .send()
                 .await?;
             print_json(ensure_success(response).await?).await?;
@@ -405,6 +424,38 @@ fn handle_template(store: PathBuf, command: TemplateCommand) -> anyhow::Result<(
                 serde_json::to_string_pretty(&catalog.inspect(&template)?)?
             );
         }
+        TemplateCommand::Render {
+            template,
+            cpu,
+            memory_mb,
+            ttl,
+            internet,
+        } => {
+            let record = catalog.record(&template)?;
+            let spec = SandboxSpec {
+                template_id: record.template_id.clone(),
+                cpu_count: cpu,
+                memory_mb,
+                timeout_seconds: ttl,
+                network: network_mode(internet),
+            };
+            spec.validate().context("invalid sandbox request")?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "schema_version": 1,
+                    "contract_version": TEMPLATE_RENDER_CONTRACT,
+                    "requested_template": template,
+                    "resolved_template_id": record.template_id,
+                    "template_spec_digest": record.spec_digest,
+                    "template_source": record.descriptor.source,
+                    "template_platform": record.descriptor.platform,
+                    "effective_request": sandbox_request_json(&spec),
+                    "artifact_verification": "deferred_to_create",
+                    "mutation_performed": false
+                }))?
+            );
+        }
         TemplateCommand::Delete { template } => {
             println!(
                 "{}",
@@ -413,6 +464,24 @@ fn handle_template(store: PathBuf, command: TemplateCommand) -> anyhow::Result<(
         }
     }
     Ok(())
+}
+
+const fn network_mode(internet_access: bool) -> NetworkMode {
+    if internet_access {
+        NetworkMode::Internet
+    } else {
+        NetworkMode::Disabled
+    }
+}
+
+fn sandbox_request_json(spec: &SandboxSpec) -> Value {
+    json!({
+        "template": spec.template_id,
+        "cpu_count": spec.cpu_count,
+        "memory_mb": spec.memory_mb,
+        "timeout_seconds": spec.timeout_seconds,
+        "network": { "internet_access": spec.network == NetworkMode::Internet }
+    })
 }
 
 async fn handle_snapshot(

@@ -84,7 +84,7 @@ Status meanings:
 | Runtime abstraction | Embedded/local runtime plus server and Docker/Kubernetes providers | Partial | Each provider passes one shared lifecycle conformance suite |
 | OCI images | Pull and run pinned public/private OCI images | Partial | Public digest-pinned image boots and executes on GitHub; private-registry custody and API image selection pass their contracts |
 | Host architecture | Linux x86_64, Linux aarch64, macOS Apple Silicon, Windows/WSL2 where supported | Partial | Platform matrix reports the exact isolation backend and passes the shared smoke contract |
-| Templates | Build, list, version, inspect, and delete reusable templates | Partial | Immutable identity, provenance, and trusted constant-time asset measurement survive lifecycle, then every supported runtime resolves the selected record |
+| Templates | Build, list, version, inspect, render, and delete reusable templates | Partial | Immutable identity, provenance, deterministic effective-request rendering, and trusted constant-time asset measurement survive lifecycle, then every supported runtime resolves the selected record |
 | Ready pools | Bounded pre-provisioning with safe replenishment | Verified | Allocation, concurrent claim, replenishment, TTL, and leak gates pass |
 | Lifecycle | Create, inspect, set TTL, pause, resume, hibernate, delete | Partial | State-transition contract passes for every runtime provider |
 | User snapshots | Named, inspectable, portable snapshots | Verified | Create/list/get/delete and integrity verification pass |
@@ -149,8 +149,9 @@ Snapshot KVM workflow enforces its separate conformance path.
 
 The template CLI now builds a catalog record from existing kernel/rootfs
 inputs, lists versioned records, inspects by alias or content-derived ID,
-rehashes both artifacts, enforces a one-time unique alias binding, and deletes
-metadata while preserving source artifacts. Standard CI run
+renders a validated and deterministic effective create request, rehashes both
+artifacts, enforces a one-time unique alias binding, and deletes metadata while
+preserving source artifacts. Standard CI run
 [30786711526](https://github.com/nya-a-cat/ferrobox/actions/runs/30786711526)
 passed this seven-check lifecycle at commit `5f1519a`. Artifact `8845497128`
 retains the descriptor, provenance, successful inspection, deliberate rootfs

@@ -16,7 +16,9 @@ resource usage low and results reproducible.
 - process-backend HTTP end-to-end verification;
 - first-party Agent Skill contract validation;
 - Rust CLI create/exec/file/delete end-to-end verification;
-- immutable template build/list/inspect/delete, alias, tamper, and rebuild verification;
+- immutable template build/list/inspect/render/delete, alias resolution,
+  deterministic/read-only rendering, invalid-resource rejection, tamper, and
+  rebuild verification;
 - Firecracker/Jailer checksum and version verification;
 - full-commit GitHub Action pin verification across every workflow;
 - OpenAPI 3.1 validation, exact Axum route matching, and seven generated SDK
@@ -30,10 +32,12 @@ path traversal rejection, deletion, and token redaction from audit records.
 
 The template E2E runs entirely below `RUNNER_TEMP`. It builds a versioned
 record from synthetic kernel/rootfs fixtures and credential-free OCI
-provenance, lists it, inspects it by content-derived ID, changes the rootfs and
+provenance, lists it, inspects it by content-derived ID, renders the effective
+create payload by alias and ID, checks byte stability and catalog immutability,
+and rejects an out-of-contract resource request. It then changes the rootfs and
 requires a hash/size mismatch, restores the fixture, rejects alias reassignment,
 deletes the metadata while retaining both inputs, and rebuilds the exact same
-identity. Run
+identity. The original seven-check lifecycle run
 [30786711526](https://github.com/nya-a-cat/ferrobox/actions/runs/30786711526)
 passed all seven checks at commit `5f1519a`. Evidence artifact `8845497128`
 has archive digest
