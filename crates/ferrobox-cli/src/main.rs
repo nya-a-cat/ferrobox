@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::Context as _;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use clap::{Parser, Subcommand};
+use ferrobox_template::{BuildTemplateRequest, TemplateCatalog};
 use reqwest::{Client, Method, Response};
 use serde_json::{Value, json};
 
@@ -87,10 +88,51 @@ enum Command {
         #[command(subcommand)]
         command: SnapshotCommand,
     },
+    Template {
+        #[arg(
+            long,
+            env = "FERROBOX_TEMPLATE_STORE",
+            default_value = ".ferrobox/templates"
+        )]
+        store: PathBuf,
+        #[command(subcommand)]
+        command: TemplateCommand,
+    },
     Delete {
         sandbox_id: String,
         #[arg(long, env = "FERROBOX_TOKEN")]
         token: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum TemplateCommand {
+    Build {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        version: String,
+        #[arg(long)]
+        alias: String,
+        #[arg(long)]
+        source_kind: String,
+        #[arg(long)]
+        source_reference: String,
+        #[arg(long)]
+        source_digest: String,
+        #[arg(long)]
+        target_arch: String,
+        #[arg(long)]
+        kernel: PathBuf,
+        #[arg(long)]
+        rootfs: PathBuf,
+    },
+    List,
+    Inspect {
+        template: String,
+    },
+    Delete {
+        template: String,
     },
 }
 
@@ -308,6 +350,9 @@ async fn main() -> anyhow::Result<()> {
         Command::Snapshot { command } => {
             handle_snapshot(&client, base, command).await?;
         }
+        Command::Template { store, command } => {
+            handle_template(store, command)?;
+        }
         Command::Delete { sandbox_id, token } => {
             let response = authorized(
                 &client,
@@ -319,6 +364,52 @@ async fn main() -> anyhow::Result<()> {
             .await?;
             ensure_success(response).await?;
             println!("deleted {sandbox_id}");
+        }
+    }
+    Ok(())
+}
+
+fn handle_template(store: PathBuf, command: TemplateCommand) -> anyhow::Result<()> {
+    let catalog = TemplateCatalog::new(store);
+    match command {
+        TemplateCommand::Build {
+            name,
+            version,
+            alias,
+            source_kind,
+            source_reference,
+            source_digest,
+            target_arch,
+            kernel,
+            rootfs,
+        } => {
+            let inspection = catalog.build(BuildTemplateRequest {
+                name,
+                version,
+                alias,
+                source_kind,
+                source_reference,
+                source_digest,
+                target_architecture: target_arch,
+                kernel_path: kernel,
+                rootfs_path: rootfs,
+            })?;
+            println!("{}", serde_json::to_string_pretty(&inspection)?);
+        }
+        TemplateCommand::List => {
+            println!("{}", serde_json::to_string_pretty(&catalog.list()?)?);
+        }
+        TemplateCommand::Inspect { template } => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&catalog.inspect(&template)?)?
+            );
+        }
+        TemplateCommand::Delete { template } => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&catalog.delete(&template)?)?
+            );
         }
     }
     Ok(())
