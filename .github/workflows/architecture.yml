@@ -219,6 +219,122 @@ jobs:
           if-no-files-found: error
           path: ${{ runner.temp }}/host-capability-macos-aarch64/host-capability.json
 
+  windows-diagnostic:
+    name: Native windows-aarch64 diagnostic
+    runs-on: windows-11-arm
+    timeout-minutes: 45
+    env:
+      FERROBOX_TEST_PYTHON: python
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust
+        id: rust_toolchain
+        continue-on-error: true
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-08-03
+
+      - name: Verify native tools
+        id: native_tools
+        continue-on-error: true
+        shell: pwsh
+        run: Get-Command bash, cargo, jq, python, rustc
+
+      - name: Verify GitHub Action commit pins
+        id: action_pin_policy
+        continue-on-error: true
+        shell: bash
+        run: bash scripts/check-action-pins.sh
+
+      - name: Generate dependency lock
+        id: dependency_lock
+        continue-on-error: true
+        shell: pwsh
+        run: cargo generate-lockfile
+
+      - name: Test host-side crates
+        id: host_tests
+        continue-on-error: true
+        shell: pwsh
+        run: >-
+          cargo test --locked --all-targets
+          -p ferrobox-core
+          -p ferrobox-protocol
+          -p ferrobox-node
+          -p ferrobox-api
+          -p ferrobox-cli
+
+      - name: Build host-side binaries
+        id: host_build
+        continue-on-error: true
+        shell: pwsh
+        run: cargo build --locked -p ferrobox-api -p ferrobox-cli
+
+      - name: Process/API lifecycle smoke
+        id: process_api_lifecycle
+        continue-on-error: true
+        shell: bash
+        run: bash scripts/e2e-process.sh
+
+      - name: CLI lifecycle smoke
+        id: cli_lifecycle
+        continue-on-error: true
+        shell: bash
+        run: bash scripts/e2e-cli.sh
+
+      - name: Record Windows ARM diagnostic
+        if: always()
+        shell: pwsh
+        run: |
+          $diagnostic = Join-Path $env:RUNNER_TEMP 'windows-aarch64-diagnostic.txt'
+          @(
+            "repository=$env:GITHUB_REPOSITORY"
+            "commit=$env:GITHUB_SHA"
+            "run_id=$env:GITHUB_RUN_ID"
+            "runner_arch=$env:RUNNER_ARCH"
+            "runner_os=$env:RUNNER_OS"
+            "image_os=$env:ImageOS"
+            "image_version=$env:ImageVersion"
+            "os_description=$([System.Runtime.InteropServices.RuntimeInformation]::OSDescription)"
+            "os_architecture=$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)"
+            "rust_toolchain=${{ steps.rust_toolchain.outcome }}"
+            "native_tools=${{ steps.native_tools.outcome }}"
+            "action_pin_policy=${{ steps.action_pin_policy.outcome }}"
+            "dependency_lock=${{ steps.dependency_lock.outcome }}"
+            "host_tests=${{ steps.host_tests.outcome }}"
+            "host_build=${{ steps.host_build.outcome }}"
+            "process_api_lifecycle=${{ steps.process_api_lifecycle.outcome }}"
+            "cli_lifecycle=${{ steps.cli_lifecycle.outcome }}"
+          ) | Set-Content -LiteralPath $diagnostic -Encoding utf8NoBOM
+          rustc -vV | Add-Content -LiteralPath $diagnostic -Encoding utf8
+          Get-Content -LiteralPath $diagnostic
+
+      - name: Upload Windows ARM diagnostic
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: host-capability-windows-aarch64-diagnostic
+          if-no-files-found: error
+          path: ${{ runner.temp }}/windows-aarch64-diagnostic.txt
+
+      - name: Enforce Windows ARM diagnostic
+        if: always()
+        shell: pwsh
+        run: |
+          $outcomes = @(
+            '${{ steps.rust_toolchain.outcome }}'
+            '${{ steps.native_tools.outcome }}'
+            '${{ steps.action_pin_policy.outcome }}'
+            '${{ steps.dependency_lock.outcome }}'
+            '${{ steps.host_tests.outcome }}'
+            '${{ steps.host_build.outcome }}'
+            '${{ steps.process_api_lifecycle.outcome }}'
+            '${{ steps.cli_lifecycle.outcome }}'
+          )
+          $failures = @($outcomes | Where-Object { $_ -ne 'success' })
+          if ($failures.Count -gt 0) {
+            throw "Windows ARM diagnostic contains $($failures.Count) failed outcomes"
+          }
+
   convergence:
     name: Host architecture convergence
     if: always()

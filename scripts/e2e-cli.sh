@@ -2,6 +2,7 @@
 set -euo pipefail
 
 api_url="${FERROBOX_API_URL:-http://127.0.0.1:18081}"
+test_python="${FERROBOX_TEST_PYTHON:-python3}"
 runtime_root="$(mktemp -d)"
 api_pid=""
 sandbox_id=""
@@ -70,7 +71,7 @@ inspect_response="$(
 
 exec_response="$(
     FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
-        exec "${sandbox_id}" -- python3 -c 'print(42)'
+        exec "${sandbox_id}" -- "${test_python}" -c 'print(42)'
 )"
 [[ "$(jq -r '.stdout' <<<"${exec_response}")" == "42" ]]
 [[ "$(jq -r '.termination.kind' <<<"${exec_response}")" == "exited" ]]
@@ -78,7 +79,8 @@ exec_response="$(
 literal='$(touch /tmp/ferrobox-cli-injected);'
 literal_response="$(
     FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
-        exec "${sandbox_id}" -- python3 -c 'import sys; print(sys.argv[1])' "${literal}"
+        exec "${sandbox_id}" -- "${test_python}" -c \
+        'import sys; print(sys.argv[1])' "${literal}"
 )"
 [[ "$(jq -r '.stdout' <<<"${literal_response}")" == "${literal}" ]]
 [[ ! -e /tmp/ferrobox-cli-injected ]]
@@ -108,7 +110,7 @@ paused_response="$(
 )"
 [[ "$(jq -r '.state' <<<"${paused_response}")" == "paused" ]]
 if FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
-    exec "${sandbox_id}" -- python3 -c 'print(42)' \
+    exec "${sandbox_id}" -- "${test_python}" -c 'print(42)' \
     >"${runtime_root}/paused-exec.log" 2>&1; then
     echo "command unexpectedly ran while the sandbox was paused" >&2
     exit 1

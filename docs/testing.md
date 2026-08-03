@@ -192,6 +192,11 @@ The macOS source artifact is `8844229804`, archive digest
 `sha256:342535585b10167fa3745c5ccc82a8eece5eae14eab635eb7f6024b8472cb7d8`.
 All four artifacts expire on 2026-11-01.
 
+The workflow now includes an initial `windows-11-arm` diagnostic. It tests the
+same five host-side crates, native API/CLI build, and shared process lifecycles
+using the runner's preinstalled ARM64 Rust, Bash, Python, and jq. Its first
+GitHub result is pending and remains outside the formal v2 convergence set.
+
 ## OCI image KVM CI
 
 `.github/workflows/oci.yml` runs entirely on a GitHub-hosted Ubuntu 24.04

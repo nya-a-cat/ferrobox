@@ -131,6 +131,8 @@ open. GitHub `macos-15` M1 run `30782442876` passed the host-side Rust
 tests/build and the shared process-backend API/CLI lifecycle. Run `30782762889`
 then converged that Apple Silicon record with both Linux records under one
 source commit and the version-2 machine-readable contract.
+An initial GitHub `windows-11-arm` diagnostic now targets the same host-side
+build and process/CLI lifecycle. Its result and formal evidence are pending.
 
 The CLI and first-party `ferrobox-sandbox` Agent Skill now have a shared
 [GitHub-hosted create/exec/file/delete conformance path](https://github.com/nya-a-cat/ferrobox/actions/runs/30763552790)

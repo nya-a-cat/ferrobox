@@ -2,6 +2,7 @@
 set -euo pipefail
 
 api_url="${FERROBOX_API_URL:-http://127.0.0.1:18080}"
+test_python="${FERROBOX_TEST_PYTHON:-python3}"
 runtime_root="$(mktemp -d)"
 api_pid=""
 
@@ -54,20 +55,29 @@ exec_response="$(
     curl --fail --silent \
         --header "authorization: Bearer ${token}" \
         --header 'content-type: application/json' \
-        --data '{"argv":["python3","-c","print(42)"],"cwd":"/home/sandbox","environment":{},"timeout_seconds":30,"max_output_bytes":1048576}' \
+        --data "$(
+            jq -cn --arg interpreter "${test_python}" \
+                '{argv:[$interpreter,"-c","print(42)"],cwd:"/home/sandbox",environment:{},timeout_seconds:30,max_output_bytes:1048576}'
+        )" \
         "${api_url}/v1/sandboxes/${sandbox_id}/commands"
 )"
 [[ "$(jq -r '.stdout' <<<"${exec_response}")" == "42" ]]
 [[ "$(jq -r '.termination.kind' <<<"${exec_response}")" == "exited" ]]
 
+literal='$(touch /tmp/ferrobox-injected);'
 literal_response="$(
     curl --fail --silent \
         --header "authorization: Bearer ${token}" \
         --header 'content-type: application/json' \
-        --data '{"argv":["python3","-c","import sys; print(sys.argv[1])","$(touch /tmp/ferrobox-injected);"],"cwd":"/home/sandbox","environment":{},"timeout_seconds":30,"max_output_bytes":1048576}' \
+        --data "$(
+            jq -cn \
+                --arg interpreter "${test_python}" \
+                --arg literal "${literal}" \
+                '{argv:[$interpreter,"-c","import sys; print(sys.argv[1])",$literal],cwd:"/home/sandbox",environment:{},timeout_seconds:30,max_output_bytes:1048576}'
+        )" \
         "${api_url}/v1/sandboxes/${sandbox_id}/commands"
 )"
-[[ "$(jq -r '.stdout' <<<"${literal_response}")" == '$(touch /tmp/ferrobox-injected);' ]]
+[[ "$(jq -r '.stdout' <<<"${literal_response}")" == "${literal}" ]]
 [[ ! -e /tmp/ferrobox-injected ]]
 
 curl --fail --silent \
