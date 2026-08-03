@@ -367,9 +367,11 @@ deleted_status="$(
 ! grep --fixed-strings --quiet "${token}" "${work_dir}/audit/events.jsonl"
 grep --fixed-strings --quiet "${template_alias}" "${work_dir}/audit/events.jsonl"
 grep --fixed-strings --quiet '"operation":"delete"' "${work_dir}/audit/events.jsonl"
-grep --fixed-strings --quiet 'resolved immutable template alias' "${work_dir}/api.log"
-grep --fixed-strings --quiet "requested_template=${template_alias}" "${work_dir}/api.log"
-grep --fixed-strings --quiet "resolved_template_id=${template_id}" "${work_dir}/api.log"
+resolution_log="$(
+    grep --fixed-strings 'resolved immutable template alias' "${work_dir}/api.log"
+)"
+grep --fixed-strings --quiet "${template_alias}" <<<"${resolution_log}"
+grep --fixed-strings --quiet "${template_id}" <<<"${resolution_log}"
 
 completed_id="${sandbox_id}"
 sandbox_id=""
