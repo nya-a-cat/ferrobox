@@ -32,9 +32,10 @@ targets. `openapi/ferrobox-codegen-overlay.json` is a reviewed RFC 7396 merge
 patch used only for SDK generation. It projects `ExecTermination` into a closed
 object with one required four-value `kind` enum plus optional `exit_code` and
 `signal` fields. `scripts/openapi_codegen_projection.py` refuses authoritative
-contract drift, overlay drift, and an unexpected projected shape. The strict
-contract remains the HTTP validation boundary, and the emitted JSON shape is
-unchanged.
+contract drift, overlay drift, and an unexpected projected shape. It preserves
+authoritative schema-property order because generated C#, Go, and Rust
+constructors use positional arguments. The strict contract remains the HTTP
+validation boundary, and the emitted JSON shape is unchanged.
 
 The optional `cwd` property keeps its `/home/sandbox` default and repeats the
 `SandboxPath` string constraints inline so Java receives a valid quoted string
@@ -74,8 +75,8 @@ the SHA-256 of each dependency manifest or lock. Python uses a fixed
 `exclude-newer` cutoff. C# uses NuGet locked mode; Go uses its checked-in
 `go.sum`; Java resolves online, explicitly prefetches the Surefire JUnit
 Platform provider at `2.22.2`, records its JAR SHA-256, then tests offline;
-Kotlin resolves its external runtime configuration while writing a strict
-Gradle lock, then builds and runs offline; Rust fetches a generated
+Kotlin resolves every resolvable generated-project configuration while writing
+a strict Gradle lock, then builds and runs offline; Rust fetches a generated
 `Cargo.lock` then runs offline; TypeScript uses an exact pnpm package graph and
 runs the compiled CommonJS output under Node. The process backend supplies
 deterministic API behavior and carries no workload-isolation claim.

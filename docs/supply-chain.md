@@ -214,9 +214,9 @@ v7.22.0 discriminator defects while preserving the runtime JSON fields.
 Java resolves its declared graph, explicitly prefetches
 `org.apache.maven.surefire:surefire-junit-platform:2.22.2` with strict checksum
 handling, records the provider JAR SHA-256, then executes offline. Rust executes
-from its fetched locked graph. Kotlin resolves the external runtime
-configuration while writing its strict lock before offline build and execution;
-TypeScript uses frozen pnpm state.
+from its fetched locked graph. Kotlin resolves every resolvable
+generated-project configuration while writing its strict lock before offline
+build and execution; TypeScript uses frozen pnpm state.
 
 The generated Kotlin wrapper selects Gradle 8.14.3. CI recognizes the embedded
 wrapper JAR as the official Gradle 8.9 binary with SHA-256

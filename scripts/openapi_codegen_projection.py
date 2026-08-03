@@ -177,9 +177,8 @@ def main() -> None:
     source_raw, document = read_object(arguments.source, "authoritative OpenAPI")
     overlay_raw, overlay = read_object(arguments.overlay, "code-generation overlay")
     projected = project_document(document, overlay)
-    projection_raw = (
-        json.dumps(projected, indent=2, sort_keys=True) + "\n"
-    ).encode("utf-8")
+    # Generators derive positional constructor APIs from schema property order.
+    projection_raw = (json.dumps(projected, indent=2) + "\n").encode("utf-8")
     arguments.output.write_bytes(projection_raw)
 
     evidence = {

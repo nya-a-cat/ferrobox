@@ -9,11 +9,15 @@ allprojects {
         }
         project.tasks.register("ferroboxSdkPrefetch") {
             group = "verification"
-            description = "Resolve the generated Kotlin SDK runtime classpath"
+            description = "Resolve every generated Kotlin SDK dependency configuration"
             doLast {
-                project.configurations.runtimeClasspath.files.each { dependency ->
-                    if (!dependency.exists()) {
-                        throw new GradleException("Missing runtime dependency: ${dependency}")
+                project.configurations.findAll { it.canBeResolved }.each { configuration ->
+                    configuration.files.each { dependency ->
+                        if (!dependency.exists()) {
+                            throw new GradleException(
+                                "Missing ${configuration.name} dependency: ${dependency}"
+                            )
+                        }
                     }
                 }
             }
