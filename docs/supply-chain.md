@@ -22,13 +22,14 @@ permissions.
 
 ## GitHub Actions inputs
 
-Every external action in `ci.yml`, `kvm.yml`, and `snapshots.yml` uses a full
-40-character commit SHA. A human-readable release or channel comment remains
-beside each pin. The current set is:
+Every external action in `architecture.yml`, `ci.yml`, `kvm.yml`, `oci.yml`, and
+`snapshots.yml` uses a full 40-character commit SHA. A human-readable release
+or channel comment remains beside each pin. The current set is:
 
 | Action | Revision |
 | --- | --- |
 | `actions/checkout` | `3d3c42e5aac5ba805825da76410c181273ba90b1` (`v7.0.1`) |
+| `actions/download-artifact` | `3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c` (`v8.0.1`) |
 | `actions/upload-artifact` | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` (`v7.0.1`) |
 | `actions/cache` restore/save | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` (`v6.1.0`) |
 | `dtolnay/rust-toolchain` | `4cda84d5c5c54efe2404f9d843567869ab1699d4` (`stable`, resolved 2026-08-03) |

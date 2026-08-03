@@ -122,6 +122,29 @@ execution. Artifact `8843358862` has archive digest
 `sha256:202af788f8ad5a41f9276ea53c9fb6ca95183f0cb0bf137ad524bb07f41f44a2`
 and retains the complete evidence through 2026-11-01.
 
+## Host architecture CI
+
+`.github/workflows/architecture.yml` runs one shared native contract on the
+GitHub-hosted `ubuntu-24.04` x86_64 image and `ubuntu-24.04-arm` aarch64 image.
+Each leg generates the dependency lock, runs the complete workspace test and
+build, produces a native static musl guest, and completes the same Process/API
+plus CLI lifecycle smokes.
+
+Every leg retains its runner label, GitHub runner architecture, image identity,
+kernel, normalized CPU description, native Rust host, static guest ELF machine
+and SHA-256, and an observational `/dev/kvm` capability record. The evidence
+labels the exercised backend as the unsafe process backend with isolation
+`none`. Firecracker remains outside this portability smoke.
+
+The final convergence job downloads both records, requires the same repository,
+commit, ref, run, and smoke checks, validates both native ELF identities, and
+uploads one `ferrobox-host-architecture-matrix-v1` document. Every test step is
+allowed to finish diagnostically; its exact GitHub outcome is recorded and the
+leg fails after the evidence is written when any outcome is incomplete.
+
+The first GitHub result is pending. Linux aarch64 production microVM support,
+macOS Apple Silicon, and Windows/WSL2 remain open host-architecture gates.
+
 ## OCI image KVM CI
 
 `.github/workflows/oci.yml` runs entirely on a GitHub-hosted Ubuntu 24.04

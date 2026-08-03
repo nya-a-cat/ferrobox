@@ -116,6 +116,14 @@ Status meanings:
 | Supply-chain inventory | Action SHA pins, pinned binaries/images, checksums, manifests, SBOM, and update policy | Verified | In-toto provenance covers every executable, guest asset, image, and SBOM used by release E2E |
 | Release integrity | Digest-bound releases, keyless signatures, provenance attestations, and consumer verification | Partial | GitHub verifies signed source/binary artifacts and OCI digests against fixed workflow and repository identities |
 
+The GitHub host-architecture matrix now defines one native Linux contract for
+x86_64 and aarch64: workspace tests and build, a native static musl guest, the
+Process/API lifecycle, and the CLI lifecycle. Each leg records the exact runner,
+CPU, Rust host, guest ELF identity, and `/dev/kvm` capability before a final
+cross-runner convergence gate. Its initial GitHub evidence is pending. The host
+architecture row remains Partial while aarch64 production microVM isolation,
+macOS Apple Silicon, and Windows/WSL2 contracts remain open.
+
 The CLI and first-party `ferrobox-sandbox` Agent Skill now have a shared
 [GitHub-hosted create/exec/file/delete conformance path](https://github.com/nya-a-cat/ferrobox/actions/runs/30763552790)
 at commit `8854525`. The row remains Partial until the MCP surface passes the

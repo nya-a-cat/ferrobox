@@ -15,6 +15,16 @@ Ferrobox production mode requires an x86_64 Linux host with:
 Run `ferrobox-node check` before creating a sandbox. The check reports each
 missing prerequisite and never changes the host.
 
+## Architecture portability boundary
+
+The GitHub host-architecture matrix validates the Rust workspace, native static
+guest, Process/API lifecycle, and CLI lifecycle on Linux x86_64 and Linux
+aarch64. Its aarch64 leg exercises the explicitly unsafe process backend and
+records `/dev/kvm` as an observational runner capability. The production
+Firecracker deployment contract above currently applies to Linux x86_64.
+Aarch64 Firecracker assets, guest images, Jailer behavior, and KVM lifecycle
+evidence remain an open production gate.
+
 ## Storage placement
 
 Keep source code wherever the developer prefers. Place Cargo build output,
