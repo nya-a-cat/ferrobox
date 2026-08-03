@@ -150,15 +150,43 @@ archive digest
 `sha256:d9cd88cef12f2aacbc3012f29359a2c6802956257cfe0833f24ba895f37a7293`;
 it expires on 2026-11-01.
 
-The current follow-up uses the audited flat code-generation projection,
-explicit Surefire provider prefetch with digest evidence, and the external
-Kotlin runtime configuration. Its passing GitHub result is pending.
+The completed follow-up,
+[run 30777303301](https://github.com/nya-a-cat/ferrobox/actions/runs/30777303301)
+at commit `86bb3cc`, passed the entire Standard CI job. C#, Go, Java, Kotlin,
+Python, Rust, and TypeScript each completed the same seven-check lifecycle
+against one API process. The aggregate matrix records seven distinct UUIDv7
+sandboxes, 35 sanitized audit events, seven successful creates, seven successful
+deletes, and one dependency record set per language. The post-runtime recursive
+comparison proved that both generated source roots remained byte-identical.
+
+The structural record binds authoritative specification SHA-256
+`70e9400c4089000b4757df3228143d68fd9bf65aea4fb36a3417b30381368b0a`,
+overlay SHA-256
+`82ea593b150854333d031e2bdb23bb613cbd97ee275e1cfdc2e42261aa00a733`,
+and projected-document SHA-256
+`eed1203f24517729bb693bc66e6a9f80efaf072cc7d74838e2bd48f5ca6ead3b`.
+The retained generated trees are:
+
+| Generator | Files | Tree SHA-256 |
+| --- | ---: | --- |
+| C# | 73 | `6be04a969fe0655ecff9548a2c6370738b4f941b7e535d155e02f46155fbe9d7` |
+| Go | 50 | `a4fb086a5f602b0a07fc8a8610104934f49387b5e36905ef2953048427935a80` |
+| Java | 73 | `a7ed92d9317248f2ae1be17697741bee69df609d1253f9c5de8e4a2ab8c94c2d` |
+| Kotlin | 63 | `8ca201694ea36e97c660b9c4f00ee6da1a5014ff977a65f2a59dc88fc3c188ff` |
+| Python | 60 | `6c644fd086a4f8a0a6a848cc19b3eadca4fa8dd31bc4d7fc3bdf9bcdaf4a5f3d` |
+| Rust | 48 | `e107456cb7db27059efa1fcd383a3913aae5289b0791283cb35fcf1fab7ffbca` |
+| TypeScript Fetch | 43 | `3fb622af39b4ef84d9ca6ac5b5cf0c5e2b3a7c9b12be486b88b35251ba94a1bd` |
+
+Artifact `8842515354` retains the generated roots, projection metadata, seven
+runtime records, aggregate matrix, audit log, dependency manifests, and
+toolchain record. Its archive digest is
+`sha256:78a7ce80c5f3e3d6a177d81744e0b09580119d76569ac8e6c6435d556ca3331f`,
+and it expires on 2026-11-01.
 
 ## Current parity boundary
 
-The generated trees are retained conformance outputs. The seven-language
-runtime gate is implemented and requires a passing GitHub run before it becomes
-verified evidence. Stable packaged SDKs remain open work. Diagnostics,
-authenticated ingress, and richer egress-policy endpoints also remain outside
-the current HTTP surface, so the broader OpenAPI and SDK roadmap rows remain
-Partial.
+The generated trees are retained conformance outputs, and their seven-language
+runtime gate is Verified. Stable versioned packages remain open work.
+Diagnostics, authenticated ingress, and richer egress-policy endpoints remain
+outside the current HTTP surface, so the broader OpenAPI and SDK roadmap rows
+remain Partial.

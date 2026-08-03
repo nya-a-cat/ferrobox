@@ -72,8 +72,8 @@ process and the same typed scenario. Its aggregate gate requires seven distinct
 UUIDv7 sandboxes, the same seven check names per language, a successful audited
 create and delete for each identity, no credential-shaped evidence keys, and a
 non-empty dependency manifest for every toolchain. All builds, dependency
-resolution, and execution occur on the GitHub runner. A passing run for this
-expanded gate is pending.
+resolution, and execution occur on the GitHub runner. The verified result is
+recorded after the diagnostic history below.
 
 [Diagnostic run 30774266980](https://github.com/nya-a-cat/ferrobox/actions/runs/30774266980)
 at commit `a38a4af` completed Go, Python, and TypeScript, retained their three
@@ -92,10 +92,21 @@ of the strict tagged union. Java compiled and stopped at its offline Surefire
 provider lookup. Kotlin's prefetch resolved the local unbuilt classes directory
 alongside external dependencies. Artifact `8841711323`, archive digest
 `sha256:d9cd88cef12f2aacbc3012f29359a2c6802956257cfe0833f24ba895f37a7293`,
-retains the diagnostic evidence through 2026-11-01. The next run uses an audited
-flat code-generation projection, explicit Surefire provider prefetch with a
-retained JAR digest, and Kotlin external-runtime resolution. A passing result is
-pending.
+retains the diagnostic evidence through 2026-11-01. The audited flat
+code-generation projection, explicit Surefire provider prefetch, complete
+Gradle lock resolution, preserved schema-property order, and BOM-free evidence
+encoding closed these failures.
+
+[Standard CI run 30777303301](https://github.com/nya-a-cat/ferrobox/actions/runs/30777303301)
+at commit `86bb3cc` passed the expanded gate. All seven generated clients
+completed the common seven-check scenario against one API process. The matrix
+contains seven distinct UUIDv7 identities, 35 sanitized audit events, seven
+successful creates, seven successful deletes, and every required dependency
+manifest. Both recursive generated-tree comparisons passed, including the
+post-runtime check. Artifact `8842515354` has archive digest
+`sha256:78a7ce80c5f3e3d6a177d81744e0b09580119d76569ac8e6c6435d556ca3331f`
+and retains the source, runtime, lock, projection, audit, and toolchain evidence
+through 2026-11-01.
 
 ## OCI image KVM CI
 

@@ -242,6 +242,22 @@ two independent jobs. Artifacts `8838973235` and `8839002111` include hidden
 generator control files after a path-name review and omit Python runtime cache
 material.
 
+[Standard CI run 30777303301](https://github.com/nya-a-cat/ferrobox/actions/runs/30777303301)
+verified the completed seven-language runtime chain at commit `86bb3cc`. Its
+structural record binds overlay SHA-256
+`82ea593b150854333d031e2bdb23bb613cbd97ee275e1cfdc2e42261aa00a733`
+to projected-document SHA-256
+`eed1203f24517729bb693bc66e6a9f80efaf072cc7d74838e2bd48f5ca6ead3b`.
+The explicitly fetched Surefire JUnit Platform provider JAR has SHA-256
+`c33490024cd816e0c2c27331a68ba82e4c023d5255bdfa4ac71ba5998e13079d`;
+its retained coordinate-and-digest record has SHA-256
+`1aa411e4adcf11e5a5efe3cc67c165d44f4bb6c31efe0846d5b26c48e9a76a1c`.
+All seven dependency record sets passed the aggregate check, and the pristine
+generated roots remained byte-identical after execution. Artifact `8842515354`
+has archive digest
+`sha256:78a7ce80c5f3e3d6a177d81744e0b09580119d76569ac8e6c6435d556ca3331f`
+and expires on 2026-11-01.
+
 ## E2E provenance schema v1
 
 `scripts/generate-e2e-provenance.sh` emits

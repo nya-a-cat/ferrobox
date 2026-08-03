@@ -104,7 +104,7 @@ Status meanings:
 | Service exposure | Authenticated HTTP/WebSocket/TCP endpoints and port discovery | Missing | Route isolation, token rotation, WebSocket, expiry, and SSRF tests pass |
 | E2B compatibility | E2B lifecycle, command, file, and code-interpreter behavior | Missing | Pinned E2B SDK conformance suite passes without application changes beyond endpoint/auth |
 | OpenAPI contracts | Versioned lifecycle, execution, diagnostics, ingress, and egress specs | Partial | Generated clients and server contract tests share one checked-in specification |
-| SDKs | Rust, Python, TypeScript, Go, Java/Kotlin, and C# surfaces | Partial | Language matrix passes the same remote GitHub sandbox scenario |
+| SDKs | Rust, Python, TypeScript, Go, Java/Kotlin, and C# surfaces | Partial | Language matrix passes one remote GitHub scenario and versioned packages pass install smoke tests |
 | CLI, MCP, skills | Human CLI, MCP server, and agent-facing skill package | Partial | Each surface completes create/exec/file/delete against the same API |
 | Browser/desktop | Chromium/Playwright, VNC desktop, and VS Code Web templates | Missing | Browser and desktop smoke tests use authenticated exposed endpoints |
 | GPU | Explicit GPU allocation and isolation policy | Missing | Provider contract reports device identity, quota, cleanup, and unsupported modes |
@@ -144,11 +144,16 @@ C#, Java, Kotlin, and Rust codegen/cache blockers.
 removed the Java and Rust source-generation failures, repeated the three passing
 clients, and preserved generated-source immutability. It narrowed the remaining
 set to C#/Rust tagged-union runtime deserialization, Java's dynamic offline
-Surefire provider, and Kotlin external-runtime prefetch. The next gate uses a
-strictly audited code-generation projection, explicit provider digest evidence,
-and corrected Gradle configuration resolution. The OpenAPI and SDK rows remain
-Partial pending one seven-language passing run. Stable language packages,
-diagnostics, ingress, and richer egress endpoints are outstanding.
+Surefire provider, and Kotlin external-runtime prefetch. The audited projection
+and dependency corrections passed in
+[run 30777303301](https://github.com/nya-a-cat/ferrobox/actions/runs/30777303301)
+at commit `86bb3cc`. All seven generated clients completed the same seven-check
+scenario through one API process, produced distinct UUIDv7 sandboxes, retained
+complete dependency evidence, and preserved byte-identical source trees. The
+generated-source runtime matrix is Verified. The OpenAPI row remains Partial
+because diagnostics, ingress, and richer egress specifications are outstanding.
+The SDK row remains Partial until stable versioned packages pass consumer
+installation smoke tests.
 
 OCI image parity now has a verified public-image slice. Runs
 [30769681608](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681608),
