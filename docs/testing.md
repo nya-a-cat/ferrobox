@@ -376,6 +376,20 @@ and four-platform architecture run
 [30793770628](https://github.com/nya-a-cat/ferrobox/actions/runs/30793770628)
 also passed at the code head.
 
+[Run 30799306385](https://github.com/nya-a-cat/ferrobox/actions/runs/30799306385)
+passed the expanded eighteen-check alias-selection contract at commit
+`9eac1cb`. The retained record binds requested alias `oci-python` to immutable
+ID `tpl-2a4a8bfe7412552c0ec6dcaf7cc2dc258dfccacef05c162149bc80827071`,
+rejects unknown alias and ID inputs, and boots the catalog rootfs over a 45-byte
+invalid fallback. Sandbox `019fc6dc-5c49-7df0-9211-a187004c4ea1` reported
+Python 3.11.15. Artifact `8850297606` has archive digest
+`sha256:3afb105e82d8db5465c39ff37c380f95454943b34cc53fd0bcc7021df2219d4a`
+and expires on 2026-11-01. Standard CI run
+[30799306409](https://github.com/nya-a-cat/ferrobox/actions/runs/30799306409)
+and architecture run
+[30799306388](https://github.com/nya-a-cat/ferrobox/actions/runs/30799306388)
+passed at the same code head.
+
 [Standard CI run 30769681624](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681624)
 passed formatting, tests, Clippy, builds, process/CLI/OpenAPI conformance, and
 the Firecracker/Jailer `1.15.1` host gate for the same commit.

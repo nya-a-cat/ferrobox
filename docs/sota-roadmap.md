@@ -183,6 +183,14 @@ other runtime providers, active-use deletion policy, private-registry
 credential custody, multi-node artifact distribution, and trusted fs-verity
 digest binding in the runtime identity contract still open.
 
+[OCI KVM run 30799306385](https://github.com/nya-a-cat/ferrobox/actions/runs/30799306385)
+then proved CubeSandbox-style immutable alias selection at commit `9eac1cb`.
+Alias `oci-python` canonicalized to the existing content ID before KVM launch;
+unknown aliases and IDs failed closed, and the catalog assets overrode a
+deliberately invalid configured fallback. The eighteen-check artifact
+`8850297606` has archive digest
+`sha256:3afb105e82d8db5465c39ff37c380f95454943b34cc53fd0bcc7021df2219d4a`.
+
 The implemented eighteen-operation HTTP surface now has one checked-in OpenAPI
 3.1 contract. Standard CI validates it with a digest-pinned official generator,
 emits seven language source trees, compares it with the Axum route set, and

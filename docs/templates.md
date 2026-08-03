@@ -9,7 +9,7 @@ public-OCI construction, exact runtime-artifact binding, and immutable-ID
 selection for direct Firecracker creates are verified. Deterministic effective
 request rendering has a retained twelve-check GitHub proof. Hosted Btrfs
 source-asset fs-verity and real-KVM compatibility are also verified. Direct
-creation by immutable alias is implemented and awaits its GitHub KVM evidence.
+creation by immutable alias has a retained eighteen-check GitHub KVM proof.
 Asynchronous build status, template-specific ready pools, other runtime
 providers, private-registry credential custody, distributed artifact delivery,
 and trusted fs-verity digest binding in the runtime identity contract remain
@@ -271,3 +271,18 @@ API remeasured both source paths immediately before launch and booted Python
 3.11.15 through the exact immutable ID. Artifact `8848166249` has archive digest
 `sha256:ca006cf19ad009a5574421d242f43562840e2cdf0b682466b873ca11880a6ba0`
 and expires on 2026-11-01.
+
+[OCI KVM run 30799306385](https://github.com/nya-a-cat/ferrobox/actions/runs/30799306385)
+passed the eighteen-check alias-selection contract at commit `9eac1cb`. The API
+requested alias `oci-python`; the runtime resolution log bound it to immutable
+ID `tpl-2a4a8bfe7412552c0ec6dcaf7cc2dc258dfccacef05c162149bc80827071`.
+Unknown alias and ID requests both returned `404 not_found`. The resolved
+catalog assets overrode the deliberately invalid 45-byte configured rootfs and
+booted Python 3.11.15. Artifact `8850297606` has archive digest
+`sha256:3afb105e82d8db5465c39ff37c380f95454943b34cc53fd0bcc7021df2219d4a`
+and expires on 2026-11-01. Standard CI run
+[30799306409](https://github.com/nya-a-cat/ferrobox/actions/runs/30799306409)
+passed every workspace, template, OpenAPI, source-immutability, and
+seven-language SDK gate. Architecture run
+[30799306388](https://github.com/nya-a-cat/ferrobox/actions/runs/30799306388)
+passed Linux x86_64, Linux aarch64, macOS Apple Silicon, and Windows ARM64.

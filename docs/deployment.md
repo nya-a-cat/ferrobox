@@ -73,14 +73,16 @@ catalog record. Equal descriptor and artifact bytes reproduce the same template
 ID after that cycle. The current catalog uses a single-writer operating
 contract for each store directory.
 
-The configured `--kernel` and `--rootfs` remain required. They serve legacy
-template names, and the configured kernel digest anchors snapshot compatibility
-for catalog records. Every `tpl-...` record must name the same kernel digest;
-its rootfs may differ. Keep the store, records, kernel, and rootfs inputs
-root-owned and unwritable by the runtime UID. Direct template-ID creation reads
-and hashes the complete kernel and rootfs before each launch, so operators
-should budget that I/O until the authenticated constant-time measurement gate
-is implemented.
+The configured `--kernel` and `--rootfs` remain required. With a catalog
+configured, they serve the reserved legacy `python` template and anchor
+snapshot-kernel compatibility; every other template reference must resolve to
+an immutable catalog alias or ID. Without a catalog, the existing configured
+rootfs path continues to serve legacy template names. Every catalog record must
+name the configured kernel digest; its rootfs may differ. Keep the store,
+records, kernel, and rootfs inputs root-owned and unwritable by the runtime UID.
+Direct alias/ID creation reads and hashes the complete kernel and rootfs before
+each launch, so operators should budget that I/O until the authenticated
+constant-time measurement gate is implemented.
 
 `scripts/build-oci-rootfs.sh` creates a deterministic ext4 identity from the
 verified OCI and injected guest inputs. It uses the OCI config `created` value
