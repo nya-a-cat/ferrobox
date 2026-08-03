@@ -126,13 +126,15 @@ verified this Linux native sub-contract at commit `b456d08`. The aarch64 runner
 had no `/dev/kvm`; the x86_64 runner exposed the character device and the
 separate Firecracker gate verifies permission setup plus the microVM path. The
 host architecture row remains Partial while aarch64 production microVM
-isolation, an Apple Silicon microVM backend, and Windows/WSL2 contracts remain
-open. GitHub `macos-15` M1 run `30782442876` passed the host-side Rust
-tests/build and the shared process-backend API/CLI lifecycle. Run `30782762889`
-then converged that Apple Silicon record with both Linux records under one
-source commit and the version-2 machine-readable contract.
-An initial GitHub `windows-11-arm` diagnostic now targets the same host-side
-build and process/CLI lifecycle. Its result and formal evidence are pending.
+isolation, an Apple Silicon microVM backend, Windows production isolation, and
+WSL2 runtime contracts remain open. GitHub `macos-15` M1 run `30782442876`
+passed the host-side Rust tests/build and the shared process-backend API/CLI
+lifecycle. Run `30782762889` then converged that Apple Silicon record with both
+Linux records under one source commit and the version-2 machine-readable
+contract.
+GitHub `windows-11-arm` diagnostic run `30784445732` passed the same host-side
+build and process/CLI lifecycle at commit `ad14972`. Its promotion into the
+formal four-platform v3 evidence contract is pending its first run.
 
 The CLI and first-party `ferrobox-sandbox` Agent Skill now have a shared
 [GitHub-hosted create/exec/file/delete conformance path](https://github.com/nya-a-cat/ferrobox/actions/runs/30763552790)

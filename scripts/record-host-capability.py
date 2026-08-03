@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import re
 import stat
 import struct
@@ -36,10 +37,12 @@ MACOS_CHECKS = (
     "process-api-lifecycle",
     "cli-lifecycle",
 )
+WINDOWS_CHECKS = MACOS_CHECKS
 CHECKS_BY_PLATFORM = {
     "linux-aarch64": LINUX_CHECKS,
     "linux-x86_64": LINUX_CHECKS,
     "macos-aarch64": MACOS_CHECKS,
+    "windows-aarch64": WINDOWS_CHECKS,
 }
 ELF_MACHINES = {"aarch64": 183, "x86_64": 62}
 
@@ -138,6 +141,21 @@ def parse_darwin_cpu() -> dict[str, str | None]:
     }
 
 
+def parse_windows_cpu(machine: str | None) -> dict[str, str | None]:
+    logical_cpus = os.cpu_count()
+    return {
+        "architecture": machine,
+        "logical_cpus": str(logical_cpus) if logical_cpus is not None else None,
+        "vendor_id": None,
+        "model_name": (
+            platform.processor() or os.environ.get("PROCESSOR_IDENTIFIER")
+        ),
+        "virtualization": None,
+        "hypervisor_vendor": None,
+        "byte_order": "Little Endian",
+    }
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -209,7 +227,7 @@ def inspect_kvm() -> dict[str, Any]:
             os.close(descriptor)
             openable = True
     return {
-        "path": str(path),
+        "path": "/dev/kvm",
         "exists": exists,
         "character_device": character_device,
         "readable": os.access(path, os.R_OK),
@@ -233,12 +251,16 @@ def main() -> None:
     parser.add_argument("--runner-label", required=True)
     parser.add_argument("--expected-runner-arch", required=True)
     parser.add_argument(
-        "--expected-runner-os", choices=("Linux", "macOS"), required=True
+        "--expected-runner-os",
+        choices=("Linux", "macOS", "Windows"),
+        required=True,
     )
-    parser.add_argument("--expected-kernel", choices=("Darwin", "Linux"), required=True)
+    parser.add_argument(
+        "--expected-kernel", choices=("Darwin", "Linux", "Windows"), required=True
+    )
     parser.add_argument(
         "--expected-machine",
-        choices=("aarch64", "arm64", "x86_64"),
+        choices=("ARM64", "aarch64", "arm64", "x86_64"),
         required=True,
     )
     parser.add_argument("--expected-rust-host", required=True)
@@ -271,9 +293,31 @@ def main() -> None:
     if runner_environment != "github-hosted":
         errors.append(f"runner environment {runner_environment!r} != 'github-hosted'")
 
-    uname_system = command(["uname", "-s"])
-    uname_machine = command(["uname", "-m"])
-    uname_release = command(["uname", "-r"])
+    if arguments.expected_kernel == "Windows":
+        observed_system = platform.system() or None
+        observed_machine = platform.machine() or os.environ.get(
+            "PROCESSOR_ARCHITECTURE"
+        )
+        observed_release = platform.release() or None
+        uname_system = {
+            "ok": observed_system is not None,
+            "error": None if observed_system else "unavailable",
+            "output": observed_system,
+        }
+        uname_machine = {
+            "ok": observed_machine is not None,
+            "error": None if observed_machine else "unavailable",
+            "output": observed_machine,
+        }
+        uname_release = {
+            "ok": observed_release is not None,
+            "error": None if observed_release else "unavailable",
+            "output": observed_release,
+        }
+    else:
+        uname_system = command(["uname", "-s"])
+        uname_machine = command(["uname", "-m"])
+        uname_release = command(["uname", "-r"])
     machine = uname_machine["output"] if uname_machine["ok"] else None
     if not uname_system["ok"] or uname_system["output"] != arguments.expected_kernel:
         errors.append(f"uname did not report {arguments.expected_kernel}")
@@ -311,8 +355,10 @@ def main() -> None:
 
     if arguments.expected_kernel == "Linux":
         cpu = parse_lscpu(command(["lscpu", "--json"]))
-    else:
+    elif arguments.expected_kernel == "Darwin":
         cpu = parse_darwin_cpu()
+    else:
+        cpu = parse_windows_cpu(machine)
     if cpu["architecture"] != arguments.expected_machine:
         errors.append("CPU architecture does not match the runner")
 

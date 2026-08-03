@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Converge the GitHub Linux and Apple Silicon host capability evidence."""
+"""Converge GitHub Linux, Apple Silicon, and Windows ARM host evidence."""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ MACOS_CHECKS = (
     "process-api-lifecycle",
     "cli-lifecycle",
 )
+WINDOWS_CHECKS = MACOS_CHECKS
 COMMON_CHECKS = (
     "rust-toolchain",
     "action-pin-policy",
@@ -72,6 +73,17 @@ PLATFORMS = {
         "static_guest_target": None,
         "elf_machine": None,
         "checks": MACOS_CHECKS,
+    },
+    "windows-aarch64": {
+        "runner_arch": "ARM64",
+        "runner_label": "windows-11-arm",
+        "runner_os": "Windows",
+        "kernel": "Windows",
+        "machine": "ARM64",
+        "rust_host": "aarch64-pc-windows-msvc",
+        "static_guest_target": None,
+        "elf_machine": None,
+        "checks": WINDOWS_CHECKS,
     },
 }
 SENSITIVE_KEYS = {"authorization", "credential", "secret", "token"}
@@ -253,8 +265,8 @@ def main() -> None:
         errors.append(f"missing platform evidence: {', '.join(missing)}")
 
     matrix = {
-        "schema_version": 2,
-        "contract": "ferrobox-host-architecture-matrix-v2",
+        "schema_version": 3,
+        "contract": "ferrobox-host-architecture-matrix-v3",
         "source": source_identity,
         "shared_smoke": {
             "backend": "process",

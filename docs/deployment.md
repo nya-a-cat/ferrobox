@@ -32,6 +32,10 @@ shared process-backend lifecycle. That backend retains its explicit unsafe
 development classification with isolation `none`. A production macOS microVM
 backend remains open.
 
+The `windows-11-arm` gate provides the same host-side API/CLI and unsafe
+process-backend coverage on native Windows ARM64. It is a portability gate;
+Windows production isolation and WSL2 runtime support remain open.
+
 ## Storage placement
 
 Keep source code wherever the developer prefers. Place Cargo build output,

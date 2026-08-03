@@ -125,18 +125,18 @@ and retains the complete evidence through 2026-11-01.
 ## Host architecture CI
 
 `.github/workflows/architecture.yml` runs the shared Process/API and CLI
-lifecycle on GitHub-hosted Linux x86_64, Linux aarch64, and macOS Apple Silicon.
-Both Linux legs also run the complete workspace test/build and produce a native
-static musl guest. The macOS leg tests the five host-side crates and builds the
-native API and CLI binaries.
+lifecycle on GitHub-hosted Linux x86_64, Linux aarch64, macOS Apple Silicon,
+and Windows ARM64. Both Linux legs also run the complete workspace test/build
+and produce a native static musl guest. The macOS and Windows legs test the
+five host-side crates and build the native API and CLI binaries.
 
 Every leg retains its runner label, GitHub architecture, image identity, kernel,
 normalized CPU description, native Rust host, observational `/dev/kvm` state,
 and every step outcome. Linux evidence additionally binds the static guest ELF
-machine, size, and SHA-256. All three identify the exercised backend as the
+machine, size, and SHA-256. All four identify the exercised backend as the
 unsafe process backend with isolation `none`.
 
-The final convergence job downloads all three records, requires the same
+The final convergence job downloads all four records, requires the same
 repository, commit, ref, run, and common smoke checks, validates each platform's
 build evidence, and uploads one versioned
 `ferrobox-host-architecture-matrix` document. Every test step is allowed to
@@ -192,10 +192,11 @@ The macOS source artifact is `8844229804`, archive digest
 `sha256:342535585b10167fa3745c5ccc82a8eece5eae14eab635eb7f6024b8472cb7d8`.
 All four artifacts expire on 2026-11-01.
 
-The workflow now includes an initial `windows-11-arm` diagnostic. It tests the
-same five host-side crates, native API/CLI build, and shared process lifecycles
-using the runner's preinstalled ARM64 Rust, Bash, Python, and jq. Its first
-GitHub result is pending and remains outside the formal v2 convergence set.
+[Host architecture run 30784445732](https://github.com/nya-a-cat/ferrobox/actions/runs/30784445732)
+passed the `windows-11-arm` diagnostic at commit `ad14972`. The native ARM64
+Rust tests/build and both shared process lifecycles completed successfully on
+image `20260727.122.1` with Rust host `aarch64-pc-windows-msvc`. Promotion into
+the formal four-platform v3 convergence contract is pending its first run.
 
 ## OCI image KVM CI
 
