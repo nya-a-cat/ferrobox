@@ -101,6 +101,23 @@ reflink-capable filesystem. Ferrobox requests `cp --reflink=auto`; the hosted
 performance workflow requires Btrfs and proves reflink support before measuring
 restore latency.
 
+## Immutable template catalog
+
+`ferrobox-template` owns a host-side catalog that is independent from the
+runtime and HTTP contracts. `ferrobox template build` hashes an existing Linux
+kernel and ext4 rootfs, combines those hashes with version, source provenance,
+target architecture, and runtime identity, then persists one immutable record.
+The full descriptor SHA-256 remains in the record. A 240-bit prefix forms the
+64-character `tpl-...` identifier accepted by the existing sandbox domain
+type.
+
+Artifact paths are host-local locators outside the identity calculation. Equal
+bytes and descriptors therefore converge on the same template identity across
+directories. `inspect` recalculates both artifact hashes and sizes. `delete`
+removes the catalog record and leaves the referenced inputs in place. The
+complete format, CLI, security assumptions, and open runtime resolver gate are
+specified in [Immutable template catalog](templates.md).
+
 ## Network modes
 
 `Disabled` creates no guest data interface. `Internet` creates a dedicated

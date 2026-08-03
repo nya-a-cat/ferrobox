@@ -70,6 +70,9 @@ UID/GID 1000.
 
 See [Architecture](docs/architecture.md) for lifecycle, trust boundaries, and
 protocol details.
+The [template catalog](docs/templates.md) records reusable kernel/rootfs inputs
+under stable content-derived identities while OCI construction and runtime
+resolution advance through their separate parity gates.
 
 ## Current capabilities
 
@@ -83,6 +86,7 @@ protocol details.
 | Control plane | Per-sandbox tokens stored as SHA-256 digests |
 | Network | Disabled by default; restricted public egress mode |
 | Startup | Firecracker snapshot restore and configurable ready pool |
+| Templates | Immutable local build/list/inspect/delete catalog with versioned provenance and artifact verification |
 | Observability | Structured lifecycle and workload audit events |
 | Agent surface | Rust CLI, first-party Agent Skill, and OpenAPI 3.1 contract |
 | Testing | Process/API E2E and hosted nested-KVM E2E workflows |

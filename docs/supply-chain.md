@@ -106,6 +106,24 @@ Python rootfs build manifest records:
 The unified evidence record separately hashes the installed kernel and rootfs,
 so copied or modified runtime assets fail the final verification loop.
 
+## Template catalog provenance
+
+The schema-1 template descriptor binds a credential-free source kind,
+reference, and SHA-256 to the target operating system, architecture, runtime,
+human version, kernel digest/size, and rootfs digest/size. Canonical struct JSON
+produces a full specification SHA-256. Its first 240 bits form the public
+template ID; the complete digest stays available for collision and corruption
+checks. Host file locators remain outside this identity payload.
+
+Standard CI run
+[30786711526](https://github.com/nya-a-cat/ferrobox/actions/runs/30786711526)
+proved descriptor integrity, artifact re-verification, alias immutability,
+metadata-only deletion, and deterministic identity after rebuild. Artifact
+`8845497128` has archive digest
+`sha256:46ba9e64288e7d51015e1825805610b5fa5c1eae2a0aff838e796583e97c87aa`
+and expires on 2026-11-01. Registry credentials, remote pulls, and build-system
+secrets stay outside this catalog contract.
+
 ## OCI root filesystem pipeline
 
 The hosted OCI gate fixes the public Python conformance image to repository

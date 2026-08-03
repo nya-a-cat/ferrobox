@@ -84,7 +84,7 @@ Status meanings:
 | Runtime abstraction | Embedded/local runtime plus server and Docker/Kubernetes providers | Partial | Each provider passes one shared lifecycle conformance suite |
 | OCI images | Pull and run pinned public/private OCI images | Partial | Public digest-pinned image boots and executes on GitHub; private-registry custody and API image selection pass their contracts |
 | Host architecture | Linux x86_64, Linux aarch64, macOS Apple Silicon, Windows/WSL2 where supported | Partial | Platform matrix reports the exact isolation backend and passes the shared smoke contract |
-| Templates | Build, list, version, inspect, and delete reusable templates | Partial | Immutable template identity and provenance survive create/delete cycles |
+| Templates | Build, list, version, inspect, and delete reusable templates | Partial | Immutable identity and provenance survive create/delete cycles, then every supported runtime resolves the selected record |
 | Ready pools | Bounded pre-provisioning with safe replenishment | Verified | Allocation, concurrent claim, replenishment, TTL, and leak gates pass |
 | Lifecycle | Create, inspect, set TTL, pause, resume, hibernate, delete | Partial | State-transition contract passes for every runtime provider |
 | User snapshots | Named, inspectable, portable snapshots | Verified | Create/list/get/delete and integrity verification pass |
@@ -146,6 +146,19 @@ same scenario with an approved credential custody contract.
 The CLI command group also covers the complete snapshot API surface: create,
 paginated list, inspect, verify, restore, clone, rollback, and delete. The Live
 Snapshot KVM workflow enforces its separate conformance path.
+
+The template CLI now builds a catalog record from existing kernel/rootfs
+inputs, lists versioned records, inspects by alias or content-derived ID,
+rehashes both artifacts, enforces a one-time unique alias binding, and deletes
+metadata while preserving source artifacts. Standard CI run
+[30786711526](https://github.com/nya-a-cat/ferrobox/actions/runs/30786711526)
+passed this seven-check lifecycle at commit `5f1519a`. Artifact `8845497128`
+retains the descriptor, provenance, successful inspection, deliberate rootfs
+tamper result, deletion result, and same-identity rebuild under archive digest
+`sha256:46ba9e64288e7d51015e1825805610b5fa5c1eae2a0aff838e796583e97c87aa`.
+The row remains Partial while OCI-to-rootfs construction, asynchronous build
+status, runtime catalog resolution, request preview, active-use deletion
+policy, and multi-node artifact distribution remain open.
 
 The implemented eighteen-operation HTTP surface now has one checked-in OpenAPI
 3.1 contract. Standard CI validates it with a digest-pinned official generator,

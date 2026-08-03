@@ -16,6 +16,7 @@ resource usage low and results reproducible.
 - process-backend HTTP end-to-end verification;
 - first-party Agent Skill contract validation;
 - Rust CLI create/exec/file/delete end-to-end verification;
+- immutable template build/list/inspect/delete, alias, tamper, and rebuild verification;
 - Firecracker/Jailer checksum and version verification;
 - full-commit GitHub Action pin verification across every workflow;
 - OpenAPI 3.1 validation, exact Axum route matching, and seven generated SDK
@@ -26,6 +27,19 @@ resource usage low and results reproducible.
 
 The process E2E checks `print(42)`, argv literal handling, file round-trip,
 path traversal rejection, deletion, and token redaction from audit records.
+
+The template E2E runs entirely below `RUNNER_TEMP`. It builds a versioned
+record from synthetic kernel/rootfs fixtures and credential-free OCI
+provenance, lists it, inspects it by content-derived ID, changes the rootfs and
+requires a hash/size mismatch, restores the fixture, rejects alias reassignment,
+deletes the metadata while retaining both inputs, and rebuilds the exact same
+identity. Run
+[30786711526](https://github.com/nya-a-cat/ferrobox/actions/runs/30786711526)
+passed all seven checks at commit `5f1519a`. Evidence artifact `8845497128`
+has archive digest
+`sha256:46ba9e64288e7d51015e1825805610b5fa5c1eae2a0aff838e796583e97c87aa`
+and retains the initial, tampered, deleted, and rebuilt JSON records through
+2026-11-01.
 
 The CLI/Agent Skill E2E repeats the user-facing flow through the compiled
 `ferrobox` binary. It captures the one-time token, proves inspection and literal

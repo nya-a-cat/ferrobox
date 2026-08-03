@@ -53,6 +53,7 @@ Suggested development layout:
   images/vmlinux
   images/python.ext4
   images/python.manifest.json
+  templates/records/
 
 /var/lib/ferrobox/
   jailer/
@@ -62,6 +63,12 @@ Suggested development layout:
 
 All `/opt/ferrobox` inputs and their parent directories must be root-owned and
 unwritable by the runtime UID. Each writable rootfs is copied into its own jail.
+
+Point `FERROBOX_TEMPLATE_STORE` at the operator-owned template directory. Each
+catalog record contains absolute kernel/rootfs locators, so moving an input
+requires deleting and rebuilding its catalog record. Equal descriptor and
+artifact bytes reproduce the same template ID after that cycle. The current
+catalog uses a single-writer operating contract for each store directory.
 
 `scripts/build-oci-rootfs.sh` creates a deterministic ext4 identity from the
 verified OCI and injected guest inputs. It uses the OCI config `created` value
