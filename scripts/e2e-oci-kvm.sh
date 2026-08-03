@@ -20,10 +20,26 @@ fsverity_evidence="${FERROBOX_FSVERITY_EVIDENCE:?FERROBOX_FSVERITY_EVIDENCE is r
 output="${FERROBOX_OCI_E2E_OUTPUT:?FERROBOX_OCI_E2E_OUTPUT is required}"
 api_binary="${FERROBOX_API_BINARY:-target/debug/ferrobox-api}"
 api_url="${FERROBOX_API_URL:-http://127.0.0.1:18084}"
+profile="${FERROBOX_OCI_PROFILE:-python}"
+expected_template_alias="${FERROBOX_TEMPLATE_ALIAS:-oci-python}"
+sandbox_cpu_count="${FERROBOX_SANDBOX_CPU_COUNT:-1}"
+sandbox_memory_mb="${FERROBOX_SANDBOX_MEMORY_MB:-512}"
+sandbox_timeout_seconds="${FERROBOX_SANDBOX_TIMEOUT_SECONDS:-120}"
+browser_expected_version="${FERROBOX_BROWSER_EXPECTED_VERSION:-}"
+browser_fixture="${FERROBOX_BROWSER_FIXTURE:-scripts/fixtures/browser-smoke.html}"
 work_dir="$(mktemp -d)"
 api_pid=""
 sandbox_id=""
 token=""
+
+case "${profile}" in
+    python) [[ -z "${browser_expected_version}" ]] ;;
+    browser) [[ "${browser_expected_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] ;;
+    *) echo "unsupported OCI KVM profile: ${profile}" >&2; exit 2 ;;
+esac
+[[ "${sandbox_cpu_count}" =~ ^[1-9][0-9]*$ ]]
+[[ "${sandbox_memory_mb}" =~ ^[1-9][0-9]*$ ]]
+[[ "${sandbox_timeout_seconds}" =~ ^[1-9][0-9]*$ ]]
 
 cleanup() {
     status="$?"
@@ -53,7 +69,7 @@ record_api_failure() {
     local http_status="$2"
     local response_path="$3"
     local failure_output
-    failure_output="$(dirname -- "${output}")/oci-kvm-api-failure.json"
+    failure_output="$(dirname -- "${output}")/${profile}-kvm-api-failure.json"
     if [[ -s "${response_path}" ]] && jq -e . "${response_path}" >/dev/null 2>&1; then
         jq -c \
             --arg stage "${stage}" \
@@ -139,7 +155,7 @@ template_rootfs_location="$(jq -er '.record.locations.rootfs' "${template_record
 jq --exit-status '.record.status == "ready" and .verification.valid == true' \
     "${template_record}" >/dev/null
 [[ "${template_id}" =~ ^tpl-[0-9a-f]{60}$ ]]
-[[ "${template_alias}" == "oci-python" ]]
+[[ "${template_alias}" == "${expected_template_alias}" ]]
 [[ "${template_spec_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]
 [[ "${template_source_reference}" == "${source_reference}" ]]
 [[ "${template_source_digest}" == "${manifest_digest}" ]]
@@ -225,11 +241,15 @@ curl --fail --silent "${api_url}/healthz" >/dev/null
 
 missing_template_id="tpl-$(printf '0%.0s' {1..60})"
 [[ "${missing_template_id}" != "${template_id}" ]]
-missing_payload="$(jq -n --arg template "${missing_template_id}" '{
+missing_payload="$(jq -n \
+    --arg template "${missing_template_id}" \
+    --argjson cpu_count "${sandbox_cpu_count}" \
+    --argjson memory_mb "${sandbox_memory_mb}" \
+    --argjson timeout_seconds "${sandbox_timeout_seconds}" '{
     template: $template,
-    cpu_count: 1,
-    memory_mb: 512,
-    timeout_seconds: 120,
+    cpu_count: $cpu_count,
+    memory_mb: $memory_mb,
+    timeout_seconds: $timeout_seconds,
     network: {internet_access: false}
 }')"
 missing_response="$(
@@ -241,11 +261,15 @@ missing_response="$(
 jq --exit-status '.error.code == "not_found"' <<<"${missing_response}" >/dev/null
 
 missing_alias="missing-catalog-alias"
-missing_alias_payload="$(jq -n --arg template "${missing_alias}" '{
+missing_alias_payload="$(jq -n \
+    --arg template "${missing_alias}" \
+    --argjson cpu_count "${sandbox_cpu_count}" \
+    --argjson memory_mb "${sandbox_memory_mb}" \
+    --argjson timeout_seconds "${sandbox_timeout_seconds}" '{
     template: $template,
-    cpu_count: 1,
-    memory_mb: 512,
-    timeout_seconds: 120,
+    cpu_count: $cpu_count,
+    memory_mb: $memory_mb,
+    timeout_seconds: $timeout_seconds,
     network: {internet_access: false}
 }')"
 missing_alias_response="$(
@@ -256,11 +280,15 @@ missing_alias_response="$(
 )"
 jq --exit-status '.error.code == "not_found"' <<<"${missing_alias_response}" >/dev/null
 
-create_payload="$(jq -n --arg template "${template_alias}" '{
+create_payload="$(jq -n \
+    --arg template "${template_alias}" \
+    --argjson cpu_count "${sandbox_cpu_count}" \
+    --argjson memory_mb "${sandbox_memory_mb}" \
+    --argjson timeout_seconds "${sandbox_timeout_seconds}" '{
     template: $template,
-    cpu_count: 1,
-    memory_mb: 512,
-    timeout_seconds: 120,
+    cpu_count: $cpu_count,
+    memory_mb: $memory_mb,
+    timeout_seconds: $timeout_seconds,
     network: {internet_access: false}
 }')"
 
@@ -275,26 +303,285 @@ token="$(jq -er '.token' <<<"${create_response}")"
 [[ "$(jq -r '.state' <<<"${create_response}")" == "running" ]]
 unset create_response
 
-exec_payload="$(jq -n '{
-    argv: [
-        "python3",
-        "-c",
-        "import os, platform; assert os.getuid() == 1000; print(\"oci-python=\" + platform.python_version())"
-    ],
-    cwd: "/home/sandbox",
-    environment: {},
-    timeout_seconds: 30,
-    max_output_bytes: 1048576
-}')"
-exec_response="$(
-    api_call python-exec 200 \
-        --header "authorization: Bearer ${token}" \
-        --header 'content-type: application/json' \
-        --data "${exec_payload}" \
-        "${api_url}/v1/sandboxes/${sandbox_id}/commands"
-)"
-python_version="$(jq -er '.stdout | select(startswith("oci-python="))' <<<"${exec_response}")"
-[[ "$(jq -r '.termination.kind' <<<"${exec_response}")" == "exited" ]]
+python_version=""
+browser_process_uid=""
+chromium_path=""
+chromium_version=""
+dom_marker=""
+screenshot_sha256=""
+screenshot_size_bytes=0
+screenshot_width=0
+screenshot_height=0
+screenshot_byte_identical_twice=false
+sandbox_bypass_flag_present=false
+
+if [[ "${profile}" == "python" ]]; then
+    exec_payload="$(jq -n '{
+        argv: [
+            "python3",
+            "-c",
+            "import os, platform; assert os.getuid() == 1000; print(\"oci-python=\" + platform.python_version())"
+        ],
+        cwd: "/home/sandbox",
+        environment: {},
+        timeout_seconds: 30,
+        max_output_bytes: 1048576
+    }')"
+    exec_response="$(
+        api_call python-exec 200 \
+            --header "authorization: Bearer ${token}" \
+            --header 'content-type: application/json' \
+            --data "${exec_payload}" \
+            "${api_url}/v1/sandboxes/${sandbox_id}/commands"
+    )"
+    python_version="$(jq -er '.stdout | select(startswith("oci-python="))' <<<"${exec_response}")"
+    jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
+        <<<"${exec_response}" >/dev/null
+
+    write_response="$(
+        api_call file-write 200 \
+            --request PUT \
+            --header "authorization: Bearer ${token}" \
+            --header 'content-type: application/json' \
+            --data '{"path":"/home/sandbox/oci.txt","content_base64":"ZmVycm9ib3gtb2NpCg==","overwrite":false}' \
+            "${api_url}/v1/sandboxes/${sandbox_id}/files"
+    )"
+    [[ "$(jq -r '.bytes_written' <<<"${write_response}")" == "13" ]]
+    read_response="$(
+        api_call file-read 200 \
+            --header "authorization: Bearer ${token}" \
+            "${api_url}/v1/sandboxes/${sandbox_id}/files?path=%2Fhome%2Fsandbox%2Foci.txt"
+    )"
+    [[ "$(jq -r '.content_base64' <<<"${read_response}")" == "ZmVycm9ib3gtb2NpCg==" ]]
+    list_response="$(
+        api_call directory-list 200 \
+            --header "authorization: Bearer ${token}" \
+            "${api_url}/v1/sandboxes/${sandbox_id}/directories?path=%2Fhome%2Fsandbox"
+    )"
+    jq --exit-status 'any(.entries[]; .name == "oci.txt" and .kind == "file")' \
+        <<<"${list_response}" >/dev/null
+else
+    uid_payload='{"argv":["id","-u"],"cwd":"/home/sandbox","environment":{},"timeout_seconds":30,"max_output_bytes":1024}'
+    uid_response="$(
+        api_call browser-uid 200 \
+            --header "authorization: Bearer ${token}" \
+            --header 'content-type: application/json' \
+            --data "${uid_payload}" \
+            "${api_url}/v1/sandboxes/${sandbox_id}/commands"
+    )"
+    jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
+        <<<"${uid_response}" >/dev/null
+    browser_process_uid="$(jq -er '.stdout | sub("\\n$"; "") | tonumber' \
+        <<<"${uid_response}")"
+    [[ "${browser_process_uid}" == "1000" ]]
+
+    discover_payload="$(jq -n '{
+        argv: [
+            "/bin/sh",
+            "-c",
+            "for browser in /ms-playwright/chromium-*/chrome-linux/chrome /ms-playwright/chromium-*/chrome-linux64/chrome; do if [ -x \"$browser\" ]; then printf \"%s\\n\" \"$browser\"; exit 0; fi; done; exit 1"
+        ],
+        cwd: "/home/sandbox",
+        environment: {},
+        timeout_seconds: 30,
+        max_output_bytes: 4096
+    }')"
+    discover_response="$(
+        api_call browser-discover 200 \
+            --header "authorization: Bearer ${token}" \
+            --header 'content-type: application/json' \
+            --data "${discover_payload}" \
+            "${api_url}/v1/sandboxes/${sandbox_id}/commands"
+    )"
+    jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
+        <<<"${discover_response}" >/dev/null
+    chromium_path="$(jq -er '.stdout | sub("\\n$"; "")' <<<"${discover_response}")"
+    [[ "${chromium_path}" == /ms-playwright/chromium-*/chrome-linux*/chrome ]]
+
+    version_payload="$(jq -n --arg chromium "${chromium_path}" '{
+        argv: [$chromium, "--version"],
+        cwd: "/home/sandbox",
+        environment: {},
+        timeout_seconds: 30,
+        max_output_bytes: 4096
+    }')"
+    version_response="$(
+        api_call browser-version 200 \
+            --header "authorization: Bearer ${token}" \
+            --header 'content-type: application/json' \
+            --data "${version_payload}" \
+            "${api_url}/v1/sandboxes/${sandbox_id}/commands"
+    )"
+    jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
+        <<<"${version_response}" >/dev/null
+    chromium_version="$(jq -er \
+        '.stdout | capture("(?<version>[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+)").version' \
+        <<<"${version_response}")"
+    [[ "${chromium_version}" == "${browser_expected_version}" ]]
+    exec_payload="${version_payload}"
+
+    test -f "${browser_fixture}"
+    browser_html_base64="$(base64 --wrap=0 "${browser_fixture}")"
+    browser_html_size="$(stat --format='%s' "${browser_fixture}")"
+    html_write_payload="$(jq -n \
+        --arg content "${browser_html_base64}" '{
+            path: "/home/sandbox/browser-smoke.html",
+            content_base64: $content,
+            overwrite: false
+        }
+    ')"
+    html_write_response="$(
+        api_call browser-html-write 200 \
+            --request PUT \
+            --header "authorization: Bearer ${token}" \
+            --header 'content-type: application/json' \
+            --data "${html_write_payload}" \
+            "${api_url}/v1/sandboxes/${sandbox_id}/files"
+    )"
+    [[ "$(jq -r '.bytes_written' <<<"${html_write_response}")" == "${browser_html_size}" ]]
+
+    assert_browser_sandbox_args() {
+        local payload="$1"
+        local bypass_flag
+        for bypass_flag in --no-sandbox --disable-setuid-sandbox; do
+            if grep --fixed-strings --quiet -- "${bypass_flag}" <<<"${payload}"; then
+                echo "browser smoke contains sandbox bypass flag: ${bypass_flag}" >&2
+                return 7
+            fi
+        done
+    }
+
+    dom_payload="$(jq -n --arg chromium "${chromium_path}" '{
+        argv: [
+            $chromium,
+            "--headless=new",
+            "--disable-gpu",
+            "--disable-dev-shm-usage",
+            "--hide-scrollbars",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--force-device-scale-factor=1",
+            "--user-data-dir=/home/sandbox/chromium-dom-profile",
+            "--dump-dom",
+            "file:///home/sandbox/browser-smoke.html"
+        ],
+        cwd: "/home/sandbox",
+        environment: {HOME: "/home/sandbox"},
+        timeout_seconds: 60,
+        max_output_bytes: 1048576
+    }')"
+    assert_browser_sandbox_args "${dom_payload}"
+    dom_response="$(
+        api_call browser-dom 200 \
+            --header "authorization: Bearer ${token}" \
+            --header 'content-type: application/json' \
+            --data "${dom_payload}" \
+            "${api_url}/v1/sandboxes/${sandbox_id}/commands"
+    )"
+    jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
+        <<<"${dom_response}" >/dev/null
+    dom_stdout="$(jq -er '.stdout' <<<"${dom_response}")"
+    grep --fixed-strings --quiet 'data-ferrobox-js="ferrobox-js-ok"' <<<"${dom_stdout}"
+    grep --fixed-strings --quiet 'ferrobox-browser-kvm:executed' <<<"${dom_stdout}"
+    dom_marker=ferrobox-js-ok
+
+    run_browser_screenshot() {
+        local stage="$1"
+        local profile_dir="$2"
+        local screenshot_path="$3"
+        local payload
+        local response
+        payload="$(jq -n \
+            --arg chromium "${chromium_path}" \
+            --arg profile_dir "${profile_dir}" \
+            --arg screenshot_path "${screenshot_path}" '{
+                argv: [
+                    $chromium,
+                    "--headless=new",
+                    "--disable-gpu",
+                    "--disable-dev-shm-usage",
+                    "--hide-scrollbars",
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                    "--force-device-scale-factor=1",
+                    "--window-size=800,600",
+                    ("--user-data-dir=" + $profile_dir),
+                    ("--screenshot=" + $screenshot_path),
+                    "file:///home/sandbox/browser-smoke.html"
+                ],
+                cwd: "/home/sandbox",
+                environment: {HOME: "/home/sandbox"},
+                timeout_seconds: 60,
+                max_output_bytes: 1048576
+            }')"
+        assert_browser_sandbox_args "${payload}"
+        response="$(
+            api_call "${stage}" 200 \
+                --header "authorization: Bearer ${token}" \
+                --header 'content-type: application/json' \
+                --data "${payload}" \
+                "${api_url}/v1/sandboxes/${sandbox_id}/commands"
+        )"
+        jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
+            <<<"${response}" >/dev/null
+    }
+
+    run_browser_screenshot \
+        browser-screenshot-a \
+        /home/sandbox/chromium-screenshot-a-profile \
+        /home/sandbox/browser-a.png
+    run_browser_screenshot \
+        browser-screenshot-b \
+        /home/sandbox/chromium-screenshot-b-profile \
+        /home/sandbox/browser-b.png
+
+    screenshot_a_response="$(
+        api_call browser-screenshot-read-a 200 \
+            --header "authorization: Bearer ${token}" \
+            "${api_url}/v1/sandboxes/${sandbox_id}/files?path=%2Fhome%2Fsandbox%2Fbrowser-a.png"
+    )"
+    screenshot_b_response="$(
+        api_call browser-screenshot-read-b 200 \
+            --header "authorization: Bearer ${token}" \
+            "${api_url}/v1/sandboxes/${sandbox_id}/files?path=%2Fhome%2Fsandbox%2Fbrowser-b.png"
+    )"
+    jq -er '.content_base64' <<<"${screenshot_a_response}" \
+        | base64 --decode >"${work_dir}/browser-a.png"
+    jq -er '.content_base64' <<<"${screenshot_b_response}" \
+        | base64 --decode >"${work_dir}/browser-b.png"
+    screenshot_size_bytes="$(stat --format='%s' "${work_dir}/browser-a.png")"
+    [[ "${screenshot_size_bytes}" -ge 1024 ]]
+    [[ "${screenshot_size_bytes}" -le 1048576 ]]
+    screenshot_sha256="$(sha256sum "${work_dir}/browser-a.png" | awk '{print $1}')"
+    screenshot_b_sha256="$(sha256sum "${work_dir}/browser-b.png" | awk '{print $1}')"
+    [[ "${screenshot_sha256}" == "${screenshot_b_sha256}" ]]
+    cmp --silent "${work_dir}/browser-a.png" "${work_dir}/browser-b.png"
+    screenshot_byte_identical_twice=true
+    read -r screenshot_width screenshot_height < <(
+        python3 - "${work_dir}/browser-a.png" <<'PY'
+import struct
+import sys
+
+data = open(sys.argv[1], "rb").read(24)
+if len(data) != 24 or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+    raise SystemExit("invalid PNG signature or IHDR")
+print(*struct.unpack(">II", data[16:24]))
+PY
+    )
+    [[ "${screenshot_width}" == "800" ]]
+    [[ "${screenshot_height}" == "600" ]]
+
+    list_response="$(
+        api_call browser-directory-list 200 \
+            --header "authorization: Bearer ${token}" \
+            "${api_url}/v1/sandboxes/${sandbox_id}/directories?path=%2Fhome%2Fsandbox"
+    )"
+    jq --exit-status '
+        any(.entries[]; .name == "browser-smoke.html" and .kind == "file") and
+        any(.entries[]; .name == "browser-a.png" and .kind == "file") and
+        any(.entries[]; .name == "browser-b.png" and .kind == "file")
+    ' <<<"${list_response}" >/dev/null
+fi
 
 true_response="$(
     api_call true-exec 200 \
@@ -303,30 +590,8 @@ true_response="$(
         --data '{"argv":["/bin/true"],"cwd":"/home/sandbox","environment":{},"timeout_seconds":30,"max_output_bytes":1024}' \
         "${api_url}/v1/sandboxes/${sandbox_id}/commands"
 )"
-[[ "$(jq -r '.termination.kind' <<<"${true_response}")" == "exited" ]]
-
-write_response="$(
-    api_call file-write 200 \
-        --request PUT \
-        --header "authorization: Bearer ${token}" \
-        --header 'content-type: application/json' \
-        --data '{"path":"/home/sandbox/oci.txt","content_base64":"ZmVycm9ib3gtb2NpCg==","overwrite":false}' \
-        "${api_url}/v1/sandboxes/${sandbox_id}/files"
-)"
-[[ "$(jq -r '.bytes_written' <<<"${write_response}")" == "13" ]]
-read_response="$(
-    api_call file-read 200 \
-        --header "authorization: Bearer ${token}" \
-        "${api_url}/v1/sandboxes/${sandbox_id}/files?path=%2Fhome%2Fsandbox%2Foci.txt"
-)"
-[[ "$(jq -r '.content_base64' <<<"${read_response}")" == "ZmVycm9ib3gtb2NpCg==" ]]
-list_response="$(
-    api_call directory-list 200 \
-        --header "authorization: Bearer ${token}" \
-        "${api_url}/v1/sandboxes/${sandbox_id}/directories?path=%2Fhome%2Fsandbox"
-)"
-jq --exit-status 'any(.entries[]; .name == "oci.txt" and .kind == "file")' \
-    <<<"${list_response}" >/dev/null
+jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
+    <<<"${true_response}" >/dev/null
 
 api_call pause 204 \
     --request POST \
@@ -387,86 +652,208 @@ if ip netns list | grep --quiet '^fb-'; then
     exit 6
 fi
 
-jq -n \
-    --arg github_sha "${GITHUB_SHA:-unknown}" \
-    --arg image_reference "${source_reference}" \
-    --arg platform "${platform}" \
-    --arg source_digest "${source_digest}" \
-    --arg manifest_digest "${manifest_digest}" \
-    --arg template_id "${template_id}" \
-    --arg template_alias "${template_alias}" \
-    --arg template_spec_digest "${template_spec_digest}" \
-    --arg template_source_reference "${template_source_reference}" \
-    --arg template_source_digest "${template_source_digest}" \
-    --arg configured_kernel_location "${configured_kernel_location}" \
-    --arg configured_rootfs_location "${configured_rootfs_location}" \
-    --arg configured_rootfs_digest "${configured_rootfs_digest}" \
-    --arg template_kernel_location "${template_kernel_location}" \
-    --arg template_rootfs_location "${template_rootfs_location}" \
-    --arg fsverity_contract "${fsverity_contract}" \
-    --arg fsverity_kernel_digest "${fsverity_kernel_digest}" \
-    --arg fsverity_rootfs_digest "${fsverity_rootfs_digest}" \
-    --argjson fsverity_kernel_p95_us "${fsverity_kernel_p95_us}" \
-    --argjson fsverity_rootfs_p95_us "${fsverity_rootfs_p95_us}" \
-    --argjson configured_rootfs_size "${configured_rootfs_size}" \
-    --arg sandbox_id "${completed_id}" \
-    --arg python_version "${python_version}" \
-    '{
-        schema_version: 1,
-        github_sha: $github_sha,
-        image_reference: $image_reference,
-        platform: $platform,
-        source_digest: $source_digest,
-        manifest_digest: $manifest_digest,
-        template_id: $template_id,
-        template_alias: $template_alias,
-        template_spec_digest: $template_spec_digest,
-        template_source_reference: $template_source_reference,
-        template_source_digest: $template_source_digest,
-        runtime_integrity: {
-            contract_version: $fsverity_contract,
-            source_assets_fsverity_enabled: true,
-            kernel_digest: $fsverity_kernel_digest,
-            rootfs_digest: $fsverity_rootfs_digest,
-            kernel_measure_p95_us: $fsverity_kernel_p95_us,
-            rootfs_measure_p95_us: $fsverity_rootfs_p95_us
-        },
-        runtime_selection: {
-            requested_template_alias: $template_alias,
-            resolved_template_id: $template_id,
-            configured_kernel: $configured_kernel_location,
-            configured_rootfs: $configured_rootfs_location,
-            configured_rootfs_digest: $configured_rootfs_digest,
-            configured_rootfs_size_bytes: $configured_rootfs_size,
-            resolved_kernel: $template_kernel_location,
-            resolved_rootfs: $template_rootfs_location,
-            locations_distinct: (
-                $configured_kernel_location != $template_kernel_location and
-                $configured_rootfs_location != $template_rootfs_location
-            )
-        },
-        sandbox_id: $sandbox_id,
-        python_version: $python_version,
-        checks: [
-            "digest-bound-rootfs",
-            "content-derived-template-identity",
-            "template-runtime-artifact-match",
-            "unknown-template-id-rejected",
-            "unknown-template-alias-rejected",
-            "api-template-alias-resolution",
-            "alias-canonicalized-to-content-id",
-            "catalog-assets-override-configured-fallback",
-            "fs-verity-source-assets",
-            "microvm-ready",
-            "uid-1000-python",
-            "argv-execution",
-            "file-write-read-list",
-            "pause-reject-resume",
-            "delete-stale-handle",
-            "credential-redaction",
-            "process-cleanup",
-            "network-resource-cleanup"
-        ]
-    }' >"${output}"
-
-printf 'OCI KVM E2E passed for sandbox %s (%s)\n' "${completed_id}" "${python_version}"
+if [[ "${profile}" == "python" ]]; then
+    jq -n \
+        --arg github_sha "${GITHUB_SHA:-unknown}" \
+        --arg image_reference "${source_reference}" \
+        --arg platform "${platform}" \
+        --arg source_digest "${source_digest}" \
+        --arg manifest_digest "${manifest_digest}" \
+        --arg template_id "${template_id}" \
+        --arg template_alias "${template_alias}" \
+        --arg template_spec_digest "${template_spec_digest}" \
+        --arg template_source_reference "${template_source_reference}" \
+        --arg template_source_digest "${template_source_digest}" \
+        --arg configured_kernel_location "${configured_kernel_location}" \
+        --arg configured_rootfs_location "${configured_rootfs_location}" \
+        --arg configured_rootfs_digest "${configured_rootfs_digest}" \
+        --arg template_kernel_location "${template_kernel_location}" \
+        --arg template_rootfs_location "${template_rootfs_location}" \
+        --arg fsverity_contract "${fsverity_contract}" \
+        --arg fsverity_kernel_digest "${fsverity_kernel_digest}" \
+        --arg fsverity_rootfs_digest "${fsverity_rootfs_digest}" \
+        --argjson fsverity_kernel_p95_us "${fsverity_kernel_p95_us}" \
+        --argjson fsverity_rootfs_p95_us "${fsverity_rootfs_p95_us}" \
+        --argjson configured_rootfs_size "${configured_rootfs_size}" \
+        --arg sandbox_id "${completed_id}" \
+        --arg python_version "${python_version}" \
+        '{
+            schema_version: 1,
+            github_sha: $github_sha,
+            image_reference: $image_reference,
+            platform: $platform,
+            source_digest: $source_digest,
+            manifest_digest: $manifest_digest,
+            template_id: $template_id,
+            template_alias: $template_alias,
+            template_spec_digest: $template_spec_digest,
+            template_source_reference: $template_source_reference,
+            template_source_digest: $template_source_digest,
+            runtime_integrity: {
+                contract_version: $fsverity_contract,
+                source_assets_fsverity_enabled: true,
+                kernel_digest: $fsverity_kernel_digest,
+                rootfs_digest: $fsverity_rootfs_digest,
+                kernel_measure_p95_us: $fsverity_kernel_p95_us,
+                rootfs_measure_p95_us: $fsverity_rootfs_p95_us
+            },
+            runtime_selection: {
+                requested_template_alias: $template_alias,
+                resolved_template_id: $template_id,
+                configured_kernel: $configured_kernel_location,
+                configured_rootfs: $configured_rootfs_location,
+                configured_rootfs_digest: $configured_rootfs_digest,
+                configured_rootfs_size_bytes: $configured_rootfs_size,
+                resolved_kernel: $template_kernel_location,
+                resolved_rootfs: $template_rootfs_location,
+                locations_distinct: (
+                    $configured_kernel_location != $template_kernel_location and
+                    $configured_rootfs_location != $template_rootfs_location
+                )
+            },
+            sandbox_id: $sandbox_id,
+            python_version: $python_version,
+            checks: [
+                "digest-bound-rootfs",
+                "content-derived-template-identity",
+                "template-runtime-artifact-match",
+                "unknown-template-id-rejected",
+                "unknown-template-alias-rejected",
+                "api-template-alias-resolution",
+                "alias-canonicalized-to-content-id",
+                "catalog-assets-override-configured-fallback",
+                "fs-verity-source-assets",
+                "microvm-ready",
+                "uid-1000-python",
+                "argv-execution",
+                "file-write-read-list",
+                "pause-reject-resume",
+                "delete-stale-handle",
+                "credential-redaction",
+                "process-cleanup",
+                "network-resource-cleanup"
+            ]
+        }' >"${output}"
+    printf 'OCI KVM E2E passed for sandbox %s (%s)\n' \
+        "${completed_id}" "${python_version}"
+else
+    jq -n \
+        --arg github_sha "${GITHUB_SHA:-unknown}" \
+        --arg image_reference "${source_reference}" \
+        --arg platform "${platform}" \
+        --arg source_digest "${source_digest}" \
+        --arg manifest_digest "${manifest_digest}" \
+        --arg template_id "${template_id}" \
+        --arg template_alias "${template_alias}" \
+        --arg template_spec_digest "${template_spec_digest}" \
+        --arg template_source_reference "${template_source_reference}" \
+        --arg template_source_digest "${template_source_digest}" \
+        --arg configured_kernel_location "${configured_kernel_location}" \
+        --arg configured_rootfs_location "${configured_rootfs_location}" \
+        --arg configured_rootfs_digest "${configured_rootfs_digest}" \
+        --arg template_kernel_location "${template_kernel_location}" \
+        --arg template_rootfs_location "${template_rootfs_location}" \
+        --arg fsverity_contract "${fsverity_contract}" \
+        --arg fsverity_kernel_digest "${fsverity_kernel_digest}" \
+        --arg fsverity_rootfs_digest "${fsverity_rootfs_digest}" \
+        --argjson fsverity_kernel_p95_us "${fsverity_kernel_p95_us}" \
+        --argjson fsverity_rootfs_p95_us "${fsverity_rootfs_p95_us}" \
+        --argjson configured_rootfs_size "${configured_rootfs_size}" \
+        --arg sandbox_id "${completed_id}" \
+        --arg chromium_path "${chromium_path}" \
+        --arg chromium_version "${chromium_version}" \
+        --arg dom_marker "${dom_marker}" \
+        --arg screenshot_sha256 "${screenshot_sha256}" \
+        --argjson browser_process_uid "${browser_process_uid}" \
+        --argjson sandbox_bypass_flag_present "${sandbox_bypass_flag_present}" \
+        --argjson screenshot_size_bytes "${screenshot_size_bytes}" \
+        --argjson screenshot_width "${screenshot_width}" \
+        --argjson screenshot_height "${screenshot_height}" \
+        --argjson screenshot_byte_identical_twice "${screenshot_byte_identical_twice}" \
+        '{
+            schema_version: 1,
+            contract_version: "ferrobox-browser-kvm-evidence-v1",
+            github_sha: $github_sha,
+            image_reference: $image_reference,
+            platform: $platform,
+            source_digest: $source_digest,
+            manifest_digest: $manifest_digest,
+            template_id: $template_id,
+            template_alias: $template_alias,
+            template_spec_digest: $template_spec_digest,
+            template_source_reference: $template_source_reference,
+            template_source_digest: $template_source_digest,
+            runtime_integrity: {
+                contract_version: $fsverity_contract,
+                source_assets_fsverity_enabled: true,
+                kernel_digest: $fsverity_kernel_digest,
+                rootfs_digest: $fsverity_rootfs_digest,
+                kernel_measure_p95_us: $fsverity_kernel_p95_us,
+                rootfs_measure_p95_us: $fsverity_rootfs_p95_us
+            },
+            runtime_selection: {
+                requested_template_alias: $template_alias,
+                resolved_template_id: $template_id,
+                configured_kernel: $configured_kernel_location,
+                configured_rootfs: $configured_rootfs_location,
+                configured_rootfs_digest: $configured_rootfs_digest,
+                configured_rootfs_size_bytes: $configured_rootfs_size,
+                resolved_kernel: $template_kernel_location,
+                resolved_rootfs: $template_rootfs_location,
+                locations_distinct: (
+                    $configured_kernel_location != $template_kernel_location and
+                    $configured_rootfs_location != $template_rootfs_location
+                )
+            },
+            sandbox_id: $sandbox_id,
+            browser: {
+                process_uid: $browser_process_uid,
+                executable: $chromium_path,
+                chromium_version: $chromium_version,
+                headless_mode: "new",
+                sandbox_bypass_flag_present: $sandbox_bypass_flag_present,
+                network_enabled: false,
+                dom: {
+                    url: "file:///home/sandbox/browser-smoke.html",
+                    javascript_marker: $dom_marker
+                },
+                screenshot: {
+                    path: "/home/sandbox/browser-a.png",
+                    size_bytes: $screenshot_size_bytes,
+                    sha256: $screenshot_sha256,
+                    png_signature_verified: true,
+                    width: $screenshot_width,
+                    height: $screenshot_height,
+                    byte_identical_twice: $screenshot_byte_identical_twice
+                }
+            },
+            checks: [
+                "digest-bound-rootfs",
+                "content-derived-template-identity",
+                "template-runtime-artifact-match",
+                "unknown-template-id-rejected",
+                "unknown-template-alias-rejected",
+                "api-template-alias-resolution",
+                "alias-canonicalized-to-content-id",
+                "catalog-assets-override-configured-fallback",
+                "fs-verity-source-assets",
+                "microvm-ready",
+                "uid-1000-browser",
+                "chromium-version-pinned",
+                "chromium-sandbox-required",
+                "network-disabled",
+                "offline-local-document",
+                "javascript-dom-execution",
+                "screenshot-file-api",
+                "png-signature-and-dimensions",
+                "screenshot-byte-identical-twice",
+                "pause-reject-resume",
+                "delete-stale-handle",
+                "credential-redaction",
+                "process-cleanup",
+                "network-resource-cleanup"
+            ]
+        }' >"${output}"
+    printf 'Browser KVM E2E passed for sandbox %s (Chromium %s)\n' \
+        "${completed_id}" "${chromium_version}"
+fi
