@@ -27,6 +27,11 @@ evidence remain an open production gate. GitHub architecture run `30781691279`
 verified the native aarch64 build and process lifecycle and reported no
 `/dev/kvm` device on its `ubuntu-24.04-arm` runner.
 
+The `macos-15` M1 gate builds the host-side API and CLI and exercises their
+shared process-backend lifecycle. That backend retains its explicit unsafe
+development classification with isolation `none`. A production macOS microVM
+backend remains open.
+
 ## Storage placement
 
 Keep source code wherever the developer prefers. Place Cargo build output,

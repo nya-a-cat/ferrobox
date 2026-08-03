@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Converge the GitHub x86_64/aarch64 host capability evidence."""
+"""Converge the GitHub Linux and Apple Silicon host capability evidence."""
 
 from __future__ import annotations
 
@@ -11,25 +11,7 @@ from pathlib import Path
 from typing import Any
 
 
-PLATFORMS = {
-    "linux-aarch64": {
-        "runner_arch": "ARM64",
-        "runner_label": "ubuntu-24.04-arm",
-        "machine": "aarch64",
-        "rust_host": "aarch64-unknown-linux-gnu",
-        "static_guest_target": "aarch64-unknown-linux-musl",
-        "elf_machine": 183,
-    },
-    "linux-x86_64": {
-        "runner_arch": "X64",
-        "runner_label": "ubuntu-24.04",
-        "machine": "x86_64",
-        "rust_host": "x86_64-unknown-linux-gnu",
-        "static_guest_target": "x86_64-unknown-linux-musl",
-        "elf_machine": 62,
-    },
-}
-CHECKS = (
+LINUX_CHECKS = (
     "rust-toolchain",
     "native-build-tools",
     "action-pin-policy",
@@ -40,6 +22,58 @@ CHECKS = (
     "process-api-lifecycle",
     "cli-lifecycle",
 )
+MACOS_CHECKS = (
+    "rust-toolchain",
+    "native-tools",
+    "action-pin-policy",
+    "dependency-lock",
+    "host-tests",
+    "host-build",
+    "process-api-lifecycle",
+    "cli-lifecycle",
+)
+COMMON_CHECKS = (
+    "rust-toolchain",
+    "action-pin-policy",
+    "dependency-lock",
+    "process-api-lifecycle",
+    "cli-lifecycle",
+)
+PLATFORMS = {
+    "linux-aarch64": {
+        "runner_arch": "ARM64",
+        "runner_label": "ubuntu-24.04-arm",
+        "runner_os": "Linux",
+        "kernel": "Linux",
+        "machine": "aarch64",
+        "rust_host": "aarch64-unknown-linux-gnu",
+        "static_guest_target": "aarch64-unknown-linux-musl",
+        "elf_machine": 183,
+        "checks": LINUX_CHECKS,
+    },
+    "linux-x86_64": {
+        "runner_arch": "X64",
+        "runner_label": "ubuntu-24.04",
+        "runner_os": "Linux",
+        "kernel": "Linux",
+        "machine": "x86_64",
+        "rust_host": "x86_64-unknown-linux-gnu",
+        "static_guest_target": "x86_64-unknown-linux-musl",
+        "elf_machine": 62,
+        "checks": LINUX_CHECKS,
+    },
+    "macos-aarch64": {
+        "runner_arch": "ARM64",
+        "runner_label": "macos-15",
+        "runner_os": "macOS",
+        "kernel": "Darwin",
+        "machine": "arm64",
+        "rust_host": "aarch64-apple-darwin",
+        "static_guest_target": None,
+        "elf_machine": None,
+        "checks": MACOS_CHECKS,
+    },
+}
 SENSITIVE_KEYS = {"authorization", "credential", "secret", "token"}
 TOP_LEVEL_FIELDS = {
     "contract",
@@ -103,12 +137,15 @@ def validate_evidence(
     if (
         runner.get("label") != expected["runner_label"]
         or runner.get("arch") != expected["runner_arch"]
-        or runner.get("os") != "Linux"
+        or runner.get("os") != expected["runner_os"]
         or runner.get("environment") != "github-hosted"
     ):
         errors.append(f"{platform_id} runner identity drift")
     system = evidence.get("system", {})
-    if system.get("kernel") != "Linux" or system.get("machine") != expected["machine"]:
+    if (
+        system.get("kernel") != expected["kernel"]
+        or system.get("machine") != expected["machine"]
+    ):
         errors.append(f"{platform_id} kernel identity drift")
     cpu = evidence.get("cpu", {})
     if cpu.get("architecture") != expected["machine"]:
@@ -120,16 +157,20 @@ def validate_evidence(
     ):
         errors.append(f"{platform_id} Rust target drift")
     guest = evidence.get("guest_artifact")
-    if not isinstance(guest, dict):
-        errors.append(f"{platform_id} static guest is missing")
-    elif (
-        guest.get("elf_machine") != expected["elf_machine"]
-        or guest.get("has_interpreter") is not False
-        or guest.get("valid_elf64_little_endian") is not True
-        or guest.get("executable") is not True
-        or not re.fullmatch(r"[0-9a-f]{64}", str(guest.get("sha256", "")))
-    ):
-        errors.append(f"{platform_id} static guest identity drift")
+    if expected["static_guest_target"] is None:
+        if guest is not None:
+            errors.append(f"{platform_id} unexpectedly retained a Linux guest")
+    else:
+        if not isinstance(guest, dict):
+            errors.append(f"{platform_id} static guest is missing")
+        elif (
+            guest.get("elf_machine") != expected["elf_machine"]
+            or guest.get("has_interpreter") is not False
+            or guest.get("valid_elf64_little_endian") is not True
+            or guest.get("executable") is not True
+            or not re.fullmatch(r"[0-9a-f]{64}", str(guest.get("sha256", "")))
+        ):
+            errors.append(f"{platform_id} static guest identity drift")
     kvm = evidence.get("kvm", {})
     if kvm.get("path") != "/dev/kvm" or kvm.get("firecracker_exercised") is not False:
         errors.append(f"{platform_id} KVM observation drift")
@@ -151,7 +192,7 @@ def validate_evidence(
         or verification.get("complete") is not True
         or verification.get("errors") != []
         or not isinstance(check_outcomes, dict)
-        or set(check_outcomes) != set(CHECKS)
+        or set(check_outcomes) != set(expected["checks"])
         or set(check_outcomes.values()) != {"success"}
     ):
         errors.append(f"{platform_id} shared smoke contract failed")
@@ -204,6 +245,7 @@ def main() -> None:
             "toolchain": evidence["toolchain"],
             "guest_artifact": evidence["guest_artifact"],
             "kvm": evidence["kvm"],
+            "checks": evidence["verification"]["checks"],
         }
 
     missing = sorted(set(PLATFORMS) - set(retained))
@@ -211,13 +253,13 @@ def main() -> None:
         errors.append(f"missing platform evidence: {', '.join(missing)}")
 
     matrix = {
-        "schema_version": 1,
-        "contract": "ferrobox-host-architecture-matrix-v1",
+        "schema_version": 2,
+        "contract": "ferrobox-host-architecture-matrix-v2",
         "source": source_identity,
         "shared_smoke": {
             "backend": "process",
             "isolation": "none",
-            "checks": list(CHECKS),
+            "common_checks": list(COMMON_CHECKS),
             "platform_count": len(retained),
         },
         "platforms": [retained[name] for name in sorted(retained)],

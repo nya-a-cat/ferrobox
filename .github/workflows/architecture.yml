@@ -100,6 +100,8 @@ jobs:
             --platform-id '${{ matrix.platform_id }}' \
             --runner-label '${{ matrix.runner }}' \
             --expected-runner-arch '${{ matrix.runner_arch }}' \
+            --expected-runner-os 'Linux' \
+            --expected-kernel 'Linux' \
             --expected-machine '${{ matrix.machine }}' \
             --expected-rust-host '${{ matrix.rust_host }}' \
             --static-guest-target '${{ matrix.static_guest_target }}' \
@@ -123,8 +125,8 @@ jobs:
           if-no-files-found: error
           path: ${{ runner.temp }}/host-capability-${{ matrix.platform_id }}/host-capability.json
 
-  darwin-diagnostic:
-    name: Native macos-aarch64 diagnostic
+  darwin:
+    name: Native macos-aarch64
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -187,58 +189,40 @@ jobs:
         shell: bash
         run: bash scripts/e2e-cli.sh
 
-      - name: Record macOS diagnostic
+      - name: Record and enforce native host capability
         if: always()
         shell: bash
         run: |
-          diagnostic="${RUNNER_TEMP}/macos-aarch64-diagnostic.txt"
-          {
-            printf 'repository=%s\n' "${GITHUB_REPOSITORY}"
-            printf 'commit=%s\n' "${GITHUB_SHA}"
-            printf 'run_id=%s\n' "${GITHUB_RUN_ID}"
-            printf 'runner_arch=%s\n' "${RUNNER_ARCH}"
-            printf 'runner_os=%s\n' "${RUNNER_OS}"
-            printf 'image_os=%s\n' "${ImageOS:-}"
-            printf 'image_version=%s\n' "${ImageVersion:-}"
-            printf 'rust_toolchain=%s\n' '${{ steps.rust_toolchain.outcome }}'
-            printf 'native_tools=%s\n' '${{ steps.native_tools.outcome }}'
-            printf 'action_pin_policy=%s\n' '${{ steps.action_pin_policy.outcome }}'
-            printf 'dependency_lock=%s\n' '${{ steps.dependency_lock.outcome }}'
-            printf 'host_tests=%s\n' '${{ steps.host_tests.outcome }}'
-            printf 'host_build=%s\n' '${{ steps.host_build.outcome }}'
-            printf 'process_api_lifecycle=%s\n' '${{ steps.process_api_lifecycle.outcome }}'
-            printf 'cli_lifecycle=%s\n' '${{ steps.cli_lifecycle.outcome }}'
-            uname -a
-            sysctl -n machdep.cpu.brand_string || true
-            rustc -vV || true
-          } >"${diagnostic}"
-          cat "${diagnostic}"
+          python3 scripts/record-host-capability.py \
+            --platform-id 'macos-aarch64' \
+            --runner-label 'macos-15' \
+            --expected-runner-arch 'ARM64' \
+            --expected-runner-os 'macOS' \
+            --expected-kernel 'Darwin' \
+            --expected-machine 'arm64' \
+            --expected-rust-host 'aarch64-apple-darwin' \
+            --check 'rust-toolchain=${{ steps.rust_toolchain.outcome }}' \
+            --check 'native-tools=${{ steps.native_tools.outcome }}' \
+            --check 'action-pin-policy=${{ steps.action_pin_policy.outcome }}' \
+            --check 'dependency-lock=${{ steps.dependency_lock.outcome }}' \
+            --check 'host-tests=${{ steps.host_tests.outcome }}' \
+            --check 'host-build=${{ steps.host_build.outcome }}' \
+            --check 'process-api-lifecycle=${{ steps.process_api_lifecycle.outcome }}' \
+            --check 'cli-lifecycle=${{ steps.cli_lifecycle.outcome }}' \
+            --output '${{ runner.temp }}/host-capability-macos-aarch64/host-capability.json'
 
-      - name: Upload macOS diagnostic
+      - name: Upload native host capability
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: host-capability-macos-aarch64-diagnostic
+          name: host-capability-macos-aarch64
           if-no-files-found: error
-          path: ${{ runner.temp }}/macos-aarch64-diagnostic.txt
-
-      - name: Enforce macOS diagnostic
-        if: always()
-        shell: bash
-        run: |
-          test '${{ steps.rust_toolchain.outcome }}' = success
-          test '${{ steps.native_tools.outcome }}' = success
-          test '${{ steps.action_pin_policy.outcome }}' = success
-          test '${{ steps.dependency_lock.outcome }}' = success
-          test '${{ steps.host_tests.outcome }}' = success
-          test '${{ steps.host_build.outcome }}' = success
-          test '${{ steps.process_api_lifecycle.outcome }}' = success
-          test '${{ steps.cli_lifecycle.outcome }}' = success
+          path: ${{ runner.temp }}/host-capability-macos-aarch64/host-capability.json
 
   convergence:
     name: Host architecture convergence
     if: always()
-    needs: native
+    needs: [native, darwin]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

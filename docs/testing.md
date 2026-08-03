@@ -138,7 +138,8 @@ labels the exercised backend as the unsafe process backend with isolation
 
 The final convergence job downloads both records, requires the same repository,
 commit, ref, run, and smoke checks, validates both native ELF identities, and
-uploads one `ferrobox-host-architecture-matrix-v1` document. Every test step is
+uploads one versioned `ferrobox-host-architecture-matrix` document. Every test
+step is
 allowed to finish diagnostically; its exact GitHub outcome is recorded and the
 leg fails after the evidence is written when any outcome is incomplete.
 
@@ -168,11 +169,13 @@ support, macOS Apple Silicon, and Windows/WSL2 remain open host-architecture
 gates. GitHub documents both Linux runner labels in its
 [hosted-runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
-The same workflow now has a diagnostic `macos-15` M1 leg for the host-side
-crates and the shared Process/API plus CLI lifecycle. It records every step
-outcome and runner identity before enforcing success. The initial GitHub result
-is pending; this diagnostic carries no Apple Virtualization Framework or
-hardware-isolation claim.
+The same workflow exercises the host-side crates and shared Process/API plus
+CLI lifecycle on a `macos-15` M1 runner. Diagnostic run `30782286698` completed
+every functional check and isolated the Bash 4-only `mapfile` used by the action
+pin policy. Run `30782442876` passed after the pin checker moved to Bash 3.2
+compatible streaming input. The macOS leg is now being promoted into the
+machine-readable cross-runner convergence contract; its first formal result is
+pending. It carries no Apple Virtualization Framework hardware-isolation claim.
 
 ## OCI image KVM CI
 

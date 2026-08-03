@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 
-CHECKS = (
+LINUX_CHECKS = (
     "rust-toolchain",
     "native-build-tools",
     "action-pin-policy",
@@ -26,6 +26,21 @@ CHECKS = (
     "process-api-lifecycle",
     "cli-lifecycle",
 )
+MACOS_CHECKS = (
+    "rust-toolchain",
+    "native-tools",
+    "action-pin-policy",
+    "dependency-lock",
+    "host-tests",
+    "host-build",
+    "process-api-lifecycle",
+    "cli-lifecycle",
+)
+CHECKS_BY_PLATFORM = {
+    "linux-aarch64": LINUX_CHECKS,
+    "linux-x86_64": LINUX_CHECKS,
+    "macos-aarch64": MACOS_CHECKS,
+}
 ELF_MACHINES = {"aarch64": 183, "x86_64": 62}
 
 
@@ -52,7 +67,10 @@ def command(command: list[str]) -> dict[str, Any]:
     }
 
 
-def parse_checks(values: list[str]) -> dict[str, str]:
+def parse_checks(platform_id: str, values: list[str]) -> dict[str, str]:
+    expected = CHECKS_BY_PLATFORM.get(platform_id)
+    if expected is None:
+        raise SystemExit(f"unknown platform identity: {platform_id}")
     checks: dict[str, str] = {}
     for value in values:
         name, separator, outcome = value.partition("=")
@@ -61,7 +79,7 @@ def parse_checks(values: list[str]) -> dict[str, str]:
         if name in checks:
             raise SystemExit(f"duplicate check outcome: {name}")
         checks[name] = outcome
-    if tuple(checks) != CHECKS:
+    if tuple(checks) != expected:
         raise SystemExit(f"check order drift: {tuple(checks)}")
     return checks
 
@@ -96,6 +114,28 @@ def parse_lscpu(result: dict[str, Any]) -> dict[str, str | None]:
             value = item.get("data")
             parsed[wanted[field]] = str(value) if value is not None else None
     return parsed
+
+
+def command_value(arguments: list[str]) -> str | None:
+    result = command(arguments)
+    return result["output"] if result["ok"] else None
+
+
+def parse_darwin_cpu() -> dict[str, str | None]:
+    hypervisor_support = command_value(["sysctl", "-n", "kern.hv_support"])
+    return {
+        "architecture": command_value(["sysctl", "-n", "hw.machine"]),
+        "logical_cpus": command_value(["sysctl", "-n", "hw.logicalcpu"]),
+        "vendor_id": "Apple",
+        "model_name": command_value(
+            ["sysctl", "-n", "machdep.cpu.brand_string"]
+        ),
+        "virtualization": (
+            "Hypervisor.framework" if hypervisor_support == "1" else None
+        ),
+        "hypervisor_vendor": "Apple" if hypervisor_support == "1" else None,
+        "byte_order": "Little Endian",
+    }
 
 
 def sha256(path: Path) -> str:
@@ -192,16 +232,27 @@ def main() -> None:
     parser.add_argument("--platform-id", required=True)
     parser.add_argument("--runner-label", required=True)
     parser.add_argument("--expected-runner-arch", required=True)
-    parser.add_argument("--expected-machine", choices=tuple(ELF_MACHINES), required=True)
+    parser.add_argument(
+        "--expected-runner-os", choices=("Linux", "macOS"), required=True
+    )
+    parser.add_argument("--expected-kernel", choices=("Darwin", "Linux"), required=True)
+    parser.add_argument(
+        "--expected-machine",
+        choices=("aarch64", "arm64", "x86_64"),
+        required=True,
+    )
     parser.add_argument("--expected-rust-host", required=True)
-    parser.add_argument("--static-guest-target", required=True)
-    parser.add_argument("--static-guest", type=Path, required=True)
+    parser.add_argument("--static-guest-target")
+    parser.add_argument("--static-guest", type=Path)
     parser.add_argument("--check", action="append", default=[])
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
 
     errors: list[str] = []
-    checks = parse_checks(arguments.check)
+    if bool(arguments.static_guest_target) != bool(arguments.static_guest):
+        parser.error("static guest target and path must be provided together")
+
+    checks = parse_checks(arguments.platform_id, arguments.check)
     for name, outcome in checks.items():
         if outcome != "success":
             errors.append(f"{name} outcome is {outcome}")
@@ -213,8 +264,10 @@ def main() -> None:
         errors.append(
             f"runner arch {runner_arch!r} != {arguments.expected_runner_arch!r}"
         )
-    if runner_os != "Linux":
-        errors.append(f"runner OS {runner_os!r} != 'Linux'")
+    if runner_os != arguments.expected_runner_os:
+        errors.append(
+            f"runner OS {runner_os!r} != {arguments.expected_runner_os!r}"
+        )
     if runner_environment != "github-hosted":
         errors.append(f"runner environment {runner_environment!r} != 'github-hosted'")
 
@@ -222,8 +275,8 @@ def main() -> None:
     uname_machine = command(["uname", "-m"])
     uname_release = command(["uname", "-r"])
     machine = uname_machine["output"] if uname_machine["ok"] else None
-    if not uname_system["ok"] or uname_system["output"] != "Linux":
-        errors.append("uname did not report Linux")
+    if not uname_system["ok"] or uname_system["output"] != arguments.expected_kernel:
+        errors.append(f"uname did not report {arguments.expected_kernel}")
     if machine != arguments.expected_machine:
         errors.append(f"machine {machine!r} != {arguments.expected_machine!r}")
 
@@ -235,27 +288,33 @@ def main() -> None:
             f"rust host {rust_host!r} != {arguments.expected_rust_host!r}"
         )
 
-    stable_guest_path = (
-        f"target/{arguments.static_guest_target}/release/ferrobox-guest"
-    )
-    guest = inspect_elf(arguments.static_guest, stable_guest_path)
-    expected_elf_machine = ELF_MACHINES[arguments.expected_machine]
-    if guest is None:
-        errors.append("static guest artifact is missing")
-    else:
-        if not guest.get("valid_elf64_little_endian"):
-            errors.append("static guest is not a little-endian ELF64 binary")
-        if guest.get("elf_machine") != expected_elf_machine:
-            errors.append("static guest ELF machine does not match the runner")
-        if guest.get("has_interpreter") is not False:
-            errors.append("static guest has a dynamic interpreter")
-        if guest.get("executable") is not True:
-            errors.append("static guest is not executable")
+    guest = None
+    if arguments.static_guest_target and arguments.static_guest:
+        stable_guest_path = (
+            f"target/{arguments.static_guest_target}/release/ferrobox-guest"
+        )
+        guest = inspect_elf(arguments.static_guest, stable_guest_path)
+        expected_elf_machine = ELF_MACHINES.get(arguments.expected_machine)
+        if guest is None:
+            errors.append("static guest artifact is missing")
+        else:
+            if not guest.get("valid_elf64_little_endian"):
+                errors.append("static guest is not a little-endian ELF64 binary")
+            if guest.get("elf_machine") != expected_elf_machine:
+                errors.append("static guest ELF machine does not match the runner")
+            if guest.get("has_interpreter") is not False:
+                errors.append("static guest has a dynamic interpreter")
+            if guest.get("executable") is not True:
+                errors.append("static guest is not executable")
+    elif arguments.expected_kernel == "Linux":
+        errors.append("Linux capability evidence requires a static guest")
 
-    lscpu = command(["lscpu", "--json"])
-    cpu = parse_lscpu(lscpu)
+    if arguments.expected_kernel == "Linux":
+        cpu = parse_lscpu(command(["lscpu", "--json"]))
+    else:
+        cpu = parse_darwin_cpu()
     if cpu["architecture"] != arguments.expected_machine:
-        errors.append("lscpu architecture does not match the runner")
+        errors.append("CPU architecture does not match the runner")
 
     source = {
         "repository": required_environment("GITHUB_REPOSITORY", errors),
