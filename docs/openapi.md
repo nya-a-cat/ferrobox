@@ -71,7 +71,8 @@ in the artifact after a path-name review.
 
 The retained SDK matrix contains one sanitized schema-1 record per language,
 the seven distinct UUIDv7 sandbox identities, the shared audit-log hash, and
-the SHA-256 of each dependency manifest or lock. Python uses a fixed
+the SHA-256 of each dependency manifest or lock. Per-language JSON records use
+canonical BOM-free UTF-8. Python uses a fixed
 `exclude-newer` cutoff. C# uses NuGet locked mode; Go uses its checked-in
 `go.sum`; Java resolves online, explicitly prefetches the Surefire JUnit
 Platform provider at `2.22.2`, records its JAR SHA-256, then tests offline;

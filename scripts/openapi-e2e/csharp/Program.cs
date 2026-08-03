@@ -145,7 +145,7 @@ internal static class Program
             await File.WriteAllTextAsync(
                 evidencePath,
                 JsonSerializer.Serialize(evidence, new JsonSerializerOptions { WriteIndented = true }) + "\n",
-                Encoding.UTF8);
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             Console.WriteLine(JsonSerializer.Serialize(evidence));
         }
         finally
