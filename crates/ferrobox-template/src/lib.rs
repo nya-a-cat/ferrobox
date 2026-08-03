@@ -140,10 +140,7 @@ pub struct DeleteTemplateResult {
 #[derive(Debug, Error)]
 pub enum TemplateCatalogError {
     #[error("invalid {field}: {reason}")]
-    InvalidInput {
-        field: &'static str,
-        reason: String,
-    },
+    InvalidInput { field: &'static str, reason: String },
     #[error("template alias {alias} already points to {template_id}")]
     AliasConflict { alias: String, template_id: String },
     #[error("template identity {template_id} already uses alias {alias}")]
@@ -357,12 +354,11 @@ impl TemplateCatalog {
         let target = directory.join(format!("{}.json", record.alias));
         let mut payload = serde_json::to_vec_pretty(record)?;
         payload.push(b'\n');
-        let mut temporary = NamedTempFile::new_in(&directory).map_err(|source| {
-            TemplateCatalogError::Io {
+        let mut temporary =
+            NamedTempFile::new_in(&directory).map_err(|source| TemplateCatalogError::Io {
                 path: directory.clone(),
                 source,
-            }
-        })?;
+            })?;
         temporary
             .write_all(&payload)
             .and_then(|()| temporary.as_file().sync_all())
@@ -454,17 +450,15 @@ fn validate_version(value: &str) -> Result<String, TemplateCatalogError> {
     {
         return Err(TemplateCatalogError::InvalidInput {
             field: "version",
-            reason: "expected 1-64 ASCII letters, digits, dots, hyphens, underscores, or plus signs"
-                .to_owned(),
+            reason:
+                "expected 1-64 ASCII letters, digits, dots, hyphens, underscores, or plus signs"
+                    .to_owned(),
         });
     }
     Ok(value.to_owned())
 }
 
-fn normalize_sha256(
-    field: &'static str,
-    value: &str,
-) -> Result<String, TemplateCatalogError> {
+fn normalize_sha256(field: &'static str, value: &str) -> Result<String, TemplateCatalogError> {
     let value = value.trim().to_ascii_lowercase();
     let Some(hex) = value.strip_prefix("sha256:") else {
         return Err(TemplateCatalogError::InvalidInput {
@@ -481,10 +475,7 @@ fn normalize_sha256(
     Ok(value)
 }
 
-fn canonical_file(
-    field: &'static str,
-    path: &Path,
-) -> Result<PathBuf, TemplateCatalogError> {
+fn canonical_file(field: &'static str, path: &Path) -> Result<PathBuf, TemplateCatalogError> {
     let canonical = fs::canonicalize(path).map_err(|source| TemplateCatalogError::Io {
         path: path.to_path_buf(),
         source,
@@ -559,12 +550,11 @@ fn load_record(path: &Path) -> Result<TemplateRecord, TemplateCatalogError> {
         path: path.to_path_buf(),
         source,
     })?;
-    let record: TemplateRecord = serde_json::from_slice(&payload).map_err(|error| {
-        TemplateCatalogError::CorruptRecord {
+    let record: TemplateRecord =
+        serde_json::from_slice(&payload).map_err(|error| TemplateCatalogError::CorruptRecord {
             path: path.to_path_buf(),
             reason: error.to_string(),
-        }
-    })?;
+        })?;
     validate_record(path, &record)?;
     Ok(record)
 }
@@ -648,8 +638,7 @@ mod tests {
             source_kind: "oci".to_owned(),
             source_reference: "docker.io/library/python:3.12-slim".to_owned(),
             source_digest:
-                "sha256:1111111111111111111111111111111111111111111111111111111111111111"
-                    .to_owned(),
+                "sha256:1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
             target_architecture: "amd64".to_owned(),
             kernel_path,
             rootfs_path,
