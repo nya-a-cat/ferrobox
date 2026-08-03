@@ -52,8 +52,10 @@ sanitized runtime documents, one aggregate matrix, the shared sanitized audit
 log, dependency manifests, a toolchain record, the generator manifest, the
 overlay, the projected document, and all seven generated source trees. It
 compares both generated trees again after runtime to prove that harness builds
-did not alter the source evidence. See [`openapi.md`](openapi.md) for the
-credential and supply-chain boundary.
+did not alter the source evidence. Each independently calculated projection
+must equal one job-stable runner input, keeping its path identical across both
+generator invocations. See [`openapi.md`](openapi.md) for the credential and
+supply-chain boundary.
 
 [Standard CI run 30766020434](https://github.com/nya-a-cat/ferrobox/actions/runs/30766020434)
 and independent

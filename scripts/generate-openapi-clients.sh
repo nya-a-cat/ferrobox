@@ -9,6 +9,8 @@ repo_root="$(cd -- "${script_dir}/.." && pwd)"
 overlay="${repo_root}/openapi/ferrobox-codegen-overlay.json"
 codegen_overlay="${output_root}/.ferrobox-codegen-overlay.json"
 codegen_spec="${output_root}/.ferrobox-codegen-openapi.json"
+shared_codegen_root="${RUNNER_TEMP:?RUNNER_TEMP is required}/ferrobox-openapi-codegen"
+shared_codegen_spec="${shared_codegen_root}/ferrobox-codegen-openapi.json"
 
 test -f "${generator_jar}"
 test -f "${spec}"
@@ -24,6 +26,12 @@ uv run --no-project --python 3.12 python \
     "${spec}" \
     "${codegen_overlay}" \
     "${codegen_spec}"
+install -d -m 0755 "${shared_codegen_root}"
+if [[ -e "${shared_codegen_spec}" ]]; then
+    cmp --silent -- "${codegen_spec}" "${shared_codegen_spec}"
+else
+    install -m 0644 "${codegen_spec}" "${shared_codegen_spec}"
+fi
 
 generators=(
     csharp
@@ -44,7 +52,7 @@ for generator in "${generators[@]}"; do
         extra_properties+=",packageName=ferrobox_client,projectName=ferrobox-client,packageVersion=0.1.0"
     fi
     java -jar "${generator_jar}" generate \
-        --input-spec "${codegen_spec}" \
+        --input-spec "${shared_codegen_spec}" \
         --generator-name "${generator}" \
         --output "${output_root}/${generator}" \
         --additional-properties "${extra_properties}" \

@@ -59,12 +59,14 @@ Standard CI uses three independent checks:
 
 Each CI run generates all seven client trees twice in separate runner-temporary
 directories and requires a recursive byte comparison before and after runtime
-conformance. The C# project GUID is fixed. Every runtime operates on a temporary
-copy, so dependency resolution, harness sources, build products, and caches do
-not mutate either generated tree. The retained hidden metadata includes the
-exact merge patch and projected OpenAPI document; structural evidence records
-their SHA-256 values. Hidden generator metadata is included in the artifact
-after a path-name review.
+conformance. Both independent projections must equal one job-stable runner
+input before generation, preventing output-directory paths from entering the
+generated README files. The C# project GUID is fixed. Every runtime operates on
+a temporary copy, so dependency resolution, harness sources, build products,
+and caches do not mutate either generated tree. The retained hidden metadata
+includes the exact merge patch and projected OpenAPI document; structural
+evidence records their SHA-256 values. Hidden generator metadata is included
+in the artifact after a path-name review.
 
 The retained SDK matrix contains one sanitized schema-1 record per language,
 the seven distinct UUIDv7 sandbox identities, the shared audit-log hash, and
