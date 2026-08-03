@@ -687,9 +687,9 @@
             "items": {"type": "string", "maxLength": 131072}
           },
           "cwd": {
-            "allOf": [
-              {"$ref": "#/components/schemas/SandboxPath"}
-            ],
+            "type": "string",
+            "minLength": 1,
+            "description": "Path confined below /home/sandbox; NUL and parent traversal are rejected.",
             "default": "/home/sandbox"
           },
           "environment": {
@@ -714,39 +714,56 @@
           }
         }
       },
+      "ExecTerminationExited": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "exit_code"],
+        "properties": {
+          "kind": {"type": "string", "enum": ["exited"]},
+          "exit_code": {"type": "integer", "format": "int32"}
+        }
+      },
+      "ExecTerminationSignaled": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "signal"],
+        "properties": {
+          "kind": {"type": "string", "enum": ["signaled"]},
+          "signal": {"type": "integer", "format": "int32"}
+        }
+      },
+      "ExecTerminationTimedOut": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind"],
+        "properties": {
+          "kind": {"type": "string", "enum": ["timed_out"]}
+        }
+      },
+      "ExecTerminationOutputLimitExceeded": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind"],
+        "properties": {
+          "kind": {"type": "string", "enum": ["output_limit_exceeded"]}
+        }
+      },
       "ExecTermination": {
         "oneOf": [
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["kind", "exit_code"],
-            "properties": {
-              "kind": {"const": "exited"},
-              "exit_code": {"type": "integer", "format": "int32"}
-            }
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["kind", "signal"],
-            "properties": {
-              "kind": {"const": "signaled"},
-              "signal": {"type": "integer", "format": "int32"}
-            }
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["kind"],
-            "properties": {"kind": {"const": "timed_out"}}
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["kind"],
-            "properties": {"kind": {"const": "output_limit_exceeded"}}
+          {"$ref": "#/components/schemas/ExecTerminationExited"},
+          {"$ref": "#/components/schemas/ExecTerminationSignaled"},
+          {"$ref": "#/components/schemas/ExecTerminationTimedOut"},
+          {"$ref": "#/components/schemas/ExecTerminationOutputLimitExceeded"}
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "exited": "#/components/schemas/ExecTerminationExited",
+            "signaled": "#/components/schemas/ExecTerminationSignaled",
+            "timed_out": "#/components/schemas/ExecTerminationTimedOut",
+            "output_limit_exceeded": "#/components/schemas/ExecTerminationOutputLimitExceeded"
           }
-        ]
+        }
       },
       "OutputTruncation": {
         "type": "object",

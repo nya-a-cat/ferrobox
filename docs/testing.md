@@ -70,6 +70,15 @@ non-empty dependency manifest for every toolchain. All builds, dependency
 resolution, and execution occur on the GitHub runner. A passing run for this
 expanded gate is pending.
 
+[Diagnostic run 30774266980](https://github.com/nya-a-cat/ferrobox/actions/runs/30774266980)
+at commit `a38a4af` completed Go, Python, and TypeScript, retained their three
+sanitized seven-check records, and passed the post-runtime source-immutability
+gate. C# reached the API then failed its anonymous-union converter; Java and
+Rust rejected invalid generated source; Kotlin wrote a lock but lacked cached
+runtime JARs for offline execution. The follow-up keeps the wire contract and
+uses named discriminated variants, a typed inline `cwd` default, and explicit
+Gradle runtime-classpath prefetch. Its passing result is pending.
+
 ## OCI image KVM CI
 
 `.github/workflows/oci.yml` runs entirely on a GitHub-hosted Ubuntu 24.04

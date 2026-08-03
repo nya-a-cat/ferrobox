@@ -24,6 +24,14 @@ This is the initial v1 description of already implemented behavior. It has no
 client migration requirement. A later incompatible route or schema change
 requires a new reviewed contract and migration note.
 
+Command termination keeps the existing tagged JSON objects and gives every
+variant a named schema, a singleton `kind` enum, and an explicit discriminator
+mapping. This is equivalent to the prior anonymous `oneOf`/`const` validation
+while giving all seven generators stable model names. The optional `cwd`
+property keeps its `/home/sandbox` default and repeats the `SandboxPath` string
+constraints inline so Java receives a valid quoted string initializer. Neither
+representation changes an accepted request or emitted response.
+
 ## GitHub conformance
 
 Standard CI uses three independent checks:
@@ -50,11 +58,12 @@ The retained SDK matrix contains one sanitized schema-1 record per language,
 the seven distinct UUIDv7 sandbox identities, the shared audit-log hash, and
 the SHA-256 of each dependency manifest or lock. Python uses a fixed
 `exclude-newer` cutoff. C# uses NuGet locked mode; Go uses its checked-in
-`go.sum`; Java resolves online then tests offline; Kotlin enables strict Gradle
-dependency locking; Rust fetches a generated `Cargo.lock` then runs offline;
-TypeScript uses an exact pnpm package graph and runs the compiled CommonJS
-output under Node. The process backend supplies deterministic API behavior and
-carries no workload-isolation claim.
+`go.sum`; Java resolves online then tests offline; Kotlin resolves its complete
+runtime classpath while writing a strict Gradle lock, then builds and runs
+offline; Rust fetches a generated `Cargo.lock` then runs offline; TypeScript
+uses an exact pnpm package graph and runs the compiled CommonJS output under
+Node. The process backend supplies deterministic API behavior and carries no
+workload-isolation claim.
 
 ## Pinned tooling
 
@@ -101,6 +110,18 @@ and
 The archives expire on 2026-10-31. Archive-level digests include per-run
 runtime evidence and packaging metadata; the language-tree hashes above are
 the reproducibility boundary.
+
+The first expanded runtime attempt,
+[run 30774266980](https://github.com/nya-a-cat/ferrobox/actions/runs/30774266980)
+at commit `a38a4af`, passed the complete scenario in Go, Python, and TypeScript
+and preserved both generated source trees byte-for-byte. It isolated four
+generator/runtime-integration blockers: anonymous termination variants in C#
+and Rust, an unquoted Java default attached through `allOf`, and Kotlin runtime
+artifacts that the dependency-report task had not downloaded. Artifact
+`8841521780` retains the partial evidence with archive digest
+`sha256:3d4a7b610cb95caaca4e3860fe822e8112be0adf3689fe3f5a7a1e1c5535f64f`.
+The named discriminator, inline typed default, and runtime-classpath prefetch
+are pending the next GitHub verification run.
 
 ## Current parity boundary
 

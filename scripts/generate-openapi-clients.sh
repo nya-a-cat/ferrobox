@@ -26,7 +26,10 @@ generators=(
 for generator in "${generators[@]}"; do
     extra_properties="hideGenerationTimestamp=true"
     if [[ "${generator}" == "csharp" ]]; then
-        extra_properties+=",packageGuid={DAC7944B-0ADC-4E95-AADD-294DC79ACC69}"
+        extra_properties+=",packageGuid={DAC7944B-0ADC-4E95-AADD-294DC79ACC69},useOneOfDiscriminatorLookup=true"
+    fi
+    if [[ "${generator}" == "java" ]]; then
+        extra_properties+=",useOneOfDiscriminatorLookup=true"
     fi
     if [[ "${generator}" == "python" ]]; then
         extra_properties+=",packageName=ferrobox_client,projectName=ferrobox-client,packageVersion=0.1.0"

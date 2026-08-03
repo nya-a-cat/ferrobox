@@ -205,7 +205,9 @@ Every generated client runs from a temporary copy. NuGet, Go, Maven, Gradle,
 uv, Cargo, and pnpm dependency records are retained separately by SHA-256, and
 the pristine source trees must still match their independent replay after all
 seven runs. Java and Rust execute from already fetched dependency graphs;
-Kotlin and TypeScript use their strict or frozen lock modes.
+Kotlin resolves the main runtime classpath while writing its strict lock before
+offline build and execution; TypeScript uses frozen pnpm state. C# and Java use
+the checked-in termination discriminator mapping for direct variant lookup.
 
 The generated Kotlin wrapper selects Gradle 8.14.3. CI recognizes the embedded
 wrapper JAR as the official Gradle 8.9 binary with SHA-256

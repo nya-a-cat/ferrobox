@@ -7,6 +7,17 @@ allprojects {
             lockAllConfigurations()
             lockMode = LockMode.STRICT
         }
+        project.tasks.register("ferroboxSdkPrefetch") {
+            group = "verification"
+            description = "Resolve the generated Kotlin SDK runtime classpath"
+            doLast {
+                project.sourceSets.main.runtimeClasspath.files.each { dependency ->
+                    if (!dependency.exists()) {
+                        throw new GradleException("Missing runtime dependency: ${dependency}")
+                    }
+                }
+            }
+        }
         project.tasks.register("ferroboxSdkE2E", JavaExec) {
             group = "verification"
             description = "Run the generated Ferrobox Kotlin SDK against the shared API"

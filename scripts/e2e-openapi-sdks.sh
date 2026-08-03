@@ -157,7 +157,7 @@ run_kotlin() {
         export GRADLE_USER_HOME="${work_dir}/gradle-home"
         "${wrapper}" --no-daemon \
             --init-script "${repo_root}/scripts/openapi-e2e/kotlin/e2e.init.gradle" \
-            dependencies --write-locks
+            ferroboxSdkPrefetch --write-locks
         test -s gradle.lockfile
         install -m 0644 gradle.lockfile "${locks_dir}/kotlin-gradle.lockfile"
         FERROBOX_OPENAPI_SDK_EVIDENCE="${evidence_dir}/kotlin.json" \

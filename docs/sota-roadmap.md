@@ -136,9 +136,13 @@ at commit `9cb5c54` independently produced equal file counts and tree hashes for
 all seven clients; each run also passed an internal byte-for-byte regeneration
 gate. Standard CI now contains a shared-process runtime gate for all seven
 generated clients, with per-language dependency locks and sanitized aggregate
-evidence; its first passing GitHub result is pending. The OpenAPI and SDK rows
-remain Partial. Stable language packages, diagnostics, ingress, and richer
-egress endpoints are outstanding.
+evidence. Its first attempt,
+[run 30774266980](https://github.com/nya-a-cat/ferrobox/actions/runs/30774266980),
+passed Go, Python, TypeScript, and generated-source immutability while isolating
+C#, Java, Kotlin, and Rust codegen/cache blockers. A wire-compatible named
+discriminator/default/cache correction is awaiting its GitHub rerun. The
+OpenAPI and SDK rows remain Partial. Stable language packages, diagnostics,
+ingress, and richer egress endpoints are outstanding.
 
 OCI image parity now has a verified public-image slice. Runs
 [30769681608](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681608),
