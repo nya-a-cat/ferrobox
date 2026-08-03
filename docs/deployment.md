@@ -64,11 +64,23 @@ Suggested development layout:
 All `/opt/ferrobox` inputs and their parent directories must be root-owned and
 unwritable by the runtime UID. Each writable rootfs is copied into its own jail.
 
-Point `FERROBOX_TEMPLATE_STORE` at the operator-owned template directory. Each
-catalog record contains absolute kernel/rootfs locators, so moving an input
-requires deleting and rebuilding its catalog record. Equal descriptor and
-artifact bytes reproduce the same template ID after that cycle. The current
-catalog uses a single-writer operating contract for each store directory.
+Point `FERROBOX_TEMPLATE_STORE` or the standalone node's `--template-store` at
+the operator-owned template directory. The HTTP API accepts
+`--template-store /absolute/path` when it constructs the Firecracker backend.
+Relative paths are rejected. Each catalog record contains absolute
+kernel/rootfs locators, so moving an input requires deleting and rebuilding its
+catalog record. Equal descriptor and artifact bytes reproduce the same template
+ID after that cycle. The current catalog uses a single-writer operating
+contract for each store directory.
+
+The configured `--kernel` and `--rootfs` remain required. They serve legacy
+template names, and the configured kernel digest anchors snapshot compatibility
+for catalog records. Every `tpl-...` record must name the same kernel digest;
+its rootfs may differ. Keep the store, records, kernel, and rootfs inputs
+root-owned and unwritable by the runtime UID. Direct template-ID creation reads
+and hashes the complete kernel and rootfs before each launch, so operators
+should budget that I/O until the authenticated constant-time measurement gate
+is implemented.
 
 `scripts/build-oci-rootfs.sh` creates a deterministic ext4 identity from the
 verified OCI and injected guest inputs. It uses the OCI config `created` value

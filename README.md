@@ -72,9 +72,9 @@ See [Architecture](docs/architecture.md) for lifecycle, trust boundaries, and
 protocol details.
 The [template catalog](docs/templates.md) records reusable kernel/rootfs inputs
 under stable content-derived identities. The hosted OCI gate binds a
-digest-pinned public image to reproducible rootfs bytes and the exact KVM
-kernel/rootfs inputs. Catalog-ID API/runtime resolution remains a separate
-parity gate.
+digest-pinned public image to reproducible rootfs bytes, selects it through the
+existing HTTP `template` field, and boots the catalog's exact KVM kernel/rootfs
+inputs after integrity verification.
 
 ## Current capabilities
 
@@ -88,7 +88,7 @@ parity gate.
 | Control plane | Per-sandbox tokens stored as SHA-256 digests |
 | Network | Disabled by default; restricted public egress mode |
 | Startup | Firecracker snapshot restore and configurable ready pool |
-| Templates | Immutable local build/list/inspect/delete catalog with versioned provenance and artifact verification |
+| Templates | Immutable build/list/inspect/delete catalog plus content-ID selection for direct Firecracker creates |
 | Observability | Structured lifecycle and workload audit events |
 | Agent surface | Rust CLI, first-party Agent Skill, and OpenAPI 3.1 contract |
 | Testing | Process/API E2E and hosted nested-KVM E2E workflows |

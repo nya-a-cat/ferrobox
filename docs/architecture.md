@@ -115,15 +115,22 @@ Artifact paths are host-local locators outside the identity calculation. Equal
 bytes and descriptors therefore converge on the same template identity across
 directories. `inspect` recalculates both artifact hashes and sizes. `delete`
 removes the catalog record and leaves the referenced inputs in place. The
-complete format, CLI, security assumptions, and open runtime resolver gate are
-specified in [Immutable template catalog](templates.md).
+complete format, CLI, runtime selection, and security assumptions are specified
+in [Immutable template catalog](templates.md).
 
 The hosted OCI workflow registers one descriptor from build-stage locations
 and again from the actual KVM runtime locations. Equal identities prove path
-independence. The KVM lifecycle loads the runtime record, rehashes the exact
-configured kernel/rootfs files, and requires their descriptor digests before
-boot. The API continues to select the configured `oci-python` runtime entry;
-resolution from a public `tpl-...` identifier remains open.
+independence. When the existing API `template` field contains an exact
+`tpl-...` identity, `ferrobox-node` validates the record, host platform, and
+configured kernel compatibility, then rehashes the catalog's exact kernel and
+rootfs before cloning those assets into the jail. An unknown identity fails
+before any VM launch.
+
+Catalog-ID requests use direct cold boot. Only the legacy `python` template can
+claim the configured ready pool or prepared boot snapshot. User snapshots keep
+their captured rootfs and restore with the configured compatible kernel; the
+dynamic-template kernel equality gate keeps both paths in the same snapshot
+compatibility domain.
 
 ## Network modes
 

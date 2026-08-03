@@ -5,8 +5,9 @@ ext4 rootfs inputs. The hosted public-OCI workflow now constructs a
 byte-reproducible rootfs, registers the resulting kernel/rootfs pair, and
 verifies that the catalog record names the exact files used by the KVM
 lifecycle. The capability status is **Partial**: catalog lifecycle, integrity,
-public-OCI construction, and exact runtime-artifact binding are verified.
-Catalog-ID API/runtime resolution, asynchronous build status, private-registry
+public-OCI construction, exact runtime-artifact binding, and immutable-ID
+selection for direct Firecracker creates are verified. Asynchronous build
+status, template-specific ready pools, other runtime providers, private-registry
 credential custody, and distributed artifact delivery remain open gates.
 
 ## Upstream semantics carried forward
@@ -107,6 +108,43 @@ ferrobox template delete python-3-12
 Every command emits machine-readable JSON. `build` performs a complete artifact
 verification before returning `ready`.
 
+## Runtime selection
+
+Configure the Firecracker API with the absolute catalog path:
+
+```bash
+ferrobox-api --backend firecracker \
+  --template-store /var/lib/ferrobox/templates \
+  <other-firecracker-options>
+```
+
+The standalone node accepts the same `--template-store` option or
+`FERROBOX_TEMPLATE_STORE`. A create request selects the immutable record through
+the existing field:
+
+```json
+{
+  "template": "tpl-2a4a8bfe7412552c0ec6dcaf7cc2dc258dfccacef05c162149bc80827071",
+  "cpu_count": 1,
+  "memory_mb": 512,
+  "timeout_seconds": 300,
+  "network": {"internet_access": false}
+}
+```
+
+For a `tpl-...` request, the node loads the exact content-derived ID, validates
+the descriptor and host architecture, requires the recorded kernel digest to
+equal the configured Firecracker/snapshot kernel digest, then streams the
+kernel and rootfs through SHA-256 before cloning them into the jail. Catalog
+aliases are reserved for build/list/inspect/delete administration. Existing
+legacy template names continue to select the configured kernel/rootfs.
+
+Immutable-ID creates currently take the direct cold-boot path. The legacy
+`python` snapshot template and ready pool cannot satisfy a catalog-ID request.
+Unknown IDs fail with `404 not_found`; incompatible platform or kernel records
+fail with `501 unsupported`; corrupt, unreadable, or tampered records fail with
+`503 unavailable` using sanitized messages.
+
 ## Security and provenance boundary
 
 - Source references contain credential-free registry or artifact identities.
@@ -116,12 +154,14 @@ verification before returning `ready`.
   operator and unwritable by the sandbox runtime UID.
 - External artifact changes become visible through `inspect` as digest and size
   mismatches.
-- Runtime creation uses its configured kernel/rootfs and the existing
-  `python`/`oci-python` selection. The OCI KVM gate verifies that those exact
-  configured files match the inspected template record. Catalog-ID resolution
-  requires an approved runtime/API contract change.
-- Active-use checks and node-replica cleanup enter with runtime resolution and
-  multi-node distribution.
+- Runtime selection accepts only the content-derived ID. Each direct create
+  revalidates the descriptor and artifact bytes before Firecracker launch.
+- Dynamic templates share the configured kernel digest so restored snapshots
+  and direct-created guests stay inside one kernel compatibility contract.
+- Full SHA-256 over a 1 GiB rootfs is currently on the create path. Constant-time
+  authenticated measurement remains an explicit performance gate.
+- Active-use deletion checks and node-replica cleanup enter with multi-node
+  distribution.
 
 ## GitHub evidence
 
@@ -158,3 +198,22 @@ and the ext4 SHA-256 above, then passed all twelve lifecycle checks with Python
 3.11.15 running as UID 1000. Artifact `8845975100` has archive digest
 `sha256:681fe9dde6d9f2c34bc54dc906e277f57ad96149820347351f2695b5e760ed0c`
 and expires on 2026-11-01.
+
+[OCI KVM run 30789867561](https://github.com/nya-a-cat/ferrobox/actions/runs/30789867561)
+passed the fifteen-check runtime-selection contract at commit `274a417`. The
+HTTP request used the immutable ID above, while the configured fallback rootfs
+was a deliberately invalid 45-byte file with SHA-256
+`990278af04fe88cd43f527f0f16f3077fe509f9ae38c48d734591c7ceba42b2d`.
+The resolver selected `/mnt/ferrobox-oci/images/vmlinux` and
+`/mnt/ferrobox-oci/images/oci-python.ext4`, booted Python 3.11.15 as UID 1000,
+and rejected an unknown all-zero template ID with `404 not_found`. Artifact
+`8846706558` has archive digest
+`sha256:419b7d98006bfa6307591c773ee2961e847f0d38a63ec04447cffb751bb3b353`
+and expires on 2026-11-01.
+
+[Standard CI run 30789867545](https://github.com/nya-a-cat/ferrobox/actions/runs/30789867545)
+passed formatting, workspace tests, Clippy, builds, template E2E, OpenAPI, and
+all seven generated SDK consumers for the same commit. Host architecture run
+[30789867548](https://github.com/nya-a-cat/ferrobox/actions/runs/30789867548)
+passed the Linux x86_64, Linux aarch64, macOS Apple Silicon, and Windows ARM64
+matrix.

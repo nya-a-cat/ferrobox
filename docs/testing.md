@@ -249,11 +249,13 @@ schema-3 deterministic fields. The retained
 `oci-rootfs-reproducibility.json` records both SHA-256 values, `cmp` status, and
 the complete ext4 identity used by the KVM test.
 
-The API flow verifies UID 1000 Python execution, literal argv execution, file
-write/read/root-directory listing, paused-command rejection, resume followed by
-a fresh guest command, delete/stale-handle behavior, audit credential redaction,
-and final process/network cleanup. A failure records only its stage, HTTP status,
-error code, and message.
+The API flow selects the immutable template ID, rejects an unknown ID, proves
+that catalog assets override an invalid configured fallback, then verifies UID
+1000 Python execution, literal argv execution, file write/read/root-directory
+listing, paused-command rejection, resume followed by a fresh guest command,
+delete/stale-handle behavior, audit credential redaction, and final
+process/network cleanup. A failure records only its stage, HTTP status, error
+code, and message.
 
 Runs
 [30769681608](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681608),
@@ -318,6 +320,24 @@ Python 3.11.15 and completed every prior lifecycle assertion plus
 Artifact `8845975100` has archive digest
 `sha256:681fe9dde6d9f2c34bc54dc906e277f57ad96149820347351f2695b5e760ed0c`
 and expires on 2026-11-01.
+
+[Run 30789867561](https://github.com/nya-a-cat/ferrobox/actions/runs/30789867561)
+passed the fifteen-check runtime-resolution contract at commit `274a417`. The
+successful request used template ID
+`tpl-2a4a8bfe7412552c0ec6dcaf7cc2dc258dfccacef05c162149bc80827071`;
+an all-zero unknown ID returned `404 not_found`. The configured rootfs was a
+deliberately invalid 45-byte file at
+`/home/runner/work/_temp/invalid-default-rootfs.ext4` with SHA-256
+`990278af04fe88cd43f527f0f16f3077fe509f9ae38c48d734591c7ceba42b2d`.
+The resolved catalog inputs were `/mnt/ferrobox-oci/images/vmlinux` and
+`/mnt/ferrobox-oci/images/oci-python.ext4`; the guest booted and reported
+`oci-python=3.11.15`. Artifact `8846706558` has archive digest
+`sha256:419b7d98006bfa6307591c773ee2961e847f0d38a63ec04447cffb751bb3b353`
+and expires on 2026-11-01. Standard CI run
+[30789867545](https://github.com/nya-a-cat/ferrobox/actions/runs/30789867545)
+and four-platform architecture run
+[30789867548](https://github.com/nya-a-cat/ferrobox/actions/runs/30789867548)
+passed for the same commit.
 
 [Standard CI run 30769681624](https://github.com/nya-a-cat/ferrobox/actions/runs/30769681624)
 passed formatting, tests, Clippy, builds, process/CLI/OpenAPI conformance, and

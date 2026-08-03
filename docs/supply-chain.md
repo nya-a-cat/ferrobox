@@ -137,6 +137,29 @@ runtime inspection, aggregate binding, OCI provenance, reproducibility record,
 and twelve-check KVM result under archive digest
 `sha256:681fe9dde6d9f2c34bc54dc906e277f57ad96149820347351f2695b5e760ed0c`.
 
+OCI KVM run
+[30789867561](https://github.com/nya-a-cat/ferrobox/actions/runs/30789867561)
+closed the direct-runtime selection loop. The API requested the exact immutable
+ID, the node validated the catalog descriptor and platform, required the
+recorded kernel to match the configured snapshot kernel, and streamed both
+catalog assets through SHA-256 before launch. A missing ID returned
+`404 not_found`. The configured rootfs was an invalid 45-byte file, so the
+successful Python 3.11.15 boot proves that the catalog rootfs supplied the jail.
+Artifact `8846706558` preserves the fifteen-check result and exact asset paths
+under archive digest
+`sha256:419b7d98006bfa6307591c773ee2961e847f0d38a63ec04447cffb751bb3b353`.
+
+This integrity loop currently reads the complete 44 MiB kernel and 1 GiB rootfs
+for every direct create. The pre-resolver OCI KVM API step completed in four
+seconds in run `30787903798`; resolver runs `30789482876` and `30789867561`
+completed the same step in 39 and 27 seconds. The next performance gate targets
+authenticated constant-time measurement with
+[Linux fs-verity](https://www.kernel.org/doc/html/latest/filesystems/fsverity.html),
+whose design was presented at the
+[2018 USENIX Linux FAST Summit](https://www.usenix.org/conference/linuxfastsummit18/presentation/tso).
+Whole-file SHA-256 remains the fallback until that gate has implementation and
+hosted-KVM evidence.
+
 ## OCI root filesystem pipeline
 
 The hosted OCI gate fixes the public Python conformance image to repository
@@ -209,6 +232,11 @@ template identity and exact equality between catalog artifact descriptors and
 the files used for boot. The kernel is 44,279,576 bytes with SHA-256
 `e20e46d0c36c55c0d1014eb20576171b3f3d922260d9f792017aeff53af3d4f2`;
 the rootfs is 1,073,741,824 bytes with the ext4 SHA-256 above.
+
+Run `30789867561` kept those identities and passed the fifteen-check API path
+that resolves the catalog record before Firecracker launch. Standard CI run
+`30789867545` and four-platform host architecture run `30789867548` also passed
+at commit `274a417`.
 
 ## SBOM generator
 

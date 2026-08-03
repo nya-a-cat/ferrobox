@@ -161,9 +161,14 @@ then bound a digest-pinned public OCI image, byte-reproducible ext4 rootfs, and
 the exact runtime kernel/rootfs paths to content-derived template ID
 `tpl-2a4a8bfe7412552c0ec6dcaf7cc2dc258dfccacef05c162149bc80827071`.
 Both path-independent registrations converged and all twelve real KVM checks
-passed. The row remains Partial with asynchronous build status, runtime catalog
-resolution, request preview, active-use deletion policy, private-registry
-credential custody, and multi-node artifact distribution still open.
+passed. Run
+[30789867561](https://github.com/nya-a-cat/ferrobox/actions/runs/30789867561)
+then selected that identity through the HTTP API, rejected an unknown identity,
+overrode a deliberately invalid configured fallback rootfs, and passed fifteen
+real KVM checks. The row remains Partial with asynchronous build status,
+template-specific ready pools, other runtime providers, request preview,
+active-use deletion policy, private-registry credential custody, multi-node
+artifact distribution, and constant-time artifact verification still open.
 
 The implemented eighteen-operation HTTP surface now has one checked-in OpenAPI
 3.1 contract. Standard CI validates it with a digest-pinned official generator,
@@ -240,7 +245,14 @@ locations, matched the catalog kernel/rootfs descriptors against the exact KVM
 inputs, and passed the extended twelve-check lifecycle. Artifact `8845975100`
 has archive digest
 `sha256:681fe9dde6d9f2c34bc54dc906e277f57ad96149820347351f2695b5e760ed0c`.
-Private-registry authentication and template-ID API selection remain open.
+Run
+[30789867561](https://github.com/nya-a-cat/ferrobox/actions/runs/30789867561)
+proved template-ID API selection and direct Firecracker launch. Its deliberately
+invalid 45-byte fallback rootfs made accidental legacy selection unable to
+boot. Artifact `8846706558` has archive digest
+`sha256:419b7d98006bfa6307591c773ee2961e847f0d38a63ec04447cffb751bb3b353`.
+Private-registry authentication, credential custody, template-specific pools,
+and other-provider resolution remain open.
 
 The four verified state-branching rows and the complete CLI snapshot surface
 are backed by
