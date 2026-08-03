@@ -576,14 +576,21 @@ jobs:
                 .browser.chromium_version == $browser_version and
                 .browser.sandbox_bypass_flag_present == false and
                 .browser.network_enabled == false and
+                (.browser.dom.source_fixture_sha256 | test("^[0-9a-f]{64}$")) and
                 .browser.dom.javascript_marker == "ferrobox-js-ok" and
                 .browser.screenshot.png_signature_verified == true and
                 .browser.screenshot.width == 800 and
                 .browser.screenshot.height == 600 and
                 .browser.screenshot.byte_identical_twice == true and
                 (.browser.screenshot.sha256 | test("^[0-9a-f]{64}$")) and
-                (.checks | length) == 24
+                (.checks | length) == 26
               ' "${FERROBOX_OCI_E2E_OUTPUT}" >/dev/null
+            [[ "$(sha256sum scripts/fixtures/browser-smoke.html | awk '{print $1}')" == \
+              "$(jq -er '.browser.dom.source_fixture_sha256' "${FERROBOX_OCI_E2E_OUTPUT}")" ]]
+            [[ "$(sha256sum "${RUNNER_TEMP}/browser-screenshot.png" | awk '{print $1}')" == \
+              "$(jq -er '.browser.screenshot.sha256' "${FERROBOX_OCI_E2E_OUTPUT}")" ]]
+            grep --fixed-strings --quiet 'ferrobox-browser-kvm:executed' \
+              "${RUNNER_TEMP}/browser-dom.html"
           fi
 
       - name: Upload OCI KVM evidence
@@ -630,7 +637,10 @@ jobs:
             ${{ runner.temp }}/oci-template-runtime-inspect.json
             ${{ runner.temp }}/oci-template-evidence.json
             ${{ runner.temp }}/*-kvm-api-failure.json
+            ${{ runner.temp }}/*-kvm-stage-failure.json
             ${{ runner.temp }}/${{ matrix.e2e_output }}
+            ${{ runner.temp }}/browser-dom.html
+            ${{ runner.temp }}/browser-screenshot.png
 
       - name: Unmount OCI runtime storage
         if: always()

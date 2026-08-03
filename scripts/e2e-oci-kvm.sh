@@ -41,6 +41,55 @@ esac
 [[ "${sandbox_memory_mb}" =~ ^[1-9][0-9]*$ ]]
 [[ "${sandbox_timeout_seconds}" =~ ^[1-9][0-9]*$ ]]
 
+mark_stage() {
+    local stage="$1"
+    printf '%s\n' "${stage}" >"${work_dir}/current-stage"
+    echo "::notice title=OCI KVM stage::${stage}" >&2
+}
+
+record_stage_failure() {
+    local stage="unknown"
+    local response_path
+    local failure_output
+    if [[ -s "${work_dir}/current-stage" ]]; then
+        stage="$(<"${work_dir}/current-stage")"
+    fi
+    response_path="${work_dir}/${stage}.response"
+    failure_output="$(dirname -- "${output}")/${profile}-kvm-stage-failure.json"
+    if [[ -s "${response_path}" ]] && jq -e . "${response_path}" >/dev/null 2>&1; then
+        jq -c \
+            --arg stage "${stage}" '
+                {
+                    stage: $stage,
+                    response_present: true,
+                    response: {
+                        state: (.state // null),
+                        termination: (.termination // null),
+                        stdout: (.stdout // ""),
+                        stderr: (.stderr // ""),
+                        error: (
+                            if .error then {
+                                code: (.error.code // "unknown"),
+                                message: (.error.message // "unknown")
+                            } else null end
+                        )
+                    }
+                }
+            ' "${response_path}" >"${failure_output}"
+    else
+        jq -n -c \
+            --arg stage "${stage}" '
+                {
+                    stage: $stage,
+                    response_present: false
+                }
+            ' >"${failure_output}"
+    fi
+    echo "::group::Sanitized OCI KVM stage failure" >&2
+    cat "${failure_output}" >&2
+    echo "::endgroup::" >&2
+}
+
 cleanup() {
     status="$?"
     set +e
@@ -51,6 +100,7 @@ cleanup() {
             "${api_url}/v1/sandboxes/${sandbox_id}" >/dev/null 2>&1
     fi
     if [[ "${status}" -ne 0 && -f "${work_dir}/api.log" ]]; then
+        record_stage_failure
         echo "::group::OCI KVM API log"
         cat "${work_dir}/api.log"
         echo "::endgroup::"
@@ -108,6 +158,7 @@ api_call() {
     shift 2
     local response_path="${work_dir}/${stage}.response"
     local http_status
+    mark_stage "${stage}"
     if ! http_status="$(
         curl --silent --show-error \
             --output "${response_path}" \
@@ -122,6 +173,27 @@ api_call() {
         return 1
     fi
     cat "${response_path}"
+}
+
+require_zero_exit() {
+    local stage="$1"
+    local response="$2"
+    if jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
+        <<<"${response}" >/dev/null; then
+        return 0
+    fi
+    echo "::group::Sanitized guest command failure" >&2
+    jq -c \
+        --arg stage "${stage}" '
+            {
+                stage: $stage,
+                termination,
+                stdout: (.stdout // ""),
+                stderr: (.stderr // "")
+            }
+        ' <<<"${response}" >&2
+    echo "::endgroup::" >&2
+    return 1
 }
 
 for path in "${firecracker}" "${jailer}" "${api_binary}" "${fsverity}"; do
@@ -308,6 +380,7 @@ browser_process_uid=""
 chromium_path=""
 chromium_version=""
 dom_marker=""
+browser_fixture_sha256=""
 screenshot_sha256=""
 screenshot_size_bytes=0
 screenshot_width=0
@@ -335,8 +408,7 @@ if [[ "${profile}" == "python" ]]; then
             "${api_url}/v1/sandboxes/${sandbox_id}/commands"
     )"
     python_version="$(jq -er '.stdout | select(startswith("oci-python="))' <<<"${exec_response}")"
-    jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
-        <<<"${exec_response}" >/dev/null
+    require_zero_exit python-exec "${exec_response}"
 
     write_response="$(
         api_call file-write 200 \
@@ -369,8 +441,7 @@ else
             --data "${uid_payload}" \
             "${api_url}/v1/sandboxes/${sandbox_id}/commands"
     )"
-    jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
-        <<<"${uid_response}" >/dev/null
+    require_zero_exit browser-uid "${uid_response}"
     browser_process_uid="$(jq -er '.stdout | sub("\\n$"; "") | tonumber' \
         <<<"${uid_response}")"
     [[ "${browser_process_uid}" == "1000" ]]
@@ -393,8 +464,7 @@ else
             --data "${discover_payload}" \
             "${api_url}/v1/sandboxes/${sandbox_id}/commands"
     )"
-    jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
-        <<<"${discover_response}" >/dev/null
+    require_zero_exit browser-discover "${discover_response}"
     chromium_path="$(jq -er '.stdout | sub("\\n$"; "")' <<<"${discover_response}")"
     [[ "${chromium_path}" == /ms-playwright/chromium-*/chrome-linux*/chrome ]]
 
@@ -412,8 +482,7 @@ else
             --data "${version_payload}" \
             "${api_url}/v1/sandboxes/${sandbox_id}/commands"
     )"
-    jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
-        <<<"${version_response}" >/dev/null
+    require_zero_exit browser-version "${version_response}"
     chromium_version="$(jq -er \
         '.stdout | capture("(?<version>[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+)").version' \
         <<<"${version_response}")"
@@ -421,6 +490,7 @@ else
     exec_payload="${version_payload}"
 
     test -f "${browser_fixture}"
+    browser_fixture_sha256="$(sha256sum "${browser_fixture}" | awk '{print $1}')"
     browser_html_base64="$(base64 --wrap=0 "${browser_fixture}")"
     browser_html_size="$(stat --format='%s' "${browser_fixture}")"
     html_write_payload="$(jq -n \
@@ -478,11 +548,11 @@ else
             --data "${dom_payload}" \
             "${api_url}/v1/sandboxes/${sandbox_id}/commands"
     )"
-    jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
-        <<<"${dom_response}" >/dev/null
+    require_zero_exit browser-dom "${dom_response}"
     dom_stdout="$(jq -er '.stdout' <<<"${dom_response}")"
     grep --fixed-strings --quiet 'data-ferrobox-js="ferrobox-js-ok"' <<<"${dom_stdout}"
     grep --fixed-strings --quiet 'ferrobox-browser-kvm:executed' <<<"${dom_stdout}"
+    printf '%s\n' "${dom_stdout}" >"$(dirname -- "${output}")/browser-dom.html"
     dom_marker=ferrobox-js-ok
 
     run_browser_screenshot() {
@@ -522,8 +592,7 @@ else
                 --data "${payload}" \
                 "${api_url}/v1/sandboxes/${sandbox_id}/commands"
         )"
-        jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
-            <<<"${response}" >/dev/null
+        require_zero_exit "${stage}" "${response}"
     }
 
     run_browser_screenshot \
@@ -570,6 +639,9 @@ PY
     )
     [[ "${screenshot_width}" == "800" ]]
     [[ "${screenshot_height}" == "600" ]]
+    install -m 0444 \
+        "${work_dir}/browser-a.png" \
+        "$(dirname -- "${output}")/browser-screenshot.png"
 
     list_response="$(
         api_call browser-directory-list 200 \
@@ -590,8 +662,7 @@ true_response="$(
         --data '{"argv":["/bin/true"],"cwd":"/home/sandbox","environment":{},"timeout_seconds":30,"max_output_bytes":1024}' \
         "${api_url}/v1/sandboxes/${sandbox_id}/commands"
 )"
-jq --exit-status '.termination == {kind: "exited", exit_code: 0}' \
-    <<<"${true_response}" >/dev/null
+require_zero_exit true-exec "${true_response}"
 
 api_call pause 204 \
     --request POST \
@@ -763,6 +834,7 @@ else
         --arg chromium_path "${chromium_path}" \
         --arg chromium_version "${chromium_version}" \
         --arg dom_marker "${dom_marker}" \
+        --arg browser_fixture_sha256 "${browser_fixture_sha256}" \
         --arg screenshot_sha256 "${screenshot_sha256}" \
         --argjson browser_process_uid "${browser_process_uid}" \
         --argjson sandbox_bypass_flag_present "${sandbox_bypass_flag_present}" \
@@ -815,10 +887,13 @@ else
                 network_enabled: false,
                 dom: {
                     url: "file:///home/sandbox/browser-smoke.html",
-                    javascript_marker: $dom_marker
+                    source_fixture_sha256: $browser_fixture_sha256,
+                    javascript_marker: $dom_marker,
+                    retained_artifact: "browser-dom.html"
                 },
                 screenshot: {
                     path: "/home/sandbox/browser-a.png",
+                    retained_artifact: "browser-screenshot.png",
                     size_bytes: $screenshot_size_bytes,
                     sha256: $screenshot_sha256,
                     png_signature_verified: true,
@@ -843,10 +918,12 @@ else
                 "chromium-sandbox-required",
                 "network-disabled",
                 "offline-local-document",
+                "fixture-source-bound",
                 "javascript-dom-execution",
                 "screenshot-file-api",
                 "png-signature-and-dimensions",
                 "screenshot-byte-identical-twice",
+                "retained-browser-artifacts",
                 "pause-reject-resume",
                 "delete-stale-handle",
                 "credential-redaction",
