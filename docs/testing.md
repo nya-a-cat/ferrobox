@@ -165,16 +165,17 @@ The retained capability observation found no `/dev/kvm` device on the aarch64
 runner. The x86_64 runner exposed a character device whose initial unprivileged
 open returned errno 13; the separate Firecracker gate applies the documented
 runner permission setup before its KVM test. Linux aarch64 production microVM
-support, an Apple Silicon microVM backend, and Windows/WSL2 remain open host-
-architecture gates. GitHub documents all three exercised runner labels in its
+support, an Apple Silicon microVM backend, Windows production isolation, and
+WSL2 runtime support remain open host-architecture gates. GitHub documents all
+four exercised runner labels in its
 [hosted-runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
 The same workflow exercises the host-side crates and shared Process/API plus
 CLI lifecycle on a `macos-15` M1 runner. Diagnostic run `30782286698` completed
 every functional check and isolated the Bash 4-only `mapfile` used by the action
 pin policy. Run `30782442876` passed after the pin checker moved to Bash 3.2
-compatible streaming input. The macOS leg is now being promoted into the
-machine-readable cross-runner convergence contract.
+compatible streaming input and cleared the macOS leg for the machine-readable
+cross-runner convergence contract.
 
 [Host architecture run 30782762889](https://github.com/nya-a-cat/ferrobox/actions/runs/30782762889)
 passed the formal three-platform v2 contract at commit `9f0e8d1`. Its macOS leg
@@ -195,8 +196,25 @@ All four artifacts expire on 2026-11-01.
 [Host architecture run 30784445732](https://github.com/nya-a-cat/ferrobox/actions/runs/30784445732)
 passed the `windows-11-arm` diagnostic at commit `ad14972`. The native ARM64
 Rust tests/build and both shared process lifecycles completed successfully on
-image `20260727.122.1` with Rust host `aarch64-pc-windows-msvc`. Promotion into
-the formal four-platform v3 convergence contract is pending its first run.
+image `20260727.122.1` with Rust host `aarch64-pc-windows-msvc`.
+
+[Host architecture run 30784854537](https://github.com/nya-a-cat/ferrobox/actions/runs/30784854537)
+passed the formal four-platform v3 contract at commit `d373e93`. Its Windows
+record reports Windows 11 ARM64, four logical CPUs, image
+`20260727.122.1`, and all eight checks complete. The Windows source document
+has SHA-256
+`a418e3c94cbf74a873acef32ab903bb45f22889fb969c25fa551dc78ff681171`;
+the accepted matrix document has SHA-256
+`06e143b738500c547f658dbc2d3c5013698bf6beff8894efa2c3fda88055a40b`.
+
+Aggregate artifact `8844936585` retains all four source records and the v3
+matrix with archive digest
+`sha256:c71b81759f5f28a398b93657123f5eff312704af0f8f12a8065b99f2319831cc`.
+Windows source artifact `8844933901` has archive digest
+`sha256:83978106366f3439f2d0bfc7c86b594d6fcd7cd574e6ddaf6cac7f0e70c30f8c`.
+All five artifacts expire on 2026-11-01. The Windows record identifies the
+unsafe process backend with isolation `none` and makes no hardware-isolation
+claim.
 
 ## OCI image KVM CI
 

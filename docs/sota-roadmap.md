@@ -133,8 +133,10 @@ lifecycle. Run `30782762889` then converged that Apple Silicon record with both
 Linux records under one source commit and the version-2 machine-readable
 contract.
 GitHub `windows-11-arm` diagnostic run `30784445732` passed the same host-side
-build and process/CLI lifecycle at commit `ad14972`. Its promotion into the
-formal four-platform v3 evidence contract is pending its first run.
+build and process/CLI lifecycle at commit `ad14972`. Run `30784854537` then
+converged Windows ARM64, Apple Silicon, Linux aarch64, and Linux x86_64 under
+the four-platform v3 evidence contract at commit `d373e93`. The Windows record
+retains isolation `none`; Windows production isolation remains an open gate.
 
 The CLI and first-party `ferrobox-sandbox` Agent Skill now have a shared
 [GitHub-hosted create/exec/file/delete conformance path](https://github.com/nya-a-cat/ferrobox/actions/runs/30763552790)
