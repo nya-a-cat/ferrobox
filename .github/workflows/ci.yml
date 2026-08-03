@@ -93,7 +93,7 @@ jobs:
             "${RUNNER_TEMP}/generated-openapi-clients" \
             "${RUNNER_TEMP}/generated-openapi-clients-replay"
 
-      - name: Generated seven-language SDK end-to-end
+      - name: Versioned seven-language SDK package end-to-end
         env:
           FERROBOX_API_URL: http://127.0.0.1:18083
           FERROBOX_OPENAPI_SDK_EVIDENCE_DIR: ${{ runner.temp }}/openapi-sdk-evidence

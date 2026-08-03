@@ -9,6 +9,9 @@
   "scripts": {
     "build": "tsc --project tsconfig.json"
   },
+  "dependencies": {
+    "@nya-a-cat/ferrobox": "file:../typescript-package/nya-a-cat-ferrobox-0.1.0.tgz"
+  },
   "devDependencies": {
     "@types/node": "22.18.3",
     "typescript": "5.9.3"

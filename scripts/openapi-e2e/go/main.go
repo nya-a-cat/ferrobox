@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	openapi "github.com/GIT_USER_ID/GIT_REPO_ID"
+	ferrobox "github.com/nya-a-cat/ferrobox/sdk/go"
 )
 
 var checks = []string{
@@ -41,13 +41,13 @@ func main() {
 	evidencePath := os.Getenv("FERROBOX_OPENAPI_SDK_EVIDENCE")
 	require(apiURL != "" && auditPath != "" && evidencePath != "", "required environment is absent")
 
-	configuration := openapi.NewConfiguration()
+	configuration := ferrobox.NewConfiguration()
 	configuration.Servers[0].URL = apiURL
-	client := openapi.NewAPIClient(configuration)
+	client := ferrobox.NewAPIClient(configuration)
 
-	network := openapi.NewNetworkRequest()
+	network := ferrobox.NewNetworkRequest()
 	network.SetInternetAccess(false)
-	createRequest := openapi.NewCreateSandboxRequest("python")
+	createRequest := ferrobox.NewCreateSandboxRequest("python")
 	createRequest.SetCpuCount(1)
 	createRequest.SetMemoryMb(512)
 	createRequest.SetTimeoutSeconds(120)
@@ -57,12 +57,12 @@ func main() {
 		Execute()
 	require(err == nil, fmt.Sprintf("create failed: %v", err))
 	require(response.StatusCode == 201, fmt.Sprintf("create returned %d", response.StatusCode))
-	require(created.GetState() == openapi.RUNNING, "created sandbox is not running")
+	require(created.GetState() == ferrobox.RUNNING, "created sandbox is not running")
 
 	sandboxID := created.GetSandboxId()
 	token := created.GetToken()
 	require(sandboxID != "" && token != "", "create identity is absent")
-	ownedContext := context.WithValue(context.Background(), openapi.ContextAccessToken, token)
+	ownedContext := context.WithValue(context.Background(), ferrobox.ContextAccessToken, token)
 	deleted := false
 	defer func() {
 		if !deleted {
@@ -74,9 +74,9 @@ func main() {
 	require(err == nil, fmt.Sprintf("inspect failed: %v", err))
 	require(response.StatusCode == 200, fmt.Sprintf("inspect returned %d", response.StatusCode))
 	require(inspected.GetSandboxId() == sandboxID, "inspect returned another sandbox")
-	require(inspected.GetState() == openapi.RUNNING, "inspected sandbox is not running")
+	require(inspected.GetState() == ferrobox.RUNNING, "inspected sandbox is not running")
 
-	executeRequest := openapi.NewExecuteCommandRequest([]string{"python3", "-c", "print(40 + 2)"})
+	executeRequest := ferrobox.NewExecuteCommandRequest([]string{"python3", "-c", "print(40 + 2)"})
 	executeRequest.SetCwd("/home/sandbox")
 	executeRequest.SetEnvironment(map[string]string{})
 	executeRequest.SetTimeoutSeconds(30)
@@ -91,7 +91,7 @@ func main() {
 	require(err == nil && string(decodedStdout) == "42\n", "base64 stdout mismatch")
 
 	payload := []byte("generated-openapi-client\n")
-	writeRequest := openapi.NewWriteFileRequest(
+	writeRequest := ferrobox.NewWriteFileRequest(
 		"/home/sandbox/openapi.txt",
 		base64.StdEncoding.EncodeToString(payload),
 	)

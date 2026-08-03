@@ -1,0 +1,22 @@
+buildscript {
+    ext.kotlin_version = '2.2.20'
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+apply plugin: 'kotlin'
+
+repositories {
+    maven {
+        url = uri(System.getenv('FERROBOX_KOTLIN_PACKAGE_REPOSITORY'))
+    }
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'io.github.nyaacat.ferrobox:ferrobox-kotlin-client:0.1.0'
+}

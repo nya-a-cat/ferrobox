@@ -44,17 +44,39 @@ generators=(
 )
 
 for generator in "${generators[@]}"; do
-    extra_properties="hideGenerationTimestamp=true"
-    if [[ "${generator}" == "csharp" ]]; then
-        extra_properties+=",packageGuid={DAC7944B-0ADC-4E95-AADD-294DC79ACC69}"
-    fi
-    if [[ "${generator}" == "python" ]]; then
-        extra_properties+=",packageName=ferrobox_client,projectName=ferrobox-client,packageVersion=0.1.0"
-    fi
+    extra_properties="hideGenerationTimestamp=true,licenseName=Apache-2.0"
+    git_repo_id="ferrobox"
+    case "${generator}" in
+        csharp)
+            extra_properties+=",packageName=Ferrobox.Client,packageVersion=0.1.0,packageGuid={DAC7944B-0ADC-4E95-AADD-294DC79ACC69},packageAuthors=Ferrobox contributors,packageCompany=Ferrobox,packageTitle=Ferrobox Client,packageDescription=Generated client for the Ferrobox v1 API"
+            ;;
+        go)
+            extra_properties+=",packageName=ferrobox,packageVersion=0.1.0,withGoMod=true"
+            git_repo_id="ferrobox/sdk/go"
+            ;;
+        java)
+            extra_properties+=",groupId=io.github.nyaacat.ferrobox,artifactId=ferrobox-java-client,artifactVersion=0.1.0,invokerPackage=io.github.nyaacat.ferrobox.client,apiPackage=io.github.nyaacat.ferrobox.client.api,modelPackage=io.github.nyaacat.ferrobox.client.model"
+            ;;
+        kotlin)
+            extra_properties+=",groupId=io.github.nyaacat.ferrobox,artifactId=ferrobox-kotlin-client,artifactVersion=0.1.0,packageName=io.github.nyaacat.ferrobox.kotlin"
+            ;;
+        python)
+            extra_properties+=",packageName=ferrobox_client,projectName=ferrobox-client,packageVersion=0.1.0"
+            ;;
+        rust)
+            extra_properties+=",packageName=ferrobox-client,packageVersion=0.1.0"
+            ;;
+        typescript-fetch)
+            extra_properties+=",npmName=@nya-a-cat/ferrobox,npmVersion=0.1.0,supportsES6=true"
+            ;;
+    esac
     java -jar "${generator_jar}" generate \
         --input-spec "${shared_codegen_spec}" \
         --generator-name "${generator}" \
         --output "${output_root}/${generator}" \
+        --git-host github.com \
+        --git-user-id nya-a-cat \
+        --git-repo-id "${git_repo_id}" \
         --additional-properties "${extra_properties}" \
         --global-property 'apiTests=false,modelTests=false,apiDocs=false,modelDocs=false'
 done

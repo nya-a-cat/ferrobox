@@ -6,6 +6,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../src/Org.OpenAPITools/Org.OpenAPITools.csproj" />
+    <PackageReference Include="Ferrobox.Client" Version="0.1.0" />
   </ItemGroup>
 </Project>

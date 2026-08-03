@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "version": "0.1.0",
+  "packages": [
+    {
+      "language": "csharp",
+      "generator": "csharp",
+      "registry_format": "nuget",
+      "package_id": "Ferrobox.Client",
+      "import_name": "Ferrobox.Client",
+      "primary_artifact": "csharp/Ferrobox.Client.0.1.0.nupkg"
+    },
+    {
+      "language": "go",
+      "generator": "go",
+      "registry_format": "go-module-proxy",
+      "package_id": "github.com/nya-a-cat/ferrobox/sdk/go",
+      "import_name": "github.com/nya-a-cat/ferrobox/sdk/go",
+      "primary_artifact": "go/proxy/github.com/nya-a-cat/ferrobox/sdk/go/@v/v0.1.0.zip"
+    },
+    {
+      "language": "java",
+      "generator": "java",
+      "registry_format": "maven",
+      "package_id": "io.github.nyaacat.ferrobox:ferrobox-java-client",
+      "import_name": "io.github.nyaacat.ferrobox.client",
+      "primary_artifact": "java/ferrobox-java-client-0.1.0.jar"
+    },
+    {
+      "language": "kotlin",
+      "generator": "kotlin",
+      "registry_format": "maven",
+      "package_id": "io.github.nyaacat.ferrobox:ferrobox-kotlin-client",
+      "import_name": "io.github.nyaacat.ferrobox.kotlin",
+      "primary_artifact": "kotlin/repository/io/github/nyaacat/ferrobox/ferrobox-kotlin-client/0.1.0/ferrobox-kotlin-client-0.1.0.jar"
+    },
+    {
+      "language": "python",
+      "generator": "python",
+      "registry_format": "wheel",
+      "package_id": "ferrobox-client",
+      "import_name": "ferrobox_client",
+      "primary_artifact": "python/ferrobox_client-0.1.0-py3-none-any.whl"
+    },
+    {
+      "language": "rust",
+      "generator": "rust",
+      "registry_format": "cargo",
+      "package_id": "ferrobox-client",
+      "import_name": "ferrobox_client",
+      "primary_artifact": "rust/ferrobox-client-0.1.0.crate"
+    },
+    {
+      "language": "typescript",
+      "generator": "typescript-fetch",
+      "registry_format": "npm",
+      "package_id": "@nya-a-cat/ferrobox",
+      "import_name": "@nya-a-cat/ferrobox",
+      "primary_artifact": "typescript/nya-a-cat-ferrobox-0.1.0.tgz"
+    }
+  ]
+}

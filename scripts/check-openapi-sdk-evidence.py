@@ -29,13 +29,21 @@ LOCK_FILES = {
     "go": ("go.sum",),
     "java": (
         "java-pom.xml",
+        "java-consumer-pom.xml",
         "java-dependency-tree.txt",
         "java-surefire-provider.sha256",
     ),
-    "kotlin": ("kotlin-gradle.lockfile", "kotlin-gradle-wrapper.properties"),
-    "python": ("python-uv.lock",),
+    "kotlin": (
+        "kotlin-gradle.lockfile",
+        "kotlin-consumer-gradle.lockfile",
+        "kotlin-gradle-wrapper.properties",
+    ),
+    "python": ("python-uv.lock", "python-consumer-freeze.txt"),
     "rust": ("rust-Cargo.lock",),
-    "typescript": ("typescript-pnpm-lock.yaml",),
+    "typescript": (
+        "typescript-package-pnpm-lock.yaml",
+        "typescript-pnpm-lock.yaml",
+    ),
 }
 SENSITIVE_KEYS = {"access_token", "authorization", "bearer", "credential", "token"}
 
@@ -71,6 +79,7 @@ def main() -> None:
     parser.add_argument("--evidence-dir", type=Path, required=True)
     parser.add_argument("--audit-log", type=Path, required=True)
     parser.add_argument("--locks-dir", type=Path, required=True)
+    parser.add_argument("--packages", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
 
@@ -138,6 +147,25 @@ def main() -> None:
             )
         manifests[language] = records
 
+    packages = read_json(arguments.packages)
+    reject_sensitive_keys(packages, "packages")
+    if (
+        set(packages)
+        != {
+            "consumer_smoke_count",
+            "contract",
+            "package_count",
+            "packages",
+            "schema_version",
+            "version",
+        }
+        or packages["schema_version"] != 1
+        or packages["package_count"] != len(LANGUAGES)
+        or packages["consumer_smoke_count"] != len(LANGUAGES)
+        or tuple(item.get("language") for item in packages["packages"]) != LANGUAGES
+    ):
+        fail("versioned SDK package evidence drift")
+
     matrix = {
         "schema_version": 1,
         "api_processes": 1,
@@ -152,6 +180,13 @@ def main() -> None:
             "successful_deletes": len(LANGUAGES),
         },
         "dependency_manifests": manifests,
+        "distribution_packages": {
+            "version": packages["version"],
+            "package_count": packages["package_count"],
+            "consumer_smoke_count": packages["consumer_smoke_count"],
+            "contract_sha256": packages["contract"]["sha256"],
+            "manifest_sha256": sha256(arguments.packages),
+        },
     }
     arguments.output.write_text(
         json.dumps(matrix, indent=2, sort_keys=True) + "\n",

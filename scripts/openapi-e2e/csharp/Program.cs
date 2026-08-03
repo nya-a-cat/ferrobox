@@ -4,10 +4,10 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Org.OpenAPITools.Api;
-using Org.OpenAPITools.Client;
-using Org.OpenAPITools.Extensions;
-using Org.OpenAPITools.Model;
+using Ferrobox.Client.Api;
+using Ferrobox.Client.Client;
+using Ferrobox.Client.Extensions;
+using Ferrobox.Client.Model;
 
 internal static class Program
 {

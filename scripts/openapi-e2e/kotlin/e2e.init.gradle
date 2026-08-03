@@ -7,6 +7,18 @@ allprojects {
             lockAllConfigurations()
             lockMode = LockMode.STRICT
         }
+        if (project.plugins.hasPlugin('maven-publish')) {
+            def packageRepository = System.getenv('FERROBOX_KOTLIN_PACKAGE_REPOSITORY')
+            if (!packageRepository) {
+                throw new GradleException('FERROBOX_KOTLIN_PACKAGE_REPOSITORY is required')
+            }
+            project.publishing.repositories {
+                maven {
+                    name = 'Ferrobox'
+                    url = project.uri(packageRepository)
+                }
+            }
+        }
         project.tasks.register("ferroboxSdkPrefetch") {
             group = "verification"
             description = "Resolve every generated Kotlin SDK dependency configuration"

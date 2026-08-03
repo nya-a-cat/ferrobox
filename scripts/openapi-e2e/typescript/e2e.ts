@@ -6,7 +6,7 @@ import {
     ResponseError,
     SandboxState,
     SandboxesApi,
-} from './index';
+} from '@nya-a-cat/ferrobox';
 
 const checks = [
     'generated-model-create',

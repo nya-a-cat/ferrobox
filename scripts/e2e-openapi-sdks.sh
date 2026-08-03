@@ -9,6 +9,7 @@ work_dir="$(mktemp -d)"
 clients_dir="${work_dir}/clients"
 locks_dir="${evidence_dir}/locks"
 tooling_dir="${evidence_dir}/tooling"
+packages_dir="${evidence_dir}/packages"
 audit_path="${work_dir}/audit/events.jsonl"
 api_pid=""
 declare -a failures=()
@@ -38,13 +39,15 @@ trap cleanup EXIT
 
 test "${api_url}" = "http://127.0.0.1:18083"
 test -x target/debug/ferrobox-api
-for command_name in cargo corepack curl dotnet go gofmt java mvn node npm rustc sha256sum uv; do
+for command_name in cargo corepack curl dotnet go gofmt java mvn node npm rustc sha256sum tar uv; do
     command -v "${command_name}" >/dev/null
 done
 for language in csharp go java kotlin python rust typescript-fetch; do
     test -d "${generated_root}/${language}"
 done
-mkdir -p "${clients_dir}" "${locks_dir}" "${tooling_dir}"
+mkdir -p "${clients_dir}" "${locks_dir}" "${tooling_dir}" "${packages_dir}"
+install -m 0644 openapi/ferrobox-sdk-packages.json \
+    "${evidence_dir}/ferrobox-sdk-packages.json"
 
 export FERROBOX_API_URL="${api_url}"
 export FERROBOX_AUDIT_LOG="${audit_path}"
@@ -74,58 +77,97 @@ curl --fail --silent "${api_url}/healthz" >/dev/null
 
 run_csharp() {
     local client="${clients_dir}/csharp"
+    local consumer="${work_dir}/csharp-consumer"
+    local package_dir="${packages_dir}/csharp"
+    local project="${client}/src/Ferrobox.Client/Ferrobox.Client.csproj"
     cp -a -- "${generated_root}/csharp" "${client}"
+    mkdir -p "${consumer}" "${package_dir}"
     install -D -m 0644 \
         scripts/openapi-e2e/csharp/FerroboxSdkE2E.csproj \
-        "${client}/e2e/FerroboxSdkE2E.csproj"
-    install -m 0644 scripts/openapi-e2e/csharp/Program.cs "${client}/e2e/Program.cs"
+        "${consumer}/FerroboxSdkE2E.csproj"
+    install -m 0644 scripts/openapi-e2e/csharp/Program.cs "${consumer}/Program.cs"
 
-    dotnet restore "${client}/src/Org.OpenAPITools/Org.OpenAPITools.csproj" \
+    dotnet restore "${project}" \
         --use-lock-file --packages "${NUGET_PACKAGES}"
-    dotnet restore "${client}/src/Org.OpenAPITools/Org.OpenAPITools.csproj" \
+    dotnet restore "${project}" \
         --locked-mode --packages "${NUGET_PACKAGES}"
-    dotnet restore "${client}/e2e/FerroboxSdkE2E.csproj" \
-        --use-lock-file --packages "${NUGET_PACKAGES}"
-    dotnet restore "${client}/e2e/FerroboxSdkE2E.csproj" \
-        --locked-mode --packages "${NUGET_PACKAGES}"
+    dotnet pack "${project}" --configuration Release --no-restore \
+        --output "${package_dir}"
+    test -f "${package_dir}/Ferrobox.Client.0.1.0.nupkg"
+    dotnet restore "${consumer}/FerroboxSdkE2E.csproj" \
+        --use-lock-file --packages "${NUGET_PACKAGES}" \
+        --source "${package_dir}" --source https://api.nuget.org/v3/index.json
+    dotnet restore "${consumer}/FerroboxSdkE2E.csproj" \
+        --locked-mode --packages "${NUGET_PACKAGES}" \
+        --source "${package_dir}" --source https://api.nuget.org/v3/index.json
+    cmp --silent -- \
+        "${package_dir}/Ferrobox.Client.0.1.0.nupkg" \
+        "${NUGET_PACKAGES}/ferrobox.client/0.1.0/ferrobox.client.0.1.0.nupkg"
     install -m 0644 \
-        "${client}/src/Org.OpenAPITools/packages.lock.json" \
+        "${client}/src/Ferrobox.Client/packages.lock.json" \
         "${locks_dir}/csharp-library.packages.lock.json"
     install -m 0644 \
-        "${client}/e2e/packages.lock.json" \
+        "${consumer}/packages.lock.json" \
         "${locks_dir}/csharp-harness.packages.lock.json"
     FERROBOX_OPENAPI_SDK_EVIDENCE="${evidence_dir}/csharp.json" \
-        dotnet run --project "${client}/e2e/FerroboxSdkE2E.csproj" \
+        dotnet run --project "${consumer}/FerroboxSdkE2E.csproj" \
             --configuration Release --no-restore
 }
 
 run_go() {
-    local client="${clients_dir}/go"
+    local consumer="${work_dir}/go-consumer"
     local format_diff="${work_dir}/go-format.diff"
-    cp -a -- "${generated_root}/go" "${client}"
-    install -D -m 0644 scripts/openapi-e2e/go/main.go "${client}/cmd/ferrobox-e2e/main.go"
-    gofmt -d "${client}/cmd/ferrobox-e2e/main.go" | tee "${format_diff}"
+    local proxy="${packages_dir}/go/proxy"
+    uv run --no-project --python 3.12 python scripts/build-go-sdk-module-proxy.py \
+        --source "${generated_root}/go" \
+        --module github.com/nya-a-cat/ferrobox/sdk/go \
+        --version v0.1.0 \
+        --output "${proxy}"
+    mkdir -p "${consumer}"
+    install -m 0644 scripts/openapi-e2e/go/go.mod "${consumer}/go.mod"
+    install -m 0644 scripts/openapi-e2e/go/main.go "${consumer}/main.go"
+    gofmt -d "${consumer}/main.go" | tee "${format_diff}"
     test ! -s "${format_diff}"
-    install -m 0644 "${client}/go.sum" "${locks_dir}/go.sum"
     (
-        cd "${client}"
+        cd "${consumer}"
         export GOMODCACHE="${work_dir}/go-mod-cache"
+        export GOPROXY="file://${proxy}"
+        export GOSUMDB=off
+        go mod download all
         go mod verify
+        test -s go.sum
+        install -m 0644 go.sum "${locks_dir}/go.sum"
         FERROBOX_OPENAPI_SDK_EVIDENCE="${evidence_dir}/go.json" \
-            go run -mod=readonly ./cmd/ferrobox-e2e
+            GOPROXY=off go run -mod=readonly .
     )
 }
 
 run_java() {
     local client="${clients_dir}/java"
+    local consumer="${work_dir}/java-consumer"
+    local package_dir="${packages_dir}/java"
     local maven_repository="${work_dir}/maven-repository"
     cp -a -- "${generated_root}/java" "${client}"
+    mkdir -p "${consumer}/src/test/java/io/github/nyaacat/ferrobox/client" "${package_dir}"
+    install -m 0644 scripts/openapi-e2e/java/pom.xml "${consumer}/pom.xml"
     install -D -m 0644 \
         scripts/openapi-e2e/java/GeneratedClientE2E.java \
-        "${client}/src/test/java/org/openapitools/client/GeneratedClientE2E.java"
+        "${consumer}/src/test/java/io/github/nyaacat/ferrobox/client/GeneratedClientE2E.java"
     install -m 0644 "${client}/pom.xml" "${locks_dir}/java-pom.xml"
     (
         cd "${client}"
+        mvn --batch-mode --no-transfer-progress --strict-checksums \
+            -Dmaven.repo.local="${maven_repository}" dependency:go-offline
+        mvn --batch-mode --no-transfer-progress --offline \
+            -Dmaven.repo.local="${maven_repository}" -DskipTests install
+    )
+    install -m 0644 \
+        "${client}/target/ferrobox-java-client-0.1.0.jar" \
+        "${package_dir}/ferrobox-java-client-0.1.0.jar"
+    install -m 0644 "${client}/pom.xml" "${package_dir}/ferrobox-java-client-0.1.0.pom"
+    install -m 0644 "${consumer}/pom.xml" "${locks_dir}/java-consumer-pom.xml"
+    (
+        cd "${consumer}"
         mvn --batch-mode --no-transfer-progress --strict-checksums \
             -Dmaven.repo.local="${maven_repository}" dependency:go-offline
         mvn --batch-mode --no-transfer-progress --strict-checksums \
@@ -151,12 +193,18 @@ run_java() {
 
 run_kotlin() {
     local client="${clients_dir}/kotlin"
+    local consumer="${work_dir}/kotlin-consumer"
+    local package_repository="${packages_dir}/kotlin/repository"
     local properties="${client}/gradle/wrapper/gradle-wrapper.properties"
     local wrapper="${client}/gradlew"
     cp -a -- "${generated_root}/kotlin" "${client}"
-    install -m 0644 \
-        scripts/openapi-e2e/kotlin/FerroboxSdkE2E.kt \
-        "${client}/src/main/kotlin/FerroboxSdkE2E.kt"
+    mkdir -p "${consumer}/src/main/kotlin" "${package_repository}"
+    install -m 0644 scripts/openapi-e2e/kotlin/consumer.build.gradle \
+        "${consumer}/build.gradle"
+    install -m 0644 scripts/openapi-e2e/kotlin/consumer.settings.gradle \
+        "${consumer}/settings.gradle"
+    install -m 0644 scripts/openapi-e2e/kotlin/FerroboxSdkE2E.kt \
+        "${consumer}/src/main/kotlin/FerroboxSdkE2E.kt"
     test "$(sha256sum "${client}/gradle/wrapper/gradle-wrapper.jar" | cut -d' ' -f1)" = \
         "498495120a03b9a6ab5d155f5de3c8f0d986a449153702fb80fc80e134484f17"
     grep -Fqx \
@@ -166,6 +214,7 @@ run_kotlin() {
         "${properties}"
     install -m 0644 "${properties}" "${locks_dir}/kotlin-gradle-wrapper.properties"
     chmod +x "${wrapper}"
+    export FERROBOX_KOTLIN_PACKAGE_REPOSITORY="${package_repository}"
     (
         cd "${client}"
         export GRADLE_USER_HOME="${work_dir}/gradle-home"
@@ -174,8 +223,22 @@ run_kotlin() {
             ferroboxSdkPrefetch --write-locks
         test -s gradle.lockfile
         install -m 0644 gradle.lockfile "${locks_dir}/kotlin-gradle.lockfile"
+        "${wrapper}" --no-daemon --offline \
+            --init-script "${repo_root}/scripts/openapi-e2e/kotlin/e2e.init.gradle" \
+            publishMavenPublicationToFerroboxRepository
+    )
+    test -f \
+        "${package_repository}/io/github/nyaacat/ferrobox/ferrobox-kotlin-client/0.1.0/ferrobox-kotlin-client-0.1.0.jar"
+    (
+        export GRADLE_USER_HOME="${work_dir}/gradle-home"
+        "${wrapper}" --no-daemon --project-dir "${consumer}" \
+            --init-script "${repo_root}/scripts/openapi-e2e/kotlin/e2e.init.gradle" \
+            ferroboxSdkPrefetch --write-locks
+        test -s "${consumer}/gradle.lockfile"
+        install -m 0644 "${consumer}/gradle.lockfile" \
+            "${locks_dir}/kotlin-consumer-gradle.lockfile"
         FERROBOX_OPENAPI_SDK_EVIDENCE="${evidence_dir}/kotlin.json" \
-            "${wrapper}" --no-daemon --offline \
+            "${wrapper}" --no-daemon --offline --project-dir "${consumer}" \
                 --init-script "${repo_root}/scripts/openapi-e2e/kotlin/e2e.init.gradle" \
                 ferroboxSdkE2E
     )
@@ -184,16 +247,28 @@ run_kotlin() {
 run_python() {
     FERROBOX_OPENAPI_SDK_EVIDENCE="${evidence_dir}/python.json" \
     FERROBOX_OPENAPI_PYTHON_LOCK="${locks_dir}/python-uv.lock" \
+    FERROBOX_OPENAPI_PYTHON_FREEZE="${locks_dir}/python-consumer-freeze.txt" \
+    FERROBOX_OPENAPI_SDK_PACKAGE_DIR="${packages_dir}/python" \
         bash scripts/e2e-openapi-python.sh "${generated_root}/python"
 }
 
 run_rust() {
     local client="${clients_dir}/rust"
     local harness="${work_dir}/rust-harness"
+    local unpack_root="${work_dir}/rust-package"
+    local package_dir="${packages_dir}/rust"
+    local crate="${package_dir}/ferrobox-client-0.1.0.crate"
     cp -a -- "${generated_root}/rust" "${client}"
+    mkdir -p "${unpack_root}" "${package_dir}"
+    export CARGO_HOME="${work_dir}/cargo-home"
+    cargo generate-lockfile --manifest-path "${client}/Cargo.toml"
+    cargo fetch --manifest-path "${client}/Cargo.toml" --locked
+    cargo package --manifest-path "${client}/Cargo.toml" --locked --offline
+    install -m 0644 "${client}/target/package/ferrobox-client-0.1.0.crate" "${crate}"
+    tar -xzf "${crate}" -C "${unpack_root}"
+    test -f "${unpack_root}/ferrobox-client-0.1.0/src/lib.rs"
     install -D -m 0644 scripts/openapi-e2e/rust/Cargo.toml "${harness}/Cargo.toml"
     install -D -m 0644 scripts/openapi-e2e/rust/main.rs "${harness}/src/main.rs"
-    export CARGO_HOME="${work_dir}/cargo-home"
     cargo fmt --manifest-path "${harness}/Cargo.toml" -- --check
     cargo generate-lockfile --manifest-path "${harness}/Cargo.toml"
     install -m 0644 "${harness}/Cargo.lock" "${locks_dir}/rust-Cargo.lock"
@@ -204,15 +279,34 @@ run_rust() {
 
 run_typescript() {
     local client="${clients_dir}/typescript-fetch"
+    local consumer="${work_dir}/typescript-consumer"
+    local runtime_package_dir="${work_dir}/typescript-package"
+    local package_dir="${packages_dir}/typescript"
     cp -a -- "${generated_root}/typescript-fetch" "${client}"
-    install -m 0644 scripts/openapi-e2e/typescript/e2e.ts "${client}/e2e.ts"
-    install -m 0644 scripts/openapi-e2e/typescript/package.json "${client}/package.json"
-    install -m 0644 scripts/openapi-e2e/typescript/tsconfig.json "${client}/tsconfig.json"
+    mkdir -p "${consumer}" "${runtime_package_dir}" "${package_dir}"
+    install -m 0644 scripts/openapi-e2e/typescript/e2e.ts "${consumer}/e2e.ts"
+    install -m 0644 scripts/openapi-e2e/typescript/package.json "${consumer}/package.json"
+    install -m 0644 scripts/openapi-e2e/typescript/tsconfig.json "${consumer}/tsconfig.json"
     uv run --no-project --python 3.12 python scripts/check-npm-tooling-metadata.py \
         --output "${tooling_dir}/npm-metadata.json"
     node -e 'if (Number(process.versions.node.split(".")[0]) < 20) process.exit(1)'
     (
         cd "${client}"
+        export COREPACK_HOME="${work_dir}/corepack"
+        export PNPM_HOME="${work_dir}/pnpm-home"
+        export PNPM_STORE_DIR="${work_dir}/pnpm-store"
+        corepack pnpm@10.15.1 install --lockfile-only --ignore-scripts
+        corepack pnpm@10.15.1 fetch --frozen-lockfile
+        corepack pnpm@10.15.1 install --offline --frozen-lockfile --ignore-scripts
+        install -m 0644 pnpm-lock.yaml "${locks_dir}/typescript-package-pnpm-lock.yaml"
+        corepack pnpm@10.15.1 run build
+        corepack pnpm@10.15.1 pack --pack-destination "${runtime_package_dir}" --ignore-scripts
+    )
+    test -f "${runtime_package_dir}/nya-a-cat-ferrobox-0.1.0.tgz"
+    install -m 0644 "${runtime_package_dir}/nya-a-cat-ferrobox-0.1.0.tgz" \
+        "${package_dir}/nya-a-cat-ferrobox-0.1.0.tgz"
+    (
+        cd "${consumer}"
         export COREPACK_HOME="${work_dir}/corepack"
         export PNPM_HOME="${work_dir}/pnpm-home"
         export PNPM_STORE_DIR="${work_dir}/pnpm-store"
@@ -265,9 +359,15 @@ if [[ "${#failures[@]}" -ne 0 ]]; then
     exit 1
 fi
 
+uv run --no-project --python 3.12 python scripts/check-openapi-sdk-packages.py \
+    --contract "${evidence_dir}/ferrobox-sdk-packages.json" \
+    --packages-dir "${packages_dir}" \
+    --evidence-dir "${evidence_dir}" \
+    --output "${evidence_dir}/packages.json"
 uv run --no-project --python 3.12 python scripts/check-openapi-sdk-evidence.py \
     --evidence-dir "${evidence_dir}" \
     --audit-log "${audit_path}" \
     --locks-dir "${locks_dir}" \
+    --packages "${evidence_dir}/packages.json" \
     --output "${evidence_dir}/matrix.json"
 install -m 0644 "${audit_path}" "${evidence_dir}/audit-events.jsonl"

@@ -1,15 +1,15 @@
 import java.io.File
 import java.util.Base64
-import org.openapitools.client.apis.CommandsApi
-import org.openapitools.client.apis.FilesApi
-import org.openapitools.client.apis.SandboxesApi
-import org.openapitools.client.infrastructure.ApiClient
-import org.openapitools.client.infrastructure.ClientException
-import org.openapitools.client.models.CreateSandboxRequest
-import org.openapitools.client.models.ExecuteCommandRequest
-import org.openapitools.client.models.NetworkRequest
-import org.openapitools.client.models.SandboxState
-import org.openapitools.client.models.WriteFileRequest
+import io.github.nyaacat.ferrobox.kotlin.apis.CommandsApi
+import io.github.nyaacat.ferrobox.kotlin.apis.FilesApi
+import io.github.nyaacat.ferrobox.kotlin.apis.SandboxesApi
+import io.github.nyaacat.ferrobox.kotlin.infrastructure.ApiClient
+import io.github.nyaacat.ferrobox.kotlin.infrastructure.ClientException
+import io.github.nyaacat.ferrobox.kotlin.models.CreateSandboxRequest
+import io.github.nyaacat.ferrobox.kotlin.models.ExecuteCommandRequest
+import io.github.nyaacat.ferrobox.kotlin.models.NetworkRequest
+import io.github.nyaacat.ferrobox.kotlin.models.SandboxState
+import io.github.nyaacat.ferrobox.kotlin.models.WriteFileRequest
 
 private val checks = listOf(
     "generated-model-create",

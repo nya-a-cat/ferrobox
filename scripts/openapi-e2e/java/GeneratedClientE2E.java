@@ -1,4 +1,4 @@
-package org.openapitools.client;
+package io.github.nyaacat.ferrobox.client;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -19,19 +19,19 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
-import org.openapitools.client.api.CommandsApi;
-import org.openapitools.client.api.FilesApi;
-import org.openapitools.client.api.SandboxesApi;
-import org.openapitools.client.model.CreateSandboxRequest;
-import org.openapitools.client.model.CreateSandboxResponse;
-import org.openapitools.client.model.ExecuteCommandRequest;
-import org.openapitools.client.model.ExecuteCommandResponse;
-import org.openapitools.client.model.NetworkRequest;
-import org.openapitools.client.model.ReadFileResponse;
-import org.openapitools.client.model.SandboxResponse;
-import org.openapitools.client.model.SandboxState;
-import org.openapitools.client.model.WriteFileRequest;
-import org.openapitools.client.model.WriteFileResponse;
+import io.github.nyaacat.ferrobox.client.api.CommandsApi;
+import io.github.nyaacat.ferrobox.client.api.FilesApi;
+import io.github.nyaacat.ferrobox.client.api.SandboxesApi;
+import io.github.nyaacat.ferrobox.client.model.CreateSandboxRequest;
+import io.github.nyaacat.ferrobox.client.model.CreateSandboxResponse;
+import io.github.nyaacat.ferrobox.client.model.ExecuteCommandRequest;
+import io.github.nyaacat.ferrobox.client.model.ExecuteCommandResponse;
+import io.github.nyaacat.ferrobox.client.model.NetworkRequest;
+import io.github.nyaacat.ferrobox.client.model.ReadFileResponse;
+import io.github.nyaacat.ferrobox.client.model.SandboxResponse;
+import io.github.nyaacat.ferrobox.client.model.SandboxState;
+import io.github.nyaacat.ferrobox.client.model.WriteFileRequest;
+import io.github.nyaacat.ferrobox.client.model.WriteFileResponse;
 
 public final class GeneratedClientE2E {
     private static final String[] CHECKS = {
