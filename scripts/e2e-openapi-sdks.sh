@@ -300,7 +300,7 @@ run_typescript() {
         corepack pnpm@10.15.1 install --offline --frozen-lockfile --ignore-scripts
         install -m 0644 pnpm-lock.yaml "${locks_dir}/typescript-package-pnpm-lock.yaml"
         corepack pnpm@10.15.1 run build
-        corepack pnpm@10.15.1 pack --pack-destination "${runtime_package_dir}" --ignore-scripts
+        corepack pnpm@10.15.1 pack --pack-destination "${runtime_package_dir}"
     )
     test -f "${runtime_package_dir}/nya-a-cat-ferrobox-0.1.0.tgz"
     install -m 0644 "${runtime_package_dir}/nya-a-cat-ferrobox-0.1.0.tgz" \
