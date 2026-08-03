@@ -123,6 +123,118 @@ jobs:
           if-no-files-found: error
           path: ${{ runner.temp }}/host-capability-${{ matrix.platform_id }}/host-capability.json
 
+  darwin-diagnostic:
+    name: Native macos-aarch64 diagnostic
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust
+        id: rust_toolchain
+        continue-on-error: true
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-08-03
+
+      - name: Verify native tools
+        id: native_tools
+        continue-on-error: true
+        shell: bash
+        run: |
+          command -v bash
+          command -v curl
+          command -v jq
+          command -v python3
+
+      - name: Verify GitHub Action commit pins
+        id: action_pin_policy
+        continue-on-error: true
+        shell: bash
+        run: bash scripts/check-action-pins.sh
+
+      - name: Generate dependency lock
+        id: dependency_lock
+        continue-on-error: true
+        shell: bash
+        run: cargo generate-lockfile
+
+      - name: Test host-side crates
+        id: host_tests
+        continue-on-error: true
+        shell: bash
+        run: >-
+          cargo test --locked --all-targets
+          -p ferrobox-core
+          -p ferrobox-protocol
+          -p ferrobox-node
+          -p ferrobox-api
+          -p ferrobox-cli
+
+      - name: Build host-side binaries
+        id: host_build
+        continue-on-error: true
+        shell: bash
+        run: cargo build --locked -p ferrobox-api -p ferrobox-cli
+
+      - name: Process/API lifecycle smoke
+        id: process_api_lifecycle
+        continue-on-error: true
+        shell: bash
+        run: bash scripts/e2e-process.sh
+
+      - name: CLI lifecycle smoke
+        id: cli_lifecycle
+        continue-on-error: true
+        shell: bash
+        run: bash scripts/e2e-cli.sh
+
+      - name: Record macOS diagnostic
+        if: always()
+        shell: bash
+        run: |
+          diagnostic="${RUNNER_TEMP}/macos-aarch64-diagnostic.txt"
+          {
+            printf 'repository=%s\n' "${GITHUB_REPOSITORY}"
+            printf 'commit=%s\n' "${GITHUB_SHA}"
+            printf 'run_id=%s\n' "${GITHUB_RUN_ID}"
+            printf 'runner_arch=%s\n' "${RUNNER_ARCH}"
+            printf 'runner_os=%s\n' "${RUNNER_OS}"
+            printf 'image_os=%s\n' "${ImageOS:-}"
+            printf 'image_version=%s\n' "${ImageVersion:-}"
+            printf 'rust_toolchain=%s\n' '${{ steps.rust_toolchain.outcome }}'
+            printf 'native_tools=%s\n' '${{ steps.native_tools.outcome }}'
+            printf 'action_pin_policy=%s\n' '${{ steps.action_pin_policy.outcome }}'
+            printf 'dependency_lock=%s\n' '${{ steps.dependency_lock.outcome }}'
+            printf 'host_tests=%s\n' '${{ steps.host_tests.outcome }}'
+            printf 'host_build=%s\n' '${{ steps.host_build.outcome }}'
+            printf 'process_api_lifecycle=%s\n' '${{ steps.process_api_lifecycle.outcome }}'
+            printf 'cli_lifecycle=%s\n' '${{ steps.cli_lifecycle.outcome }}'
+            uname -a
+            sysctl -n machdep.cpu.brand_string || true
+            rustc -vV || true
+          } >"${diagnostic}"
+          cat "${diagnostic}"
+
+      - name: Upload macOS diagnostic
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: host-capability-macos-aarch64-diagnostic
+          if-no-files-found: error
+          path: ${{ runner.temp }}/macos-aarch64-diagnostic.txt
+
+      - name: Enforce macOS diagnostic
+        if: always()
+        shell: bash
+        run: |
+          test '${{ steps.rust_toolchain.outcome }}' = success
+          test '${{ steps.native_tools.outcome }}' = success
+          test '${{ steps.action_pin_policy.outcome }}' = success
+          test '${{ steps.dependency_lock.outcome }}' = success
+          test '${{ steps.host_tests.outcome }}' = success
+          test '${{ steps.host_build.outcome }}' = success
+          test '${{ steps.process_api_lifecycle.outcome }}' = success
+          test '${{ steps.cli_lifecycle.outcome }}' = success
+
   convergence:
     name: Host architecture convergence
     if: always()

@@ -127,6 +127,9 @@ had no `/dev/kvm`; the x86_64 runner exposed the character device and the
 separate Firecracker gate verifies permission setup plus the microVM path. The
 host architecture row remains Partial while aarch64 production microVM
 isolation, macOS Apple Silicon, and Windows/WSL2 contracts remain open.
+An initial GitHub `macos-15` M1 diagnostic now exercises the host-side Rust
+crates and the shared process-backend API/CLI lifecycle with retained step
+outcomes. Its result and formal convergence evidence are pending.
 
 The CLI and first-party `ferrobox-sandbox` Agent Skill now have a shared
 [GitHub-hosted create/exec/file/delete conformance path](https://github.com/nya-a-cat/ferrobox/actions/runs/30763552790)

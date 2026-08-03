@@ -168,6 +168,12 @@ support, macOS Apple Silicon, and Windows/WSL2 remain open host-architecture
 gates. GitHub documents both Linux runner labels in its
 [hosted-runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
+The same workflow now has a diagnostic `macos-15` M1 leg for the host-side
+crates and the shared Process/API plus CLI lifecycle. It records every step
+outcome and runner identity before enforcing success. The initial GitHub result
+is pending; this diagnostic carries no Apple Virtualization Framework or
+hardware-isolation claim.
+
 ## OCI image KVM CI
 
 `.github/workflows/oci.yml` runs entirely on a GitHub-hosted Ubuntu 24.04

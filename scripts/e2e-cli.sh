@@ -40,7 +40,7 @@ target/debug/ferrobox-api \
     >"${runtime_root}/api.log" 2>&1 &
 api_pid="$!"
 
-for _ in $(seq 1 120); do
+for ((attempt = 0; attempt < 120; attempt++)); do
     if curl --fail --silent "${api_url}/healthz" >/dev/null; then
         break
     fi
@@ -113,7 +113,7 @@ if FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
     echo "command unexpectedly ran while the sandbox was paused" >&2
     exit 1
 fi
-grep --fixed-strings --quiet '409 Conflict' "${runtime_root}/paused-exec.log"
+grep -Fq '409 Conflict' "${runtime_root}/paused-exec.log"
 
 resume_output="$(
     FERROBOX_TOKEN="${token}" target/debug/ferrobox --api-url "${api_url}" \
@@ -138,8 +138,8 @@ deleted_status="$(
         "${api_url}/v1/sandboxes/${sandbox_id}"
 )"
 [[ "${deleted_status}" == "404" ]]
-! grep --fixed-strings --quiet "${token}" "${runtime_root}/audit/events.jsonl"
-grep --fixed-strings --quiet '"operation":"delete"' "${runtime_root}/audit/events.jsonl"
+! grep -Fq "${token}" "${runtime_root}/audit/events.jsonl"
+grep -Fq '"operation":"delete"' "${runtime_root}/audit/events.jsonl"
 
 completed_id="${sandbox_id}"
 sandbox_id=""
