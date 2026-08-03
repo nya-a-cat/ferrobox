@@ -16,7 +16,7 @@ jobs:
   rust:
     name: Rust workspace
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -93,13 +93,20 @@ jobs:
             "${RUNNER_TEMP}/generated-openapi-clients" \
             "${RUNNER_TEMP}/generated-openapi-clients-replay"
 
-      - name: Generated Python SDK end-to-end
+      - name: Generated seven-language SDK end-to-end
         env:
           FERROBOX_API_URL: http://127.0.0.1:18083
-          FERROBOX_OPENAPI_PYTHON_EVIDENCE: ${{ runner.temp }}/openapi-python-e2e.json
+          FERROBOX_OPENAPI_SDK_EVIDENCE_DIR: ${{ runner.temp }}/openapi-sdk-evidence
         run: |
-          bash scripts/e2e-openapi-python.sh \
-            "${RUNNER_TEMP}/generated-openapi-clients/python"
+          bash scripts/e2e-openapi-sdks.sh \
+            "${RUNNER_TEMP}/generated-openapi-clients"
+
+      - name: Verify generated SDK sources remained immutable
+        if: always()
+        run: |
+          diff --recursive --brief \
+            "${RUNNER_TEMP}/generated-openapi-clients" \
+            "${RUNNER_TEMP}/generated-openapi-clients-replay"
 
       - name: Record OpenAPI contract evidence
         run: |
@@ -119,7 +126,7 @@ jobs:
           path: |
             ${{ runner.temp }}/openapi-generator/openapi-generator.manifest
             ${{ runner.temp }}/openapi-contract-evidence.json
-            ${{ runner.temp }}/openapi-python-e2e.json
+            ${{ runner.temp }}/openapi-sdk-evidence
             ${{ runner.temp }}/generated-openapi-clients
 
       - name: Upload generated lockfile

@@ -187,7 +187,7 @@ for Firecracker.
 The gate requires a non-empty package set and document namespace in each SBOM.
 Syft update checks are disabled during evidence generation.
 
-## OpenAPI generator and Python tooling pins
+## OpenAPI generator and generated-SDK tooling pins
 
 Standard CI generates developer-client evidence with OpenAPI Generator v7.22.0.
 `scripts/fetch-openapi-generator.sh` downloads the official GitHub release JAR,
@@ -199,8 +199,27 @@ commit is `f4d1cb8c15e1bc0476c75bcbc3febf1edec89b25`.
 The same workflow pins `astral-sh/setup-uv` v9.0.0 to full commit
 `c771a70e6277c0a99b617c7a806ffedaca235ff9`, fixes uv to 0.12.1 and Python to
 3.12, and disables the action cache. The generated Python dependency graph is
-resolved with a fixed upload-date cutoff, locked before execution, and retained
-inside the OpenAPI evidence artifact.
+resolved with a fixed upload-date cutoff and locked before execution.
+
+Every generated client runs from a temporary copy. NuGet, Go, Maven, Gradle,
+uv, Cargo, and pnpm dependency records are retained separately by SHA-256, and
+the pristine source trees must still match their independent replay after all
+seven runs. Java and Rust execute from already fetched dependency graphs;
+Kotlin and TypeScript use their strict or frozen lock modes.
+
+The generated Kotlin wrapper selects Gradle 8.14.3. CI recognizes the embedded
+wrapper JAR as the official Gradle 8.9 binary with SHA-256
+`498495120a03b9a6ab5d155f5de3c8f0d986a449153702fb80fc80e134484f17`
+and adds the official 8.14.3 complete-distribution SHA-256
+`ed1a8d686605fd7c23bdf62c7fc7add1c5b23b2bbc3721e661934ef4a4911d7c`
+to the temporary wrapper properties before execution. The values come from
+Gradle's [release checksum reference](https://gradle.org/release-checksums/).
+
+Before TypeScript installation, CI queries npm metadata for exact pnpm
+10.15.1, TypeScript 5.9.3, and `@types/node` 22.18.3 packages. It requires the
+expected name, version, license, source repository, executable entrypoints,
+and registry `sha512` integrity, then creates and consumes one frozen pnpm lock.
+The metadata and GitHub runner toolchain versions are retained with the matrix.
 
 Standard CI runs
 [30766020434](https://github.com/nya-a-cat/ferrobox/actions/runs/30766020434)

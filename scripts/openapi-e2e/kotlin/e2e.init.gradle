@@ -1,0 +1,17 @@
+import org.gradle.api.artifacts.dsl.LockMode
+import org.gradle.api.tasks.JavaExec
+
+allprojects {
+    afterEvaluate { project ->
+        project.dependencyLocking {
+            lockAllConfigurations()
+            lockMode = LockMode.STRICT
+        }
+        project.tasks.register("ferroboxSdkE2E", JavaExec) {
+            group = "verification"
+            description = "Run the generated Ferrobox Kotlin SDK against the shared API"
+            classpath = project.sourceSets.main.runtimeClasspath
+            mainClass = "FerroboxSdkE2EKt"
+        }
+    }
+}

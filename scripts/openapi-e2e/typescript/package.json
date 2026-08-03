@@ -1,0 +1,16 @@
+{
+  "name": "ferrobox-generated-sdk-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.15.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.3",
+    "typescript": "5.9.3"
+  }
+}

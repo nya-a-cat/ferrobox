@@ -34,22 +34,27 @@ Standard CI uses three independent checks:
    route/method set, resolves every local reference, checks operation IDs,
    request bodies, path parameters, error responses, credential scopes, and
    sensitive fields, then hashes each generated source tree.
-3. The generated Python client runs through `uv` against the loopback-only
-   process backend and completes create, inspect, typed command execution,
-   lossless output, file roundtrip, delete, stale-handle rejection, and audit
-   credential-redaction checks.
+3. Generated C#, Go, Java, Kotlin, Python, Rust, and TypeScript clients share
+   one loopback-only API process. Every client completes create, inspect, typed
+   command execution, lossless output, file roundtrip, delete, stale-handle
+   rejection, and audit credential-redaction checks.
 
 Each CI run generates all seven client trees twice in separate runner-temporary
-directories and requires a recursive byte comparison. The C# project GUID is
-fixed. The Python runtime test operates on a temporary copy and returns only
-its locked dependency graph to the retained source tree. This keeps Python
-bytecode and installation metadata outside the evidence. Hidden generator
-metadata is included in the artifact after a path-name review.
+directories and requires a recursive byte comparison before and after runtime
+conformance. The C# project GUID is fixed. Every runtime operates on a temporary
+copy, so dependency resolution, harness sources, build products, and caches do
+not mutate either generated tree. Hidden generator metadata is included in the
+artifact after a path-name review.
 
-The Python dependency graph is locked on the GitHub runner with an
-`exclude-newer` cutoff and retained with the generated source. The process
-backend supplies deterministic API behavior and carries no workload-isolation
-claim.
+The retained SDK matrix contains one sanitized schema-1 record per language,
+the seven distinct UUIDv7 sandbox identities, the shared audit-log hash, and
+the SHA-256 of each dependency manifest or lock. Python uses a fixed
+`exclude-newer` cutoff. C# uses NuGet locked mode; Go uses its checked-in
+`go.sum`; Java resolves online then tests offline; Kotlin enables strict Gradle
+dependency locking; Rust fetches a generated `Cargo.lock` then runs offline;
+TypeScript uses an exact pnpm package graph and runs the compiled CommonJS
+output under Node. The process backend supplies deterministic API behavior and
+carries no workload-isolation claim.
 
 ## Pinned tooling
 
@@ -99,7 +104,9 @@ the reproducibility boundary.
 
 ## Current parity boundary
 
-The generated trees are retained conformance outputs. Stable packaged SDKs and
-the full language execution matrix remain open work. Diagnostics, authenticated
-ingress, and richer egress-policy endpoints also remain outside the current
-HTTP surface, so the broader OpenAPI and SDK roadmap rows remain Partial.
+The generated trees are retained conformance outputs. The seven-language
+runtime gate is implemented and requires a passing GitHub run before it becomes
+verified evidence. Stable packaged SDKs remain open work. Diagnostics,
+authenticated ingress, and richer egress-policy endpoints also remain outside
+the current HTTP surface, so the broader OpenAPI and SDK roadmap rows remain
+Partial.

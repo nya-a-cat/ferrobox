@@ -32,7 +32,7 @@ def enum_value(value: object) -> object:
 def main() -> None:
     api_url = os.environ["FERROBOX_API_URL"]
     audit_path = Path(os.environ["FERROBOX_AUDIT_LOG"])
-    evidence_path = Path(os.environ["FERROBOX_OPENAPI_PYTHON_EVIDENCE"])
+    evidence_path = Path(os.environ["FERROBOX_OPENAPI_SDK_EVIDENCE"])
     sandbox_id = None
     token = None
 
@@ -106,6 +106,7 @@ def main() -> None:
         assert '"operation":"delete"' in audit
         evidence = {
             "schema_version": 1,
+            "language": "python",
             "sandbox_id": str(sandbox_id),
             "checks": [
                 "generated-model-create",

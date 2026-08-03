@@ -20,7 +20,8 @@ resource usage low and results reproducible.
 - full-commit GitHub Action pin verification across every workflow;
 - OpenAPI 3.1 validation, exact Axum route matching, and seven generated SDK
   source trees;
-- a generated Python SDK create/exec/file/delete closed loop through `uv`.
+- generated C#, Go, Java, Kotlin, Python, Rust, and TypeScript SDKs completing
+  the same create/inspect/exec/file/delete closed loop through one API process.
 
 The process E2E checks `print(42)`, argv literal handling, file round-trip,
 path traversal rejection, deletion, and token redaction from audit records.
@@ -43,10 +44,12 @@ at commit `4b3daae`. Its state sequence was running, paused, rejected execution
 with HTTP 409, resumed, running, then deleted.
 
 The OpenAPI gate uses `openapi/ferrobox-v1.json` as the common input for the
-official generator, the exact source-route comparison, and the generated
-Python black-box client. It retains a structural evidence document, a sanitized
-seven-check runtime document, the generator manifest, the generated Python
-`uv.lock`, and all seven generated source trees. See
+official generator, the exact source-route comparison, and seven black-box
+generated clients. It retains a structural evidence document, seven sanitized
+runtime documents, one aggregate matrix, the shared sanitized audit log,
+dependency manifests, a toolchain record, the generator manifest, and all seven
+generated source trees. It compares both generated trees again after runtime
+to prove that harness builds did not alter the source evidence. See
 [`openapi.md`](openapi.md) for the credential and supply-chain boundary.
 
 [Standard CI run 30766020434](https://github.com/nya-a-cat/ferrobox/actions/runs/30766020434)
@@ -58,6 +61,14 @@ generations before the Python runtime test. Artifacts `8838973235` and
 language file counts and tree hashes match across the two runs. The Python
 tree contains 60 retained source/metadata/lock files and no runtime bytecode or
 installation cache.
+
+The expanded language gate runs every client against the same loopback API
+process and the same typed scenario. Its aggregate gate requires seven distinct
+UUIDv7 sandboxes, the same seven check names per language, a successful audited
+create and delete for each identity, no credential-shaped evidence keys, and a
+non-empty dependency manifest for every toolchain. All builds, dependency
+resolution, and execution occur on the GitHub runner. A passing run for this
+expanded gate is pending.
 
 ## OCI image KVM CI
 
