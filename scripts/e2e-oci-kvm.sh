@@ -531,6 +531,7 @@ else
             "--no-first-run",
             "--no-default-browser-check",
             "--force-device-scale-factor=1",
+            "--timeout=10000",
             "--user-data-dir=/home/sandbox/chromium-dom-profile",
             "--dump-dom",
             "file:///home/sandbox/browser-smoke.html"
@@ -574,6 +575,7 @@ else
                     "--no-first-run",
                     "--no-default-browser-check",
                     "--force-device-scale-factor=1",
+                    "--timeout=10000",
                     "--window-size=800,600",
                     ("--user-data-dir=" + $profile_dir),
                     ("--screenshot=" + $screenshot_path),
