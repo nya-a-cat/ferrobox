@@ -67,7 +67,7 @@ jobs:
             cpu_count: 2
             memory_mb: 2048
             sandbox_timeout_seconds: 300
-            browser_version: 145.0.7632.6
+            browser_version: 151.0.7922.34
             evidence_name: browser-kvm-evidence
             e2e_output: browser-kvm-e2e.json
     env:
