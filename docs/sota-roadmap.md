@@ -120,9 +120,13 @@ The GitHub host-architecture matrix now defines one native Linux contract for
 x86_64 and aarch64: workspace tests and build, a native static musl guest, the
 Process/API lifecycle, and the CLI lifecycle. Each leg records the exact runner,
 CPU, Rust host, guest ELF identity, and `/dev/kvm` capability before a final
-cross-runner convergence gate. Its initial GitHub evidence is pending. The host
-architecture row remains Partial while aarch64 production microVM isolation,
-macOS Apple Silicon, and Windows/WSL2 contracts remain open.
+cross-runner convergence gate.
+[GitHub run 30781691279](https://github.com/nya-a-cat/ferrobox/actions/runs/30781691279)
+verified this Linux native sub-contract at commit `b456d08`. The aarch64 runner
+had no `/dev/kvm`; the x86_64 runner exposed the character device and the
+separate Firecracker gate verifies permission setup plus the microVM path. The
+host architecture row remains Partial while aarch64 production microVM
+isolation, macOS Apple Silicon, and Windows/WSL2 contracts remain open.
 
 The CLI and first-party `ferrobox-sandbox` Agent Skill now have a shared
 [GitHub-hosted create/exec/file/delete conformance path](https://github.com/nya-a-cat/ferrobox/actions/runs/30763552790)

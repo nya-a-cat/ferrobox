@@ -142,8 +142,31 @@ uploads one `ferrobox-host-architecture-matrix-v1` document. Every test step is
 allowed to finish diagnostically; its exact GitHub outcome is recorded and the
 leg fails after the evidence is written when any outcome is incomplete.
 
-The first GitHub result is pending. Linux aarch64 production microVM support,
-macOS Apple Silicon, and Windows/WSL2 remain open host-architecture gates.
+[Host architecture run 30781691279](https://github.com/nya-a-cat/ferrobox/actions/runs/30781691279)
+passed at commit `b456d08`. Both native legs completed all nine checks and the
+final convergence accepted the two records. The aarch64 runner was
+`ubuntu24-arm64` image `20260719.67.1` on a four-vCPU ARM Neoverse-N2; its
+5,179,856-byte guest has ELF machine 183 and SHA-256
+`960acc6e8398562afa4817d97fea4a70bf7120b6b8eef77ed0098808e8d5191f`.
+The x86_64 runner was `ubuntu24` image `20260720.247.2` on a four-vCPU AMD EPYC
+7763; its 5,144,288-byte guest has ELF machine 62 and SHA-256
+`32314ad282c3d54a3cbb76ff9a6056a2d81f5ead94aa87c1235ac7b61b728060`.
+
+Artifact `8843888799` retains the aggregate plus both source records with
+archive digest
+`sha256:7927a042a66fa02ecfe9d7afc6211fc011f9b53f54a57347190a2326715bd2bf`.
+The aarch64 and x86_64 evidence documents have SHA-256
+`656df8439d1f7a5fe41a44c330a260ad36d8f9dbfb599f614daa3cf23dfe3bfe`
+and `e4f49796261a9f45a133984a8f21ea645064ee2d2f3933237bb907dc4f19bdbf`.
+All three artifacts expire on 2026-11-01.
+
+The retained capability observation found no `/dev/kvm` device on the aarch64
+runner. The x86_64 runner exposed a character device whose initial unprivileged
+open returned errno 13; the separate Firecracker gate applies the documented
+runner permission setup before its KVM test. Linux aarch64 production microVM
+support, macOS Apple Silicon, and Windows/WSL2 remain open host-architecture
+gates. GitHub documents both Linux runner labels in its
+[hosted-runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
 ## OCI image KVM CI
 
