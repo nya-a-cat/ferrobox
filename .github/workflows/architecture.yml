@@ -225,7 +225,7 @@ jobs:
     timeout-minutes: 45
     env:
       FERROBOX_TEST_PYTHON: python
-      MSYS2_ARG_CONV_EXCL: "*"
+      MSYS2_ARG_CONV_EXCL: '/home/sandbox;path=/home/sandbox;path=../../;{"path":'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
