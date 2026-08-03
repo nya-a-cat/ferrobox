@@ -11,10 +11,12 @@ jailer="${FERROBOX_JAILER:?FERROBOX_JAILER is required}"
 kernel="${FERROBOX_KERNEL:?FERROBOX_KERNEL is required}"
 rootfs="${FERROBOX_ROOTFS:?FERROBOX_ROOTFS is required}"
 template_store="${FERROBOX_TEMPLATE_STORE:?FERROBOX_TEMPLATE_STORE is required}"
+fsverity="${FERROBOX_FSVERITY:?FERROBOX_FSVERITY is required}"
 chroot_base="${FERROBOX_CHROOT_BASE:?FERROBOX_CHROOT_BASE is required}"
 runtime_root="${FERROBOX_RUNTIME_ROOT:?FERROBOX_RUNTIME_ROOT is required}"
 rootfs_evidence="${FERROBOX_OCI_ROOTFS_EVIDENCE:?FERROBOX_OCI_ROOTFS_EVIDENCE is required}"
 template_record="${FERROBOX_OCI_TEMPLATE_RECORD:?FERROBOX_OCI_TEMPLATE_RECORD is required}"
+fsverity_evidence="${FERROBOX_FSVERITY_EVIDENCE:?FERROBOX_FSVERITY_EVIDENCE is required}"
 output="${FERROBOX_OCI_E2E_OUTPUT:?FERROBOX_OCI_E2E_OUTPUT is required}"
 api_binary="${FERROBOX_API_BINARY:-target/debug/ferrobox-api}"
 api_url="${FERROBOX_API_URL:-http://127.0.0.1:18084}"
@@ -106,10 +108,10 @@ api_call() {
     cat "${response_path}"
 }
 
-for path in "${firecracker}" "${jailer}" "${api_binary}"; do
+for path in "${firecracker}" "${jailer}" "${api_binary}" "${fsverity}"; do
     test -x "${path}"
 done
-for path in "${kernel}" "${rootfs}" "${rootfs_evidence}" "${template_record}"; do
+for path in "${kernel}" "${rootfs}" "${rootfs_evidence}" "${template_record}" "${fsverity_evidence}"; do
     test -f "${path}"
 done
 test -d "${template_store}"
@@ -152,6 +154,46 @@ test -f "${template_rootfs_location}"
 [[ "${template_kernel_digest}" == "sha256:$(sha256sum "${template_kernel_location}" | awk '{print $1}')" ]]
 [[ "${template_rootfs_digest}" == "sha256:$(sha256sum "${template_rootfs_location}" | awk '{print $1}')" ]]
 [[ "${template_rootfs_digest}" != "${configured_rootfs_digest}" ]]
+
+fsverity_contract="$(jq -er '.contract_version' "${fsverity_evidence}")"
+fsverity_kernel_digest="$(jq -er \
+    --arg path "${template_kernel_location}" \
+    '.artifacts[] | select(.name == "kernel" and .path == $path) | .fsverity_digest' \
+    "${fsverity_evidence}")"
+fsverity_rootfs_digest="$(jq -er \
+    --arg path "${template_rootfs_location}" \
+    '.artifacts[] | select(.name == "rootfs" and .path == $path) | .fsverity_digest' \
+    "${fsverity_evidence}")"
+fsverity_kernel_p95_us="$(jq -er \
+    '.artifacts[] | select(.name == "kernel") | .measure_p95_us' \
+    "${fsverity_evidence}")"
+fsverity_rootfs_p95_us="$(jq -er \
+    '.artifacts[] | select(.name == "rootfs") | .measure_p95_us' \
+    "${fsverity_evidence}")"
+jq --arg github_sha "${GITHUB_SHA:?GITHUB_SHA is required}" --exit-status '
+    .schema_version == 1 and
+    .contract_version == "ferrobox-fsverity-evidence-v1" and
+    .github.commit == $github_sha and
+    (.artifacts | length) == 2 and
+    all(.artifacts[];
+        .filesystem == "btrfs" and
+        .traditional_sha256_verified == true and
+        .measurements_match_offline_digest == true and
+        .write_rejected_errno > 0
+    )
+' "${fsverity_evidence}" >/dev/null
+[[ "${fsverity_kernel_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]
+[[ "${fsverity_rootfs_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]
+current_kernel_verity_digest="$(
+    "${fsverity}" measure "${template_kernel_location}" |
+        awk 'NR == 1 { print $1 }'
+)"
+current_rootfs_verity_digest="$(
+    "${fsverity}" measure "${template_rootfs_location}" |
+        awk 'NR == 1 { print $1 }'
+)"
+[[ "${current_kernel_verity_digest}" == "${fsverity_kernel_digest}" ]]
+[[ "${current_rootfs_verity_digest}" == "${fsverity_rootfs_digest}" ]]
 
 before_pids="$(pgrep -x firecracker || true)"
 "${api_binary}" \
@@ -337,6 +379,11 @@ jq -n \
     --arg configured_rootfs_digest "${configured_rootfs_digest}" \
     --arg template_kernel_location "${template_kernel_location}" \
     --arg template_rootfs_location "${template_rootfs_location}" \
+    --arg fsverity_contract "${fsverity_contract}" \
+    --arg fsverity_kernel_digest "${fsverity_kernel_digest}" \
+    --arg fsverity_rootfs_digest "${fsverity_rootfs_digest}" \
+    --argjson fsverity_kernel_p95_us "${fsverity_kernel_p95_us}" \
+    --argjson fsverity_rootfs_p95_us "${fsverity_rootfs_p95_us}" \
     --argjson configured_rootfs_size "${configured_rootfs_size}" \
     --arg sandbox_id "${completed_id}" \
     --arg python_version "${python_version}" \
@@ -351,6 +398,14 @@ jq -n \
         template_spec_digest: $template_spec_digest,
         template_source_reference: $template_source_reference,
         template_source_digest: $template_source_digest,
+        runtime_integrity: {
+            contract_version: $fsverity_contract,
+            source_assets_fsverity_enabled: true,
+            kernel_digest: $fsverity_kernel_digest,
+            rootfs_digest: $fsverity_rootfs_digest,
+            kernel_measure_p95_us: $fsverity_kernel_p95_us,
+            rootfs_measure_p95_us: $fsverity_rootfs_p95_us
+        },
         runtime_selection: {
             requested_template_id: $template_id,
             configured_kernel: $configured_kernel_location,
@@ -373,6 +428,7 @@ jq -n \
             "unknown-template-rejected",
             "api-template-id-resolution",
             "catalog-assets-override-configured-fallback",
+            "fs-verity-source-assets",
             "microvm-ready",
             "uid-1000-python",
             "argv-execution",

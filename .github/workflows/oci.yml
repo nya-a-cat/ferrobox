@@ -15,7 +15,9 @@ on:
       - crates/ferrobox-protocol/**
       - crates/ferrobox-template/**
       - scripts/build-e2fsprogs.sh
+      - scripts/build-fsverity-utils.sh
       - scripts/build-oci-rootfs.sh
+      - scripts/benchmark-fsverity.py
       - scripts/e2e-oci-kvm.sh
       - patches/go-containerregistry-v0.21.8-root-directory.patch
       - scripts/build-crane.sh
@@ -62,6 +64,7 @@ jobs:
             gnupg \
             jq \
             libarchive-dev \
+            libssl-dev \
             musl-tools \
             patch \
             pkg-config \
@@ -139,6 +142,28 @@ jobs:
           grep --fixed-strings --line-regexp \
             'tar_input_byte_reproducible_twice=true' \
             "${RUNNER_TEMP}/e2fsprogs/SOURCE.manifest"
+
+      - name: Build verified fsverity-utils
+        run: |
+          bash scripts/build-fsverity-utils.sh "${RUNNER_TEMP}/fsverity-utils"
+          grep --fixed-strings --line-regexp \
+            'upstream_version=1.7' \
+            "${RUNNER_TEMP}/fsverity-utils/SOURCE.manifest"
+          grep --fixed-strings --line-regexp \
+            'release_commit=96d12bd0d34a034d6e0b85512422f0d6df3c7c4a' \
+            "${RUNNER_TEMP}/fsverity-utils/SOURCE.manifest"
+          grep --fixed-strings --line-regexp \
+            'published_signature_verified=true' \
+            "${RUNNER_TEMP}/fsverity-utils/SOURCE.manifest"
+          grep --fixed-strings --line-regexp \
+            'release_git_tree_sha1=849ba951347671baf7691000e94dfcdffb36fe56' \
+            "${RUNNER_TEMP}/fsverity-utils/SOURCE.manifest"
+          grep --fixed-strings --line-regexp \
+            'signed_release_tree_verified=true' \
+            "${RUNNER_TEMP}/fsverity-utils/SOURCE.manifest"
+          grep --fixed-strings --line-regexp \
+            'portable_check_passed=true' \
+            "${RUNNER_TEMP}/fsverity-utils/SOURCE.manifest"
 
       - name: Build digest-verified reproducible OCI rootfs
         env:
@@ -381,10 +406,68 @@ jobs:
           jq --exit-status '.contract_version == "ferrobox-oci-template-evidence-v1"' \
             "${RUNNER_TEMP}/oci-template-evidence.json" >/dev/null
 
+      - name: Enable and benchmark fs-verity runtime assets
+        run: |
+          set -euo pipefail
+          kernel_sha256="$(sed -n 's/^kernel_sha256=//p' \
+            "${RUNNER_TEMP}/oci-kernel.manifest")"
+          rootfs_sha256="$(jq -er '.ext4.sha256' \
+            "${RUNNER_TEMP}/oci-rootfs-evidence/oci-rootfs-evidence.json")"
+          sudo --preserve-env=GITHUB_REPOSITORY,GITHUB_SHA,GITHUB_RUN_ID \
+            python3 scripts/benchmark-fsverity.py \
+              --fsverity "${RUNNER_TEMP}/fsverity-utils/bin/fsverity" \
+              --kernel /mnt/ferrobox-oci/images/vmlinux \
+              --kernel-sha256 "${kernel_sha256}" \
+              --rootfs /mnt/ferrobox-oci/images/oci-python.ext4 \
+              --rootfs-sha256 "${rootfs_sha256}" \
+              --source-manifest "${RUNNER_TEMP}/fsverity-utils/SOURCE.manifest" \
+              --output "${RUNNER_TEMP}/oci-fsverity-evidence.json"
+          jq \
+            --arg kernel_sha256 "${kernel_sha256}" \
+            --arg rootfs_sha256 "${rootfs_sha256}" \
+            --exit-status '
+            .schema_version == 1 and
+            .contract_version == "ferrobox-fsverity-evidence-v1" and
+            .github.repository == env.GITHUB_REPOSITORY and
+            .github.commit == env.GITHUB_SHA and
+            .github.run_id == env.GITHUB_RUN_ID and
+            .tool_version == "fsverity v1.7" and
+            (.tool_source_manifest_sha256 | test("^[0-9a-f]{64}$")) and
+            .measurement_samples_per_artifact == 31 and
+            (.artifacts | length) == 2 and
+            all(.artifacts[];
+              .filesystem == "btrfs" and
+              (.traditional_sha256 | test("^[0-9a-f]{64}$")) and
+              .traditional_sha256_verified == true and
+              (.fsverity_digest | test("^sha256:[0-9a-f]{64}$")) and
+              .fsverity_differs_from_traditional_sha256 == true and
+              .measurements_match_offline_digest == true and
+              (.measure_us | length) == 31 and
+              .measure_p50_us > 0 and
+              .measure_p95_us <= 100000 and
+              .measure_max_us > 0 and
+              .write_rejected_errno > 0
+            ) and
+            (.artifacts[] | select(.name == "kernel") |
+              .path == "/mnt/ferrobox-oci/images/vmlinux" and
+              .traditional_sha256 == $kernel_sha256 and
+              .size_bytes == 44279576
+            ) and
+            (.artifacts[] | select(.name == "rootfs") |
+              .path == "/mnt/ferrobox-oci/images/oci-python.ext4" and
+              .traditional_sha256 == $rootfs_sha256 and
+              .size_bytes == 1073741824 and
+              .reflink_clone.fsverity_metadata_preserved == false and
+              .reflink_clone.sha256 == .traditional_sha256
+            ) and
+            (.checks | length) == 9
+          ' "${RUNNER_TEMP}/oci-fsverity-evidence.json" >/dev/null
+
       - name: Run OCI-derived Firecracker API end-to-end
         env:
           FERROBOX_FIRECRACKER: /opt/ferrobox/bin/firecracker
           FERROBOX_JAILER: /opt/ferrobox/bin/jailer
+          FERROBOX_FSVERITY: ${{ runner.temp }}/fsverity-utils/bin/fsverity
           FERROBOX_KERNEL: ${{ runner.temp }}/vmlinux
           FERROBOX_ROOTFS: ${{ runner.temp }}/invalid-default-rootfs.ext4
           FERROBOX_TEMPLATE_STORE: ${{ runner.temp }}/oci-template-runtime-store
@@ -393,10 +476,11 @@ jobs:
           FERROBOX_API_BINARY: target/debug/ferrobox-api
           FERROBOX_OCI_ROOTFS_EVIDENCE: ${{ runner.temp }}/oci-rootfs-evidence/oci-rootfs-evidence.json
           FERROBOX_OCI_TEMPLATE_RECORD: ${{ runner.temp }}/oci-template-runtime-build.json
+          FERROBOX_FSVERITY_EVIDENCE: ${{ runner.temp }}/oci-fsverity-evidence.json
           FERROBOX_OCI_E2E_OUTPUT: ${{ runner.temp }}/oci-kvm-e2e.json
         run: |
           printf 'catalog selection must replace this fallback\n' >"${FERROBOX_ROOTFS}"
-          sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_TEMPLATE_STORE,FERROBOX_CHROOT_BASE,FERROBOX_RUNTIME_ROOT,FERROBOX_API_BINARY,FERROBOX_OCI_ROOTFS_EVIDENCE,FERROBOX_OCI_TEMPLATE_RECORD,FERROBOX_OCI_E2E_OUTPUT,GITHUB_SHA \
+          sudo --preserve-env=FERROBOX_FIRECRACKER,FERROBOX_JAILER,FERROBOX_FSVERITY,FERROBOX_KERNEL,FERROBOX_ROOTFS,FERROBOX_TEMPLATE_STORE,FERROBOX_CHROOT_BASE,FERROBOX_RUNTIME_ROOT,FERROBOX_API_BINARY,FERROBOX_OCI_ROOTFS_EVIDENCE,FERROBOX_OCI_TEMPLATE_RECORD,FERROBOX_FSVERITY_EVIDENCE,FERROBOX_OCI_E2E_OUTPUT,GITHUB_SHA \
             bash scripts/e2e-oci-kvm.sh
           jq --exit-status \
             --arg sha "${GITHUB_SHA}" \
@@ -409,10 +493,12 @@ jobs:
               (.template_spec_digest | test("^sha256:[0-9a-f]{64}$")) and
               .template_source_reference == $image and
               .template_source_digest == .manifest_digest and
+              .runtime_integrity.contract_version == "ferrobox-fsverity-evidence-v1" and
+              .runtime_integrity.source_assets_fsverity_enabled == true and
               .runtime_selection.requested_template_id == .template_id and
               .runtime_selection.locations_distinct == true and
               .runtime_selection.configured_rootfs_size_bytes < 4096 and
-              (.checks | length) == 15 and
+              (.checks | length) == 16 and
               (.python_version | startswith("oci-python="))
             ' "${RUNNER_TEMP}/oci-kvm-e2e.json" >/dev/null
 
@@ -441,7 +527,17 @@ jobs:
             ${{ runner.temp }}/e2fsprogs/SMOKE-E2FSCK.log
             ${{ runner.temp }}/e2fsprogs/SOURCE-EXTRACTION.json
             ${{ runner.temp }}/e2fsprogs/SOURCE.manifest
+            ${{ runner.temp }}/fsverity-utils/BUILD.log
+            ${{ runner.temp }}/fsverity-utils/CHECK.log
+            ${{ runner.temp }}/fsverity-utils/GPG-IMPORT.log
+            ${{ runner.temp }}/fsverity-utils/GPG-STATUS.log
+            ${{ runner.temp }}/fsverity-utils/GPG-VERIFY.log
+            ${{ runner.temp }}/fsverity-utils/LDD.log
+            ${{ runner.temp }}/fsverity-utils/SOURCE-EXTRACTION.json
+            ${{ runner.temp }}/fsverity-utils/SOURCE.manifest
+            ${{ runner.temp }}/fsverity-utils/VERSION.txt
             ${{ runner.temp }}/oci-kernel.manifest
+            ${{ runner.temp }}/oci-fsverity-evidence.json
             ${{ runner.temp }}/oci-rootfs-evidence
             ${{ runner.temp }}/oci-rootfs-rebuild-evidence
             ${{ runner.temp }}/oci-rootfs-reproducibility.json
