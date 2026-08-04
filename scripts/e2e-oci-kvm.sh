@@ -467,10 +467,10 @@ else
             "${api_url}/v1/sandboxes/${sandbox_id}/commands"
     )"
     require_zero_exit browser-discover "${discover_response}"
-    chromium_path="$(jq -er '.stdout | split("\\n") | map(select(length > 0)) | .[0]' \
+    chromium_path="$(jq -er '.stdout | split("\n") | map(select(length > 0)) | .[0]' \
         <<<"${discover_response}")"
     headless_shell_path="$(jq -er \
-        '.stdout | split("\\n") | map(select(length > 0)) | .[1]' \
+        '.stdout | split("\n") | map(select(length > 0)) | .[1]' \
         <<<"${discover_response}")"
     [[ "${chromium_path}" == /ms-playwright/chromium-*/chrome-linux*/chrome ]]
     [[ "${headless_shell_path}" == \
